@@ -66,6 +66,9 @@
           if (message.type === "homekit_manager/mode_status") {
             return { active_mode: "homekit_bridge", desired_mode: "homekit_bridge", transition: "stable", matrix: {} };
           }
+          if (message.type === "homekit_manager/activation_status") {
+            return { state: "unknown", entry_id: "fixture-bridge", message: "Kein Anwendungsvorgang" };
+          }
           if (message.type === "homekit_manager/devices") {
             return { devices: [{ device_id: "fixture-device", name: "Kitchen device", area_name: "Kitchen", entity_count: 1, compatible_count: 1, configured_count: 1, unavailable_count: 0, integrations: ["demo"] }] };
           }

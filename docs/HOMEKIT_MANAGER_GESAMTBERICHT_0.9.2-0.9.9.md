@@ -87,7 +87,7 @@ Die aktuelle erneute Browserprüfung war bei Erstellung dieses Berichts wegen ei
 
 ### Verbleibende Einschränkungen
 
-- 0.9.3 bis 0.9.9 sind lokal entwickelt, aber nicht als 0.9.x-Tags oder 0.9.x-GitHub-Releases veröffentlicht.
+- 0.9.3 bis 0.9.8 sind lokal entwickelt, aber nicht als 0.9.x-Tags oder 0.9.x-GitHub-Releases veröffentlicht; `v0.9.9` ist als Git-Tag vorhanden, ein GitHub-Release fehlt noch.
 - GitHub enthält zusätzlich historische 1.0.1-, 1.0.2- und 1.0.3-Releases.
 - Der 0.9.9-Branch ist nach GitHub gepusht, aber noch nicht nach `main` gemergt.
 - CI, HACS und Hassfest sind für den Branch erfolgreich durchgelaufen.
@@ -1034,7 +1034,7 @@ Remote selbst überprüft:
 | `v0.9.6` | nicht vorhanden | nicht veröffentlicht |
 | `v0.9.7` | nicht vorhanden | nicht veröffentlicht |
 | `v0.9.8` | nicht vorhanden | nicht veröffentlicht |
-| `v0.9.9` | nicht vorhanden | nicht veröffentlicht |
+| `v0.9.9` | `7e28b61` | Tag vorhanden, GitHub-Release nicht erstellt |
 | `v1.0.1` | `1e8d529` | historischer Tag |
 | `v1.0.2` | `d64e516` | historischer Tag |
 | `v1.0.3` | `cff03a1` | historischer Tag |
@@ -1056,7 +1056,8 @@ Tatsächlich vorhandene Releases:
 | Release | Status |
 |---|---|
 | `v0.9.2` | vorhanden |
-| `v0.9.3` bis `v0.9.9` | nicht vorhanden |
+| `v0.9.3` bis `v0.9.8` | nicht vorhanden |
+| `v0.9.9` | Tag vorhanden, Release nicht erstellt |
 | `v1.0.1` | vorhanden |
 | `v1.0.2` | vorhanden |
 | `v1.0.3` | vorhanden |
@@ -1146,7 +1147,7 @@ Die Dokumentation behauptet nicht, dass keinerlei Home-Assistant-Store-Datei ges
 ### Priorität hoch
 
 1. **Remote-Veröffentlichung von 0.9.9 fehlt**  
-   Der Branch ist gepusht und HACS-/Hassfest-validiert, aber noch nicht nach `main` gemergt, getaggt oder als GitHub-Release veröffentlicht.
+   Der Branch ist gepusht, HACS-/Hassfest-validiert und mit `v0.9.9` getaggt, aber noch nicht nach `main` gemergt oder als GitHub-Release veröffentlicht.
 
 2. **Produktive Aktualisierung fehlt**  
    Die produktive Installation ist weiterhin 0.9.2. 0.9.9 wurde nicht über HACS oder File Editor installiert.

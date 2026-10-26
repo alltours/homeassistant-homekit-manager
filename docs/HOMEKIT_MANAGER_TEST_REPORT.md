@@ -25,7 +25,7 @@ Ergebnisse:
 - Frontend-Verhaltenstest: **bestanden** (`node tests/frontend/test_panel.mjs`).
 - Frontend-Accessibility-Regressionsassertions: **bestanden**. Beschriftete Auswahl- und
   Zustandssteuerungen, tastaturbedienbare Sortierbuttons, Pager-Beschriftungen und die
-  mobile CSS-Regel werden geprüft.
+  mobile CSS-Regel sowie `aria-current`, `aria-busy` und `aria-live` werden geprüft.
 - Browser-Fixture: **bestanden** mit `tests/frontend/browser_fixture.html`.
 - Frische Live-Browserprüfung: **bestanden**. Das Panel, die Entitätenansicht und die
   Konfigurationsansicht wurden gegen die laufende Home-Assistant-Instanz geladen; das
@@ -37,7 +37,7 @@ Ergebnisse:
   erneut bestätigt.
 - Release-Archiv: **bestanden**. `homekit-manager-0.9.9.zip` enthält exakt 30 Dateien;
   alle Inhalte stimmen mit dem Release-Manifest überein. SHA-256:
-  `911976dd5df1e1c0e09ed98368c9629ca5f537e12808ff880e47e01addce1077`.
+  `06f5fd74455bece492beb9067f0789d86e1e86b2d3d364da268346b7f2d2822d`.
 - Chromium-Mobile-Screenshot: **bestanden** bei einer Fenstergröße von `500x844`. Zwei
   Karten-Spalten bleiben innerhalb des Viewports lesbar; die Tab-Leiste ist kontrolliert
   horizontal scrollbar.

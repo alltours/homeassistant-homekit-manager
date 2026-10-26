@@ -79,6 +79,8 @@ assert.match(panel.shadowRoot.innerHTML, /aria-label="Gewünschter Zustand für 
 assert.match(panel.shadowRoot.innerHTML, /aria-label="Nächste Seite"/);
 assert.match(panel.shadowRoot.innerHTML, /class="sort" data-sort="name"/);
 assert.match(panel.shadowRoot.innerHTML, /@media\(max-width:800px\)/);
+assert.match(panel.shadowRoot.innerHTML, /aria-current="page"/);
+assert.match(panel.shadowRoot.innerHTML, /main aria-busy="false"/);
 
 panel.bridge = { entry_id: "bridge-1" };
 panel.draft = new Map([["light.kitchen", "exclude"]]);

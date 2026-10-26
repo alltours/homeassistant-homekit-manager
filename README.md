@@ -40,6 +40,13 @@ node --check custom_components/homekit_manager/www/homekit-manager.js
 Changes are developed on a branch, tested locally, committed, pushed to `main`, and verified by GitHub Actions. Starting with `0.9.2`, versioned GitHub Releases use the `0.9.x` series. Existing `1.0.x` releases remain historical. Versioned GitHub Releases are used for HACS installation.
 
 See [the 0.9.2 implementation notes](docs/HOMEKIT_MANAGER_0_9_2.md).
+See [the 0.9.3 implementation notes](docs/HOMEKIT_MANAGER_0_9_3.md).
+See [the 0.9.4 implementation notes](docs/HOMEKIT_MANAGER_0_9_4.md).
+See [the 0.9.5 implementation notes](docs/HOMEKIT_MANAGER_0_9_5.md).
+See [the 0.9.6 implementation notes](docs/HOMEKIT_MANAGER_0_9_6.md).
+See [the 0.9.7 implementation notes](docs/HOMEKIT_MANAGER_0_9_7.md).
+See [the 0.9.8 implementation notes](docs/HOMEKIT_MANAGER_0_9_8.md).
+See [the 0.9.9 implementation notes](docs/HOMEKIT_MANAGER_0_9_9.md).
 
 ## HACS status
 

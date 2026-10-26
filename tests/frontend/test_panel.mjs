@@ -73,6 +73,17 @@ panel.query = "";
 panel.filters.area_name = "";
 panel.sort = { key: "name", direction: 1 };
 assert.deepEqual(panel.filtered.map((entity) => entity.entity_id), ["sensor.hidden", "light.kitchen"]);
+panel.selectView("entities");
+assert.match(panel.shadowRoot.innerHTML, /aria-label="Auswahl Kitchen"/);
+assert.match(panel.shadowRoot.innerHTML, /aria-label="Gewünschter Zustand für Kitchen"/);
+assert.match(panel.shadowRoot.innerHTML, /aria-label="Nächste Seite"/);
+assert.match(panel.shadowRoot.innerHTML, /class="sort" data-sort="name"/);
+assert.match(panel.shadowRoot.innerHTML, /@media\(max-width:800px\)/);
+assert.match(panel.shadowRoot.innerHTML, /aria-current="page"/);
+assert.match(panel.shadowRoot.innerHTML, /role="tablist"/);
+assert.match(panel.shadowRoot.innerHTML, /role="tab"/);
+assert.match(panel.shadowRoot.innerHTML, /aria-selected="true"/);
+assert.match(panel.shadowRoot.innerHTML, /main aria-busy="false"/);
 
 panel.bridge = { entry_id: "bridge-1" };
 panel.draft = new Map([["light.kitchen", "exclude"]]);
@@ -105,6 +116,10 @@ successful.hass = {
     if (type === "homekit_manager/inventory") return { entities: [], overview: { fingerprint: "ok" } };
     if (type === "homekit_manager/bridges") return { bridges: [] };
     if (type === "homekit_manager/yaml_status") return { valid: true, exists: false };
+    if (type === "homekit_manager/devices") return { devices: [] };
+    if (type === "homekit_manager/areas") return { areas: [] };
+    if (type === "homekit_manager/diagnostics") return { findings: [], summary: {} };
+    if (type === "homekit_manager/device_preview") return { simulation: true, title: "Kitchen", service_type: "Lightbulb", applied: false };
     if (type === "homekit_manager/mode_status") return { active_mode: "homekit_bridge", desired_mode: "homekit_bridge", transition: "stable", matrix: {} };
     throw new Error(`unexpected command: ${type}`);
   },
@@ -112,7 +127,7 @@ successful.hass = {
 successful.panel = { config: {} };
 successful.narrow = true;
 await new Promise((resolve) => setTimeout(resolve, 0));
-assert.equal(successCalls, 4);
+assert.equal(successCalls, 7);
 assert.doesNotMatch(successful.shadowRoot.innerHTML, /Initialisierung fehlgeschlagen/);
 assert.match(successful.shadowRoot.innerHTML, /HomeKit Manager/);
 

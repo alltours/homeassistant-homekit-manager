@@ -23,6 +23,9 @@ from .yaml_store import (
 )
 from .const import MANAGEMENT_MODES, MODE_HOMEKIT_BRIDGE, MODE_HOMEKIT_MANAGER, MODE_YAML
 from .mode_store import ModeStore
+from .grouping import build_area_views, build_device_views
+from .diagnostics import build_diagnostics, diagnostics_summary
+from .history import make_history_entry, restore_as_draft
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,6 +35,10 @@ class HomeKitManagerCoordinator:
         self.hass = hass
         self.inventory: list[dict[str, Any]] = []
         self.bridges: list[dict[str, Any]] = []
+        self.devices: list[dict[str, Any]] = []
+        self.areas: list[dict[str, Any]] = []
+        self.diagnostic_findings: list[dict[str, Any]] = []
+        self.history_entries: list[dict[str, Any]] = []
         self.last_error: str | None = None
         self.fingerprint: str | None = None
         config_path = getattr(getattr(hass, "config", None), "path", None)
@@ -90,6 +97,9 @@ class HomeKitManagerCoordinator:
                     item["homekit"].update(evaluate_filter(record.entity_id, record.entity_category, record.hidden_by, bridge_filter, core_filter).as_dict())
                 self.inventory.append(item)
             self.bridges = [bridge.as_dict() for bridge in bridges]
+            self.devices = build_device_views(self.inventory)
+            self.areas = build_area_views(self.inventory)
+            self.diagnostic_findings = build_diagnostics(self.inventory, self.bridges, self.yaml_snapshot.as_dict() if hasattr(self.yaml_snapshot, "as_dict") else {"valid": self.yaml_snapshot.valid, "error": self.yaml_snapshot.error})
             self.yaml_snapshot = await self.hass.async_add_executor_job(self.yaml_store.load)
             self.fingerprint = build_fingerprint(self.bridges, self.inventory, self.yaml_snapshot.document)
             self.last_error = None
@@ -115,13 +125,28 @@ class HomeKitManagerCoordinator:
             "excluded_entities": excluded if filter_known else None,
             "unknown_entities": unknown,
             "bridges": len(self.bridges),
+            "bridge_selection_required": len(self.bridges) > 1,
             "fingerprint": self.fingerprint,
             "yaml_valid": self.yaml_snapshot.valid,
             "yaml_exists": self.yaml_snapshot.exists,
             "yaml_file_version": self.yaml_snapshot.file_version,
             "last_error": self.last_error,
             "last_updated": self.yaml_snapshot.last_modified,
+            "diagnostics": diagnostics_summary(self.diagnostic_findings),
         }
+
+    def diagnostics(self) -> dict[str, Any]:
+        """Return the current diagnostic snapshot without applying corrections."""
+        return {"findings": self.diagnostic_findings, "summary": diagnostics_summary(self.diagnostic_findings), "fingerprint": self.fingerprint}
+
+    def history(self) -> dict[str, Any]:
+        """Return bounded desired-state history without pairing material."""
+        return {"entries": list(self.history_entries), "count": len(self.history_entries)}
+
+    def restore_history(self, index: int) -> dict[str, Any]:
+        if not isinstance(index, int) or index < 0 or index >= len(self.history_entries):
+            raise ValueError("Historieneintrag nicht gefunden")
+        return restore_as_draft(self.history_entries[index])
 
     def _active_mode(self, bridge: dict[str, Any] | None) -> str:
         """Infer the current mode without claiming a migration occurred."""
@@ -157,6 +182,8 @@ class HomeKitManagerCoordinator:
             "yaml_exists": self.yaml_snapshot.exists,
             "matrix": matrix,
             "supported_modes": list(MANAGEMENT_MODES),
+            "bridge_count": len(self.bridges),
+            "bridge_selection_required": len(self.bridges) > 1,
             "message": "Moduswechsel bleiben gesperrt, solange Bridge-Identität und Pairing-Erhalt nicht nachgewiesen sind.",
         }
 
@@ -212,6 +239,8 @@ class HomeKitManagerCoordinator:
         snapshot = self.yaml_store.save(validated["document"], expected_file_version)
         self.yaml_snapshot = snapshot
         self.fingerprint = build_fingerprint(self.bridges, self.inventory, snapshot.document)
+        self.history_entries.append(make_history_entry(snapshot.document, fingerprint=self.fingerprint))
+        self.history_entries = self.history_entries[-50:]
         _LOGGER.info(
             "HomeKit-Manager-Entwurf gespeichert: file_version=%s entities=%d",
             snapshot.file_version,
@@ -231,6 +260,8 @@ class HomeKitManagerCoordinator:
         )
         self.yaml_snapshot = snapshot
         self.fingerprint = build_fingerprint(self.bridges, self.inventory, snapshot.document)
+        self.history_entries.append(make_history_entry(snapshot.document, fingerprint=self.fingerprint))
+        self.history_entries = self.history_entries[-50:]
         _LOGGER.info(
             "HomeKit-Manager-Entwurf gespeichert: file_version=%s entities=%d",
             snapshot.file_version,

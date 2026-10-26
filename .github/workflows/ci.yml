@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - 'feature/**'
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -40,6 +42,30 @@ jobs:
           missing = [name for name in required if not (Path('custom_components/homekit_manager') / name).is_file()]
           if missing:
               raise SystemExit(f'Missing integration files: {missing}')
+          PY
+      - name: Verify release manifest and file hashes
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          root = Path('custom_components/homekit_manager')
+          release = json.loads(Path('docs/RELEASE_MANIFEST.json').read_text())
+          manifest = json.loads((root / 'manifest.json').read_text())
+          if release['integration_version'] != manifest['version']:
+              raise SystemExit('Release manifest version does not match integration manifest')
+          files = release['files']
+          if release['file_count'] != len(files):
+              raise SystemExit('Release manifest file_count is inconsistent')
+          for item in files:
+              path = root / item['path']
+              if not path.is_file():
+                  raise SystemExit(f'Missing release file: {item["path"]}')
+              digest = hashlib.sha256(path.read_bytes()).hexdigest()
+              if digest != item['sha256']:
+                  raise SystemExit(f'Hash mismatch: {item["path"]}')
+          print(f"Verified {len(files)} release files for version {manifest['version']}")
           PY
       - name: Python syntax
         run: python -m compileall -q custom_components tests

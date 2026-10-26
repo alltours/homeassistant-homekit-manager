@@ -96,6 +96,14 @@ async def test_homekit_manager_websocket_registration(hass, enable_custom_integr
         "homekit_manager/bridges",
         "homekit_manager/mode_status",
         "homekit_manager/set_mode",
+        "homekit_manager/devices",
+        "homekit_manager/areas",
+        "homekit_manager/diagnostics",
+        "homekit_manager/device_preview",
+        "homekit_manager/rules_preview",
+        "homekit_manager/history",
+        "homekit_manager/history_restore",
+        "homekit_manager/performance",
         "homekit_manager/yaml_status",
         "homekit_manager/validate_draft",
         "homekit_manager/preview",
@@ -183,3 +191,109 @@ async def test_homekit_manager_mode_status_is_conservative(
     assert status["active_mode"] in {"yaml", "homekit_bridge", "homekit_manager"}
     assert status["transition"] == "stable"
     assert all(item["status"] in {"safe", "manual_required"} for item in status["matrix"].values())
+
+
+async def test_homekit_manager_devices_and_areas_websocket_round_trip(
+    hass, enable_custom_integrations, hass_ws_client
+):
+    """Device and area views are read-only aggregates of the live registries."""
+    result = await hass.config_entries.flow.async_init(
+        "homekit_manager", context={"source": config_entries.SOURCE_USER}
+    )
+    await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    client = await hass_ws_client()
+    for command, key in (("homekit_manager/devices", "devices"), ("homekit_manager/areas", "areas")):
+        await client.send_json_auto_id({"type": command})
+        response = await client.receive_json()
+        assert response["type"] == "result"
+        assert response["success"] is True
+        assert key in response["result"]
+
+
+async def test_homekit_manager_diagnostics_websocket_round_trip(
+    hass, enable_custom_integrations, hass_ws_client
+):
+    """Diagnostics are exposed as findings and never perform corrections."""
+    result = await hass.config_entries.flow.async_init(
+        "homekit_manager", context={"source": config_entries.SOURCE_USER}
+    )
+    await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    client = await hass_ws_client()
+    await client.send_json_auto_id({"type": "homekit_manager/diagnostics"})
+    response = await client.receive_json()
+    assert response["success"] is True
+    assert "findings" in response["result"]
+    assert "summary" in response["result"]
+
+
+async def test_homekit_manager_device_preview_is_simulated(
+    hass, enable_custom_integrations, hass_ws_client
+):
+    """Device preview never reports an applied HomeKit change."""
+    result = await hass.config_entries.flow.async_init(
+        "homekit_manager", context={"source": config_entries.SOURCE_USER}
+    )
+    await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    coordinator.inventory = [{"entity_id": "light.test", "name": "Test", "domain": "light", "compatibility": {"expected_type": "Lightbulb"}, "attributes": {}, "state": "on"}]
+    client = await hass_ws_client()
+    await client.send_json_auto_id({"type": "homekit_manager/device_preview", "entity_id": "light.test"})
+    response = await client.receive_json()
+    assert response["success"] is True
+    assert response["result"]["simulation"] is True
+    assert response["result"]["applied"] is False
+
+
+async def test_homekit_manager_rules_preview_is_suggestion_only(
+    hass, enable_custom_integrations, hass_ws_client
+):
+    """Rules are evaluated but never persisted or applied."""
+    result = await hass.config_entries.flow.async_init(
+        "homekit_manager", context={"source": config_entries.SOURCE_USER}
+    )
+    await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    coordinator.inventory = [{"entity_id": "light.test", "domain": "light", "area_name": "Living", "available": True, "compatibility": {"status": "supported"}}]
+    client = await hass_ws_client()
+    await client.send_json_auto_id({"type": "homekit_manager/rules_preview", "rules": [{"id": "living-lights", "priority": 10, "match": {"area_name": "Living"}, "action": "include"}]})
+    response = await client.receive_json()
+    assert response["success"] is True
+    assert response["result"]["decisions"][0]["decision"] == "include"
+    assert response["result"]["applied"] is False
+
+
+async def test_homekit_manager_history_is_read_only_and_restorable_as_draft(
+    hass, enable_custom_integrations, hass_ws_client
+):
+    """History restoration returns a draft and never an active configuration."""
+    result = await hass.config_entries.flow.async_init(
+        "homekit_manager", context={"source": config_entries.SOURCE_USER}
+    )
+    await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    coordinator.history_entries = [{"document": {"schema_version": 1, "bridges": {}}, "applied": False}]
+    client = await hass_ws_client()
+    await client.send_json_auto_id({"type": "homekit_manager/history"})
+    response = await client.receive_json()
+    assert response["success"] is True
+    assert response["result"]["count"] == 1
+    await client.send_json_auto_id({"type": "homekit_manager/history_restore", "index": 0})
+    response = await client.receive_json()
+    assert response["success"] is True
+    assert response["result"]["restored"] is True
+    assert response["result"]["applied"] is False
+
+
+async def test_homekit_manager_performance_summary_is_bounded(
+    hass, enable_custom_integrations, hass_ws_client
+):
+    """Performance information is a bounded read-only summary."""
+    result = await hass.config_entries.flow.async_init(
+        "homekit_manager", context={"source": config_entries.SOURCE_USER}
+    )
+    await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    client = await hass_ws_client()
+    await client.send_json_auto_id({"type": "homekit_manager/performance"})
+    response = await client.receive_json()
+    assert response["success"] is True
+    assert "recommended_page_size" in response["result"]

@@ -7,9 +7,13 @@ from .const import (
     VALIDATE_DRAFT_COMMAND, YAML_STATUS_COMMAND, PREPARE_OPTIONS_DIFF_COMMAND,
     RECONCILE_COMMAND, EXPORT_COMMAND,
     MODE_STATUS_COMMAND, SET_MODE_COMMAND,
+    DEVICES_COMMAND, AREAS_COMMAND, DIAGNOSTICS_COMMAND, DEVICE_PREVIEW_COMMAND, RULES_PREVIEW_COMMAND, HISTORY_COMMAND, HISTORY_RESTORE_COMMAND, PERFORMANCE_COMMAND,
 )
 from .homekit_writer import HomeKitWriteError
 from .yaml_store import YamlStoreError, YamlValidationError, YamlVersionConflict
+from .device_config import build_preview
+from .rules import evaluate_rules
+from .performance import summarize_inventory
 
 @websocket_api.require_admin
 @websocket_api.websocket_command({probatio.Required("type"): INVENTORY_COMMAND, probatio.Optional("query"): str})
@@ -28,6 +32,88 @@ async def websocket_inventory(hass, connection, msg):
 async def websocket_bridges(hass, connection, msg):
     coordinator = hass.data["homekit_manager"]["coordinator"]
     connection.send_result(msg["id"], {"bridges": coordinator.bridges})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required("type"): DEVICES_COMMAND})
+@websocket_api.async_response
+async def websocket_devices(hass, connection, msg):
+    """Return aggregated device views; this endpoint never writes registries."""
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    connection.send_result(msg["id"], {"devices": coordinator.devices})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required("type"): AREAS_COMMAND})
+@websocket_api.async_response
+async def websocket_areas(hass, connection, msg):
+    """Return aggregated area views; this endpoint never writes registries."""
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    connection.send_result(msg["id"], {"areas": coordinator.areas})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required("type"): DIAGNOSTICS_COMMAND})
+@websocket_api.async_response
+async def websocket_diagnostics(hass, connection, msg):
+    """Return read-only findings and recommendations."""
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    connection.send_result(msg["id"], coordinator.diagnostics())
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required("type"): DEVICE_PREVIEW_COMMAND, probatio.Required("entity_id"): str, probatio.Optional("options"): dict})
+@websocket_api.async_response
+async def websocket_device_preview(hass, connection, msg):
+    """Return a simulated accessory view; never persists or applies options."""
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    entity = next((item for item in coordinator.inventory if item.get("entity_id") == msg["entity_id"]), None)
+    if entity is None:
+        connection.send_error(msg["id"], "not_found", "Entität nicht im aktuellen Inventar")
+        return
+    try:
+        connection.send_result(msg["id"], build_preview(entity, msg.get("options")))
+    except ValueError as err:
+        connection.send_error(msg["id"], "invalid_options", str(err))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required("type"): RULES_PREVIEW_COMMAND, probatio.Required("rules"): list, probatio.Optional("manual"): dict})
+@websocket_api.async_response
+async def websocket_rules_preview(hass, connection, msg):
+    """Evaluate rule suggestions without saving or applying them."""
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    try:
+        connection.send_result(msg["id"], evaluate_rules(coordinator.inventory, msg["rules"], msg.get("manual")))
+    except ValueError as err:
+        connection.send_error(msg["id"], "invalid_rules", str(err))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required("type"): HISTORY_COMMAND})
+@websocket_api.async_response
+async def websocket_history(hass, connection, msg):
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    connection.send_result(msg["id"], coordinator.history())
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required("type"): HISTORY_RESTORE_COMMAND, probatio.Required("index"): int})
+@websocket_api.async_response
+async def websocket_history_restore(hass, connection, msg):
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    try:
+        connection.send_result(msg["id"], coordinator.restore_history(msg["index"]))
+    except ValueError as err:
+        connection.send_error(msg["id"], "not_found", str(err))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required("type"): PERFORMANCE_COMMAND})
+@websocket_api.async_response
+async def websocket_performance(hass, connection, msg):
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    connection.send_result(msg["id"], summarize_inventory(coordinator.inventory))
 
 
 @websocket_api.require_admin
@@ -145,6 +231,6 @@ def async_register_websocket_commands(hass, coordinator) -> None:
     """Register read-only commands; HA WebSocket auth is required by default."""
     websocket_api.async_register_command(hass, websocket_inventory)
     websocket_api.async_register_command(hass, websocket_bridges)
-    for handler in (websocket_mode_status, websocket_set_mode, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_prepare_options_diff, websocket_reconcile, websocket_export):
+    for handler in (websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_mode_status, websocket_set_mode, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_prepare_options_diff, websocket_reconcile, websocket_export):
         websocket_api.async_register_command(hass, handler)
 

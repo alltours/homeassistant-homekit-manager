@@ -19,6 +19,12 @@ from custom_components.homekit_manager.homekit_writer import HomeKitWriter, Home
 from custom_components.homekit_manager.reconcile import reconcile_desired_state
 from custom_components.homekit_manager.exporter import export_desired_state
 from custom_components.homekit_manager.homekit_reader import read_homekit_entries
+from custom_components.homekit_manager.grouping import build_area_views, build_device_views
+from custom_components.homekit_manager.diagnostics import build_diagnostics, diagnostics_summary
+from custom_components.homekit_manager.device_config import build_preview
+from custom_components.homekit_manager.rules import evaluate_rules
+from custom_components.homekit_manager.history import compare_history, make_history_entry, restore_as_draft
+from custom_components.homekit_manager.performance import summarize_inventory
 
 class HomeKitManagerTests(unittest.TestCase):
     def setUp(self):
@@ -37,6 +43,87 @@ class HomeKitManagerTests(unittest.TestCase):
         self.assertEqual(result[0].area_name, "Flur")
         self.assertIsNone(result[1].state)
         self.assertFalse(result[1].available)
+
+    def test_device_and_area_views_are_deterministic_aggregates(self):
+        entities = [
+            {"entity_id": "light.a", "device_id": "d1", "device_name": "Lamp", "area_id": "a1", "area_name": "Living", "available": True, "compatibility": {"status": "supported"}, "homekit": {"configured_by_filter": True}, "integration_domain": "test"},
+            {"entity_id": "sensor.b", "device_id": "d1", "device_name": "Lamp", "area_id": "a1", "area_name": "Living", "available": False, "compatibility": {"status": "unknown"}, "homekit": {"configured_by_filter": False}, "integration_domain": "test"},
+            {"entity_id": "switch.c", "device_id": None, "area_id": None, "area_name": None, "available": True, "compatibility": {"status": "supported"}, "homekit": {"configured_by_filter": None}, "integration_domain": "mqtt"},
+        ]
+        devices = build_device_views(entities)
+        areas = build_area_views(entities)
+        self.assertEqual(devices[0]["entity_ids"], ["light.a", "sensor.b"])
+        self.assertEqual(devices[0]["unavailable_count"], 1)
+        self.assertEqual(areas[0]["name"], "Kein Bereich")
+        self.assertEqual(areas[1]["device_count"], 1)
+
+    def test_diagnostics_are_deterministic_and_read_only(self):
+        inventory = [
+            {"entity_id": "number.bad", "available": True, "compatibility": {"status": "unsupported", "reason": "unsupported"}, "homekit": {}},
+            {"entity_id": "sensor.lost", "available": False, "compatibility": {"status": "supported"}, "homekit": {}},
+        ]
+        bridges = [{"entry_id": "b1", "filter": {"include_entities": ["number.bad", "sensor.missing"]}}]
+        findings = build_diagnostics(inventory, bridges, {"valid": False, "error": "bad yaml"})
+        self.assertEqual(findings, build_diagnostics(inventory, bridges, {"valid": False, "error": "bad yaml"}))
+        self.assertEqual(diagnostics_summary(findings)["critical"], 2)
+        self.assertTrue(any(item["code"] == "stale_filter_reference" for item in findings))
+
+    def test_device_preview_is_explicitly_simulated(self):
+        result = build_preview({"entity_id": "light.a", "name": "Lamp", "domain": "light", "state": "on", "attributes": {}, "compatibility": {"expected_type": "Lightbulb"}})
+        self.assertTrue(result["simulation"])
+        self.assertFalse(result["applied"])
+        with self.assertRaises(ValueError):
+            build_preview({"entity_id": "light.a", "compatibility": {}}, {"pairing_key": "secret"})
+
+    def test_rules_are_deterministic_manual_first_and_conflict_safe(self):
+        entities = [{"entity_id": "light.a", "area_name": "Living", "available": True, "compatibility": {"status": "supported"}}]
+        rules = [
+            {"id": "exclude", "priority": 5, "match": {"area_name": "Living"}, "action": "exclude"},
+            {"id": "include", "priority": 10, "match": {"area_name": "Living"}, "action": "include"},
+        ]
+        result = evaluate_rules(entities, rules, {"light.a": "exclude"})
+        self.assertEqual(result["decisions"][0]["source"], "manual")
+        conflict = evaluate_rules(entities, rules)
+        self.assertEqual(conflict["decisions"][0]["decision"], "unknown")
+        self.assertEqual(len(conflict["conflicts"]), 1)
+        self.assertFalse(conflict["applied"])
+
+    def test_history_compare_and_restore_never_apply(self):
+        before = {"schema_version": 1, "bridges": {"b": {"policy": "explicit_overrides", "entities": {"light.a": "include"}}}}
+        after = {"schema_version": 1, "bridges": {"b": {"policy": "explicit_overrides", "entities": {"light.a": "exclude", "sensor.b": "include"}}}}
+        diff = compare_history(before, after)
+        self.assertEqual(diff["summary"]["changed"], 1)
+        self.assertEqual(diff["summary"]["added"], 1)
+        entry = make_history_entry(after)
+        restored = restore_as_draft(entry)
+        self.assertTrue(restored["restored"])
+        self.assertFalse(restored["applied"])
+
+    def test_performance_summary_is_deterministic(self):
+        summary = summarize_inventory([
+            {"entity_id": "light.a", "domain": "light", "available": True},
+            {"entity_id": "sensor.b", "domain": "sensor", "available": False},
+        ])
+        self.assertEqual(summary["entity_count"], 2)
+        self.assertEqual(summary["domain_counts"], {"light": 1, "sensor": 1})
+        self.assertFalse(summary["virtualization_recommended"])
+
+    def test_performance_summary_handles_release_scale_inventories(self):
+        for count in (2500, 5000):
+            entities = [
+                {
+                    "entity_id": f"light.synthetic_{index}",
+                    "domain": "light",
+                    "available": index % 10 != 0,
+                }
+                for index in range(count)
+            ]
+            summary = summarize_inventory(entities)
+            self.assertEqual(summary["entity_count"], count)
+            self.assertEqual(summary["unavailable_count"], count // 10)
+            self.assertEqual(summary["domain_counts"], {"light": count})
+            self.assertEqual(summary["recommended_page_size"], 100 if count == 2500 else 50)
+            self.assertEqual(summary["virtualization_recommended"], count > 2500)
 
     def test_state_only_entities_are_visible_with_unknown_registry_metadata(self):
         result = build_inventory(
@@ -93,13 +180,19 @@ class HomeKitManagerTests(unittest.TestCase):
         )
 
     def test_large_inventory(self):
-        entries = {}
-        states = {}
-        for i in range(1500):
-            entity_id = f"light.test_{i}"
-            entries[entity_id] = SimpleNamespace(entity_id=entity_id, name=None, original_name=None, device_id=None, area_id=None, platform="test", device_class=None, original_device_class=None, entity_category=None, disabled_by=None, hidden_by=None, config_entry_id=None)
-            states[entity_id] = SimpleNamespace(state="off", attributes={})
-        self.assertEqual(len(build_inventory({"entities": entries}, {}, {}, states)), 1500)
+        for count in (1500, 2500, 5000):
+            entries = {}
+            states = {}
+            for i in range(count):
+                entity_id = f"light.test_{i}"
+                entries[entity_id] = SimpleNamespace(entity_id=entity_id, name=None, original_name=None, device_id=None, area_id=None, platform="test", device_class=None, original_device_class=None, entity_category=None, disabled_by=None, hidden_by=None, config_entry_id=None)
+                states[entity_id] = SimpleNamespace(state="off", attributes={})
+            result = build_inventory({"entities": entries}, {}, {}, states)
+            self.assertEqual(len(result), count)
+            self.assertEqual(
+                [item.entity_id for item in result],
+                sorted(entries),
+            )
 
     def test_draft_serialization_is_deterministic_and_non_persistent(self):
         result = serialize_draft("bridge-1", {"sensor.z": "exclude", "light.a": "include", "switch.x": "unchanged"})

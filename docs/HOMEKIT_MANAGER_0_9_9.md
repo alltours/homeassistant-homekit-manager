@@ -1,0 +1,66 @@
+# HomeKit Manager 0.9.9
+
+## Ziel
+
+0.9.9 ergänzt die technische Performance- und Stabilitätsgrundlage für große
+Inventare.
+
+## Metriken
+
+Der authentifizierte, read-only Endpunkt `homekit_manager/performance` liefert:
+
+- Entitätsanzahl
+- Anzahl nicht verfügbarer Entitäten
+- Domain-Verteilung
+- empfohlene Seitengröße
+- Hinweis auf Virtualisierung bei sehr großen Beständen
+- dokumentiertes event-driven Refresh-Modell
+
+Die Antwort ist begrenzt und enthält keine Pairing- oder geheimen Daten.
+
+## Stabilität
+
+- Frontend-Inventar wird nur initial beziehungsweise explizit aktualisiert geladen.
+- Normale Home-Assistant-State-Änderungen führen nicht zu vollständigem Inventar-Reload.
+- Entitätsansicht verwendet Pagination.
+- WebSocket-Endpunkte sind authentifiziert.
+
+## Offene Reifeprüfungen
+
+Noch nicht vollständig nachgewiesen sind:
+
+- reale Home-Assistant-Live-Lasttests mit 2.500 und 5.000 Entitäten
+- synthetische 2.500-/5.000-Entitätentests der Performance-Zusammenfassung sind abgedeckt
+- der tatsächliche Inventaraufbau einschließlich deterministischer Sortierung ist für
+  1.500, 2.500 und 5.000 synthetische Registry-/State-Einträge abgedeckt
+- Tabellen-Checkboxen, Zustandsauswahlen, Sortiersteuerungen und Seitennavigation besitzen
+  zugängliche Beschriftungen beziehungsweise tastaturbedienbare Controls
+- aktive Registerkarte, Ladezustand und Statusmeldungen sind für assistive Technologien
+  semantisch ausgezeichnet
+- die Hauptnavigation verwendet `tablist`-/`tab`-Semantik mit `aria-selected`
+- mobile Layout-Regeln für schmale Ansichten sind statisch im Frontend enthalten und im
+  Verhaltenstest auf Vorhandensein geprüft
+- die Browser-Fixture liefert die seit 0.9.3 verwendeten read-only-Endpunkte für Geräte,
+  Bereiche, Diagnose und simulierte Gerätevorschau
+- der echte Chromium-Mobile-Lauf mit 500px CSS-Fensterbreite zeigt zwei lesbare Karten-
+  spalten; die Tab-Leiste bleibt kontrolliert horizontal scrollbar
+- vollständige mobile Browserabnahme
+- vollständige Screenreader-Abnahme
+- vollständige Übersetzungsabdeckung aller UI-Texte
+- produktive Abnahme der gesamten 0.9.x-Kette
+
+## Teststatus
+
+- Python-Kompilierung: bestanden.
+- JavaScript-Syntaxprüfung: bestanden.
+- Frontend-Verhaltenstest: bestanden.
+- Home-Assistant-Integrationstests und Unit-Tests: 42 bestanden.
+- Lokales Installationsarchiv `homekit-manager-0.9.9.zip`: 30 Dateien, SHA-256
+  `1cff20e3c492912d60c303996fc30ee6c481ea12b17e672381a0008bf50d1628`
+- Echte Chromium-Fixture-Prüfung: bestanden; die Fixture wurde über einen kurzlebigen
+  lokalen HTTP-Server geladen. Erfolgssicht, Fehleranzeige und leere Browserkonsole wurden
+  geprüft.
+- Chromium-Mobile-Screenshot: bestanden bei `500x844`; die Karten bleiben innerhalb des
+  Viewports lesbar und die Tab-Leiste scrollt horizontal.
+
+Die produktive Installation wurde nicht verändert.

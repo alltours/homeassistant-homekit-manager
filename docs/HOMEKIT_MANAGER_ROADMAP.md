@@ -9,13 +9,83 @@ gesperrt, bis Bridge-Identität, Pairings, Accessory-IDs und Instance-IDs nachwe
 erhalten werden können. Die Versionierung verwendet ab diesem Stand die Reihe `0.9.x`;
 historische `1.0.x`-Releases bleiben unverändert.
 
+## Phase 0.9.3 – Geräte- und Bereichsverwaltung
+
+Auf `feature/homekit-manager-0.9.3` lokal implementiert. Die Entity-Registry wird
+read-only zu stabilen Geräte- und Bereichsansichten aggregiert. Neue authentifizierte
+WebSocket-Endpunkte liefern diese Ansichten; das Frontend erhält eigene Geräte- und
+Bereiche-Tabs. Sammelaktionen verändern weiterhin ausschließlich lokale Entwürfe.
+
+Die lokale Abnahme ist bestanden. Veröffentlichung, HACS-Update und produktive
+Installation bleiben bis zur vollständigen 0.9.2-Produktivabnahme zurückgestellt.
+
+## Phase 0.9.4 – Kompatibilitätsprüfung und Diagnose
+
+Auf `feature/homekit-manager-0.9.4` lokal implementiert. Die Diagnose erstellt aus
+Inventar, Bridge-Filtern und YAML-Status reproduzierbare Befunde für nicht unterstützte
+oder unklare Entitäten, nicht verfügbare Entitäten, veraltete Filterreferenzen,
+Mehrfachzuordnungen und ungültige YAML. Die WebSocket-Schnittstelle ist read-only;
+Korrekturen werden nicht automatisch ausgeführt.
+
+Die lokale Abnahme ist bestanden. Veröffentlichung und produktive Installation bleiben
+bis zur vollständigen Abnahme der produktiven 0.9.2-Kette zurückgestellt.
+
+## Phase 0.9.5 – Erweiterte Gerätekonfiguration und Vorschau
+
+Auf `feature/homekit-manager-0.9.5` lokal implementiert. Der neue read-only-Endpunkt
+`homekit_manager/device_preview` erzeugt eine explizit als Simulation markierte
+HomeKit-Service-Vorschau aus einer Inventar-Entität. Zulässige Vorschauoptionen sind
+auf Anzeigename und Service-Typ begrenzt; Pairing- und Identitätsdaten werden weder
+angenommen noch gespeichert. Die Detailansicht kann die Simulation anfordern.
+
+Eine echte HomeKit-Übernahme bleibt durch den gesperrten Writer ausgeschlossen.
+Veröffentlichung und produktive Installation bleiben bis zur vollständigen Abnahme der
+produktiven 0.9.2-Kette zurückgestellt.
+
+## Phase 0.9.6 – Multi-Bridge-Management
+
+Auf `feature/homekit-manager-0.9.6` lokal erweitert. Mehrere Bridges werden vollständig
+erkannt und in der Konfigurationsansicht angezeigt. Bei mehrdeutiger Auswahl wird keine
+Bridge implizit verwendet; Moduswechsel und Änderungsplanung bleiben gesperrt, bis eine
+eindeutige Bridge-Zuordnung vorliegt. Bridge-Neuanlage, Löschung und Verschiebung sind
+nicht implementiert und werden nicht automatisch ausgeführt.
+
+## Phase 0.9.7 – Regelbasierte Entitätsfreigabe
+
+Auf `feature/homekit-manager-0.9.7` lokal implementiert. Der Endpunkt
+`homekit_manager/rules_preview` wertet deterministische Regeln nach Priorität aus.
+Manuelle Entscheidungen haben Vorrang; widersprüchliche Regeln werden als Konflikt
+gemeldet. Die Auswertung ist ausschließlich Vorschlag und setzt niemals automatisch
+HomeKit-Optionen oder YAML.
+
+## Phase 0.9.8 – Konfigurationshistorie und Wiederherstellung
+
+Auf `feature/homekit-manager-0.9.8` lokal implementiert. Während der laufenden Manager-
+Instanz werden gespeicherte Desired-State-Entwürfe als begrenzte, redigierte
+Historieneinträge geführt. Vergleiche zeigen
+hinzugefügte, entfernte und geänderte Entitäten. Eine Wiederherstellung liefert nur
+einen neuen Entwurf; `applied` bleibt immer `False`.
+
+## Phase 0.9.9 – Performance, Stabilität und Produktreife
+
+Auf `feature/homekit-manager-0.9.9` lokal implementiert. Der read-only-Endpunkt
+`homekit_manager/performance` liefert deterministische Größen-, Domain- und
+Verfügbarkeitsmetriken sowie eine begrenzte Empfehlung zur Seitengröße. Das Frontend
+verwendet weiterhin Pagination und lädt das Inventar nicht bei normalen State-Updates
+neu. Vollständige Lasttests mit 2.500 und 5.000 realen Entitäten sowie eine vollständige
+mobile/Screenreader-Abnahme bleiben vor einer Produktreife-Freigabe offen.
+
 ## Status
 
-Stand: 26.10.2026. Die produktive Home-Assistant-Installation enthält den korrigierten
-`config_flow.py`-Dateistand und wurde dafür einmal kontrolliert neu gestartet. Der direkte
-Integrationspfad erkennt `homekit_manager`, der native Config Flow ist zur Laufzeit jedoch
-weiterhin nicht verfügbar. Die Ursache ist noch nicht durch einen produktiven Importfehler
-belegt. Weitere produktive Änderungen und Neustarts sind nicht freigegeben.
+Stand: 26.10.2026. Die lokale 0.9.9-Entwicklung ist implementiert, dokumentiert und mit
+42 Tests sowie einer frischen Browser-Liveprüfung validiert. Das Panel rendert, das
+Inventar wird geladen und `mode_status` antwortet nach vollständigem Home-Assistant-Start.
+
+Der produktive Home Assistant läuft weiterhin auf 0.9.2. Die lokalen Versionen 0.9.3 bis
+0.9.9 sind noch nicht nach `main` integriert, nicht als Releases veröffentlicht und nicht
+über HACS aktualisiert. Vor einer Veröffentlichung fehlen insbesondere die formale
+Releaseabnahme, die Ausführung der CI auf dem neuen Stand sowie die Entscheidung über die
+noch offenen Last-, Mobile- und Screenreader-Prüfungen.
 
 ## Reihenfolge
 
@@ -86,14 +156,23 @@ belegt. Weitere produktive Änderungen und Neustarts sind nicht freigegeben.
    laufende Integrationsseite erkennt den Manager aktuell. Der produktive Stand ist jedoch
    älter als RC1 (`0.1.0`, ungültiges Dokumentationsfeld, `strings.json` nicht sichtbar);
    Eigentümer, Rechte und SHA-256 bleiben ungeklärt. Status: **NO-GO für Übertragung**.
-13. **Phase 5D – Native UI/UX**
-14. **Phase 6A – HomeKit-Statusermittlung**
-15. **Phase 6B – Konfigurationsübergabe**
-16. **Phase 6C – Kontrollierter HomeKit-Praxistest**
-17. **Phase 7 – Stabilität**
-18. **Phase 8 – Erweiterte Verwaltungsfunktionen**
-19. **Phase 9 – Wartbarkeit**
-20. **Phase 10 – Release 1.0**
+13. **Phase 0.9.3–0.9.9 – Lokale Produktreife-Runde**
+   Die lokalen Erweiterungen für Geräte/Bereiche, Diagnose, Vorschau, Multi-Bridge-Schutz,
+   Regeln, Historie und Performance sind implementiert. Die lokale Prüfung umfasst
+   Python-Kompilierung, JavaScript-Syntax, Frontend-Verhalten und 42 Tests. Die
+   synthetischen 2.500-/5.000-Entitätengrößenprüfungen bestehen; echte Live-Lasttests
+   gegen eine große Home-Assistant-Instanz bleiben offen.
+   Eine frische Browserprüfung gegen die laufende Instanz zeigt ein sichtbares Panel,
+   funktionierende Entitäten- und Konfigurationsansichten sowie keine Browser-Warnungen.
+   Die produktive Installation bleibt auf 0.9.2; es erfolgte keine Aktualisierung.
+14. **Phase 5D – Native UI/UX**
+15. **Phase 6A – HomeKit-Statusermittlung**
+16. **Phase 6B – Konfigurationsübergabe**
+17. **Phase 6C – Kontrollierter HomeKit-Praxistest**
+18. **Phase 7 – Stabilität**
+19. **Phase 8 – Erweiterte Verwaltungsfunktionen**
+20. **Phase 9 – Wartbarkeit**
+21. **Phase 10 – Release 1.0**
 
 ## Sicherheitsstatus
 

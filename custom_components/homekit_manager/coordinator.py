@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import logging
+from pathlib import Path
 from typing import Any
 from homeassistant.core import callback
 from .compatibility import classify_entity
@@ -27,6 +28,7 @@ from .grouping import build_area_views, build_device_views
 from .diagnostics import build_diagnostics, diagnostics_summary
 from .history import make_history_entry, restore_as_draft
 from .history_store import HistoryStore
+from .config_source import detect_configuration_sources
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,6 +51,12 @@ class HomeKitManagerCoordinator:
         self.yaml_store = YamlStore(yaml_path)
         self.mode_store = ModeStore(hass)
         self.desired_modes: dict[str, str] = {}
+        self.configuration_sources: dict[str, Any] = {
+            "sources": [], "active_mode": "unknown", "mixed": False,
+            "ambiguous": True, "message": "Konfigurationsquelle wird gelesen.",
+        }
+        self._configuration_text = ""
+        self._manager_file_exists = False
         # File I/O is intentionally deferred to the executor.  The coordinator
         # is constructed during Home Assistant setup, which runs on the event
         # loop and must not perform synchronous filesystem reads.
@@ -62,6 +70,24 @@ class HomeKitManagerCoordinator:
         self.desired_modes = await self.mode_store.async_load()
         self.yaml_snapshot = await self.hass.async_add_executor_job(self.yaml_store.load)
         self.history_entries = await self.history_store.async_load()
+        config_path = getattr(getattr(self.hass, "config", None), "path", None)
+        if callable(config_path):
+            configuration_file = config_path("configuration.yaml")
+            manager_file = config_path("homekit_manager.yaml")
+            def _read_sources():
+                try:
+                    text = open(configuration_file, encoding="utf-8").read()
+                except OSError:
+                    text = ""
+                try:
+                    manager_exists = Path(manager_file).exists()
+                except OSError:
+                    manager_exists = False
+                return text, manager_exists
+            self._configuration_text, self._manager_file_exists = await self.hass.async_add_executor_job(_read_sources)
+            self.configuration_sources = detect_configuration_sources(
+                self._configuration_text, manager_file_exists=self._manager_file_exists, bridge_count=0
+            )
 
     def selected_bridge(self) -> dict[str, Any] | None:
         """Return the selected bridge, never an arbitrary bridge."""
@@ -102,6 +128,11 @@ class HomeKitManagerCoordinator:
             states = {state.entity_id: state for state in self.hass.states.async_all()}
             records = build_inventory(entities, devices, areas, states)
             bridges = read_homekit_entries(self.hass)
+            self.configuration_sources = detect_configuration_sources(
+                self._configuration_text,
+                manager_file_exists=self._manager_file_exists,
+                bridge_count=len(bridges),
+            )
             bridge_ids = {bridge.entry_id for bridge in bridges}
             if self.selected_bridge_id not in bridge_ids:
                 self.selected_bridge_id = next(iter(bridge_ids), None) if len(bridges) == 1 else None
@@ -175,6 +206,9 @@ class HomeKitManagerCoordinator:
 
     def _active_mode(self, bridge: dict[str, Any] | None) -> str:
         """Infer the current mode without claiming a migration occurred."""
+        detected = self.configuration_sources.get("active_mode")
+        if detected in (*MANAGEMENT_MODES, "mixed"):
+            return detected
         if bridge:
             return MODE_HOMEKIT_BRIDGE
         if self.yaml_snapshot.exists and self.yaml_snapshot.valid:
@@ -210,6 +244,7 @@ class HomeKitManagerCoordinator:
             "bridge_count": len(self.bridges),
             "bridge_selection_required": len(self.bridges) > 1,
             "message": "Moduswechsel bleiben gesperrt, solange Bridge-Identität und Pairing-Erhalt nicht nachgewiesen sind.",
+            "source_detection": self.configuration_sources,
         }
 
     async def async_set_mode(self, mode: str) -> dict[str, Any]:

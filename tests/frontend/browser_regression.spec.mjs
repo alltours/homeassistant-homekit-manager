@@ -17,7 +17,7 @@ for (const [name, width, height] of viewports) {
       await page.goto("/tests/frontend/browser_fixture.html");
       const panel = page.locator("homekit-manager-panel");
       await expect(panel).toBeVisible();
-      await expect(panel.locator("text=Deine Bridge auf einen Blick")).toBeVisible();
+      await expect(panel.locator("text=Eine klare Übersicht deiner Konfiguration")).toBeVisible();
       await panel.locator("text=Geräte verwalten").click();
       await expect(panel.locator("text=Was soll in HomeKit erscheinen?")).toBeVisible();
       await panel.locator("[data-expand]").first().click();

@@ -240,3 +240,10 @@ Historienansichten, Bridge-ID-Validierung, konservative Core-Referenzierung und 
 Regressionstests. Der HomeKit-Schreibpfad bleibt deaktiviert. Release und Produktivinstallation
 bleiben bis zur vollständigen Browser- und CI-Abnahme ausstehend.
 
+# HomeKit Manager 0.9.12 – Functional Redesign
+
+The 0.9.12 development line consolidates configuration-method discovery,
+bridge-scoped editing and the simplified single-page workflow. Productive
+HomeKit application remains disabled until a supported Core write contract
+and pairing-preservation evidence exist.
+

@@ -14,6 +14,7 @@ assert.match(panel.shadowRoot.innerHTML, /HomeKit/);
 assert.match(panel.shadowRoot.innerHTML, /Geräte/);
 assert.match(panel.shadowRoot.innerHTML, /Änderungen/);
 assert.match(panel.shadowRoot.innerHTML, /Einstellungen/);
+assert.match(panel.shadowRoot.innerHTML, /Konfigurationsmethode/);
 
 let calls = 0;
 panel.hass = { callWS: async ({ type }) => { calls += 1; if (type === "homekit_manager/inventory") throw new Error("WebSocket nicht erreichbar"); throw new Error(`unexpected command: ${type}`); } };
@@ -42,6 +43,8 @@ assert.equal(panel.draft.size, 0, "returning a device to its baseline removes th
 panel.selectView("devices");
 assert.match(panel.shadowRoot.innerHTML, /Auswahlmodus/);
 assert.match(panel.shadowRoot.innerHTML, /data-group="areas"/);
+assert.match(panel.shadowRoot.innerHTML, /data-group="types"/);
+assert.match(panel.shadowRoot.innerHTML, /data-group="zones"/);
 assert.match(panel.shadowRoot.innerHTML, /Details/);
 assert.match(panel.shadowRoot.innerHTML, /@media\(max-width:700px\)/);
 

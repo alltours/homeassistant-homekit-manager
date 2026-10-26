@@ -50,6 +50,14 @@ Bridge implizit verwendet; Moduswechsel und Änderungsplanung bleiben gesperrt, 
 eindeutige Bridge-Zuordnung vorliegt. Bridge-Neuanlage, Löschung und Verschiebung sind
 nicht implementiert und werden nicht automatisch ausgeführt.
 
+## Phase 0.9.7 – Regelbasierte Entitätsfreigabe
+
+Auf `feature/homekit-manager-0.9.7` lokal implementiert. Der Endpunkt
+`homekit_manager/rules_preview` wertet deterministische Regeln nach Priorität aus.
+Manuelle Entscheidungen haben Vorrang; widersprüchliche Regeln werden als Konflikt
+gemeldet. Die Auswertung ist ausschließlich Vorschlag und setzt niemals automatisch
+HomeKit-Optionen oder YAML.
+
 ## Status
 
 Stand: 26.10.2026. Die produktive Home-Assistant-Installation enthält den korrigierten

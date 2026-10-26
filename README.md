@@ -44,6 +44,7 @@ See [the 0.9.3 implementation notes](docs/HOMEKIT_MANAGER_0_9_3.md).
 See [the 0.9.4 implementation notes](docs/HOMEKIT_MANAGER_0_9_4.md).
 See [the 0.9.5 implementation notes](docs/HOMEKIT_MANAGER_0_9_5.md).
 See [the 0.9.6 implementation notes](docs/HOMEKIT_MANAGER_0_9_6.md).
+See [the 0.9.7 implementation notes](docs/HOMEKIT_MANAGER_0_9_7.md).
 
 ## HACS status
 

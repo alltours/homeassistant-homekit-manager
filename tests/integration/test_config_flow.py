@@ -100,6 +100,7 @@ async def test_homekit_manager_websocket_registration(hass, enable_custom_integr
         "homekit_manager/areas",
         "homekit_manager/diagnostics",
         "homekit_manager/device_preview",
+        "homekit_manager/rules_preview",
         "homekit_manager/yaml_status",
         "homekit_manager/validate_draft",
         "homekit_manager/preview",
@@ -237,4 +238,22 @@ async def test_homekit_manager_device_preview_is_simulated(
     response = await client.receive_json()
     assert response["success"] is True
     assert response["result"]["simulation"] is True
+    assert response["result"]["applied"] is False
+
+
+async def test_homekit_manager_rules_preview_is_suggestion_only(
+    hass, enable_custom_integrations, hass_ws_client
+):
+    """Rules are evaluated but never persisted or applied."""
+    result = await hass.config_entries.flow.async_init(
+        "homekit_manager", context={"source": config_entries.SOURCE_USER}
+    )
+    await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    coordinator.inventory = [{"entity_id": "light.test", "domain": "light", "area_name": "Living", "available": True, "compatibility": {"status": "supported"}}]
+    client = await hass_ws_client()
+    await client.send_json_auto_id({"type": "homekit_manager/rules_preview", "rules": [{"id": "living-lights", "priority": 10, "match": {"area_name": "Living"}, "action": "include"}]})
+    response = await client.receive_json()
+    assert response["success"] is True
+    assert response["result"]["decisions"][0]["decision"] == "include"
     assert response["result"]["applied"] is False

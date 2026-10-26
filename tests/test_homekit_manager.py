@@ -22,6 +22,7 @@ from custom_components.homekit_manager.homekit_reader import read_homekit_entrie
 from custom_components.homekit_manager.grouping import build_area_views, build_device_views
 from custom_components.homekit_manager.diagnostics import build_diagnostics, diagnostics_summary
 from custom_components.homekit_manager.device_config import build_preview
+from custom_components.homekit_manager.rules import evaluate_rules
 
 class HomeKitManagerTests(unittest.TestCase):
     def setUp(self):
@@ -71,6 +72,19 @@ class HomeKitManagerTests(unittest.TestCase):
         self.assertFalse(result["applied"])
         with self.assertRaises(ValueError):
             build_preview({"entity_id": "light.a", "compatibility": {}}, {"pairing_key": "secret"})
+
+    def test_rules_are_deterministic_manual_first_and_conflict_safe(self):
+        entities = [{"entity_id": "light.a", "area_name": "Living", "available": True, "compatibility": {"status": "supported"}}]
+        rules = [
+            {"id": "exclude", "priority": 5, "match": {"area_name": "Living"}, "action": "exclude"},
+            {"id": "include", "priority": 10, "match": {"area_name": "Living"}, "action": "include"},
+        ]
+        result = evaluate_rules(entities, rules, {"light.a": "exclude"})
+        self.assertEqual(result["decisions"][0]["source"], "manual")
+        conflict = evaluate_rules(entities, rules)
+        self.assertEqual(conflict["decisions"][0]["decision"], "unknown")
+        self.assertEqual(len(conflict["conflicts"]), 1)
+        self.assertFalse(conflict["applied"])
 
     def test_state_only_entities_are_visible_with_unknown_registry_metadata(self):
         result = build_inventory(

@@ -113,7 +113,7 @@ const dashboardOriginalRender = HomeKitManagerPanel.prototype.render;
 HomeKitManagerPanel.prototype.render = function () {
   dashboardOriginalRender.call(this);
   const save = this.shadowRoot.querySelector("[data-dashboard-save]");
-  if (save && this.supportsApply() && !this.shadowRoot.querySelector("[data-dashboard-apply]")) {
+  if (save && this.supportsApply() && this.changes().length && !this.shadowRoot.querySelector("[data-dashboard-apply]")) {
     save.insertAdjacentHTML("afterend", '<button data-dashboard-apply>Änderung anwenden</button>');
     const notice = [...this.shadowRoot.querySelectorAll(".notice")].find((item) => item.textContent.includes("Produktive HomeKit-Anwendung"));
     if (notice) notice.textContent = "Anwenden ist nach Vorschau und Bestätigung nur für diese reguläre SOURCE_USER-Bridge möglich.";

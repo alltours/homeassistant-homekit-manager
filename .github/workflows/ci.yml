@@ -73,11 +73,28 @@ jobs:
         run: |
           ! grep -R "apply_enabled[[:space:]]*=[[:space:]]*True" -n custom_components
           grep -R "HomeKitWriteDisabled" -n custom_components/homekit_manager/homekit_writer.py
-          ! grep -R "async_update_entry\|async_reload\|pairing" -n custom_components/homekit_manager/homekit_writer.py
+          grep -R "SOURCE_USER\|allow_production\|async_update_entry" -n custom_components/homekit_manager/homekit_writer.py
+          ! grep -R "async_reload\|\.storage\|pairing" -n custom_components/homekit_manager/homekit_writer.py
       - name: Python tests
         run: pytest -c tests/integration/pytest.ini -q tests/integration tests/test_homekit_manager.py
       - name: Frontend tests
         run: |
           node --check custom_components/homekit_manager/www/homekit-manager.js
           node tests/frontend/test_panel.mjs
+
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser test dependencies
+        run: npm install --no-save @playwright/test playwright
+      - name: Install Chromium and WebKit
+        run: npx playwright install --with-deps chromium webkit
+      - name: Responsive browser regression
+        run: |
+          npx playwright test -c tests/frontend/playwright.config.mjs tests/frontend/browser_regression.spec.mjs --browser=chromium
+          npx playwright test -c tests/frontend/playwright.config.mjs tests/frontend/browser_regression.spec.mjs --browser=webkit
 

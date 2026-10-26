@@ -98,6 +98,7 @@ async def test_homekit_manager_websocket_registration(hass, enable_custom_integr
         "homekit_manager/set_mode",
         "homekit_manager/devices",
         "homekit_manager/areas",
+        "homekit_manager/diagnostics",
         "homekit_manager/yaml_status",
         "homekit_manager/validate_draft",
         "homekit_manager/preview",
@@ -202,3 +203,19 @@ async def test_homekit_manager_devices_and_areas_websocket_round_trip(
         assert response["type"] == "result"
         assert response["success"] is True
         assert key in response["result"]
+
+
+async def test_homekit_manager_diagnostics_websocket_round_trip(
+    hass, enable_custom_integrations, hass_ws_client
+):
+    """Diagnostics are exposed as findings and never perform corrections."""
+    result = await hass.config_entries.flow.async_init(
+        "homekit_manager", context={"source": config_entries.SOURCE_USER}
+    )
+    await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    client = await hass_ws_client()
+    await client.send_json_auto_id({"type": "homekit_manager/diagnostics"})
+    response = await client.receive_json()
+    assert response["success"] is True
+    assert "findings" in response["result"]
+    assert "summary" in response["result"]

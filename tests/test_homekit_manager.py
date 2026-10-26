@@ -20,6 +20,7 @@ from custom_components.homekit_manager.reconcile import reconcile_desired_state
 from custom_components.homekit_manager.exporter import export_desired_state
 from custom_components.homekit_manager.homekit_reader import read_homekit_entries
 from custom_components.homekit_manager.grouping import build_area_views, build_device_views
+from custom_components.homekit_manager.diagnostics import build_diagnostics, diagnostics_summary
 
 class HomeKitManagerTests(unittest.TestCase):
     def setUp(self):
@@ -51,6 +52,17 @@ class HomeKitManagerTests(unittest.TestCase):
         self.assertEqual(devices[0]["unavailable_count"], 1)
         self.assertEqual(areas[0]["name"], "Kein Bereich")
         self.assertEqual(areas[1]["device_count"], 1)
+
+    def test_diagnostics_are_deterministic_and_read_only(self):
+        inventory = [
+            {"entity_id": "number.bad", "available": True, "compatibility": {"status": "unsupported", "reason": "unsupported"}, "homekit": {}},
+            {"entity_id": "sensor.lost", "available": False, "compatibility": {"status": "supported"}, "homekit": {}},
+        ]
+        bridges = [{"entry_id": "b1", "filter": {"include_entities": ["number.bad", "sensor.missing"]}}]
+        findings = build_diagnostics(inventory, bridges, {"valid": False, "error": "bad yaml"})
+        self.assertEqual(findings, build_diagnostics(inventory, bridges, {"valid": False, "error": "bad yaml"}))
+        self.assertEqual(diagnostics_summary(findings)["critical"], 2)
+        self.assertTrue(any(item["code"] == "stale_filter_reference" for item in findings))
 
     def test_state_only_entities_are_visible_with_unknown_registry_metadata(self):
         result = build_inventory(

@@ -19,6 +19,17 @@ Bereiche-Tabs. Sammelaktionen verändern weiterhin ausschließlich lokale Entwü
 Die lokale Abnahme ist bestanden. Veröffentlichung, HACS-Update und produktive
 Installation bleiben bis zur vollständigen 0.9.2-Produktivabnahme zurückgestellt.
 
+## Phase 0.9.4 – Kompatibilitätsprüfung und Diagnose
+
+Auf `feature/homekit-manager-0.9.4` lokal implementiert. Die Diagnose erstellt aus
+Inventar, Bridge-Filtern und YAML-Status reproduzierbare Befunde für nicht unterstützte
+oder unklare Entitäten, nicht verfügbare Entitäten, veraltete Filterreferenzen,
+Mehrfachzuordnungen und ungültige YAML. Die WebSocket-Schnittstelle ist read-only;
+Korrekturen werden nicht automatisch ausgeführt.
+
+Die lokale Abnahme ist bestanden. Veröffentlichung und produktive Installation bleiben
+bis zur vollständigen Abnahme der produktiven 0.9.2-Kette zurückgestellt.
+
 ## Status
 
 Stand: 26.10.2026. Die produktive Home-Assistant-Installation enthält den korrigierten

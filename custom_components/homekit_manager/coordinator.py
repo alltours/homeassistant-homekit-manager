@@ -24,6 +24,7 @@ from .yaml_store import (
 from .const import MANAGEMENT_MODES, MODE_HOMEKIT_BRIDGE, MODE_HOMEKIT_MANAGER, MODE_YAML
 from .mode_store import ModeStore
 from .grouping import build_area_views, build_device_views
+from .diagnostics import build_diagnostics, diagnostics_summary
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ class HomeKitManagerCoordinator:
         self.bridges: list[dict[str, Any]] = []
         self.devices: list[dict[str, Any]] = []
         self.areas: list[dict[str, Any]] = []
+        self.diagnostic_findings: list[dict[str, Any]] = []
         self.last_error: str | None = None
         self.fingerprint: str | None = None
         config_path = getattr(getattr(hass, "config", None), "path", None)
@@ -95,6 +97,7 @@ class HomeKitManagerCoordinator:
             self.bridges = [bridge.as_dict() for bridge in bridges]
             self.devices = build_device_views(self.inventory)
             self.areas = build_area_views(self.inventory)
+            self.diagnostic_findings = build_diagnostics(self.inventory, self.bridges, self.yaml_snapshot.as_dict() if hasattr(self.yaml_snapshot, "as_dict") else {"valid": self.yaml_snapshot.valid, "error": self.yaml_snapshot.error})
             self.yaml_snapshot = await self.hass.async_add_executor_job(self.yaml_store.load)
             self.fingerprint = build_fingerprint(self.bridges, self.inventory, self.yaml_snapshot.document)
             self.last_error = None
@@ -126,7 +129,12 @@ class HomeKitManagerCoordinator:
             "yaml_file_version": self.yaml_snapshot.file_version,
             "last_error": self.last_error,
             "last_updated": self.yaml_snapshot.last_modified,
+            "diagnostics": diagnostics_summary(self.diagnostic_findings),
         }
+
+    def diagnostics(self) -> dict[str, Any]:
+        """Return the current diagnostic snapshot without applying corrections."""
+        return {"findings": self.diagnostic_findings, "summary": diagnostics_summary(self.diagnostic_findings), "fingerprint": self.fingerprint}
 
     def _active_mode(self, bridge: dict[str, Any] | None) -> str:
         """Infer the current mode without claiming a migration occurred."""

@@ -7,7 +7,7 @@ from .const import (
     VALIDATE_DRAFT_COMMAND, YAML_STATUS_COMMAND, PREPARE_OPTIONS_DIFF_COMMAND,
     RECONCILE_COMMAND, EXPORT_COMMAND,
     MODE_STATUS_COMMAND, SET_MODE_COMMAND,
-    DEVICES_COMMAND, AREAS_COMMAND,
+    DEVICES_COMMAND, AREAS_COMMAND, DIAGNOSTICS_COMMAND,
 )
 from .homekit_writer import HomeKitWriteError
 from .yaml_store import YamlStoreError, YamlValidationError, YamlVersionConflict
@@ -47,6 +47,15 @@ async def websocket_areas(hass, connection, msg):
     """Return aggregated area views; this endpoint never writes registries."""
     coordinator = hass.data["homekit_manager"]["coordinator"]
     connection.send_result(msg["id"], {"areas": coordinator.areas})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required("type"): DIAGNOSTICS_COMMAND})
+@websocket_api.async_response
+async def websocket_diagnostics(hass, connection, msg):
+    """Return read-only findings and recommendations."""
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    connection.send_result(msg["id"], coordinator.diagnostics())
 
 
 @websocket_api.require_admin
@@ -164,6 +173,6 @@ def async_register_websocket_commands(hass, coordinator) -> None:
     """Register read-only commands; HA WebSocket auth is required by default."""
     websocket_api.async_register_command(hass, websocket_inventory)
     websocket_api.async_register_command(hass, websocket_bridges)
-    for handler in (websocket_devices, websocket_areas, websocket_mode_status, websocket_set_mode, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_prepare_options_diff, websocket_reconcile, websocket_export):
+    for handler in (websocket_devices, websocket_areas, websocket_diagnostics, websocket_mode_status, websocket_set_mode, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_prepare_options_diff, websocket_reconcile, websocket_export):
         websocket_api.async_register_command(hass, handler)
 

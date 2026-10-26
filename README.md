@@ -41,6 +41,7 @@ Changes are developed on a branch, tested locally, committed, pushed to `main`, 
 
 See [the 0.9.2 implementation notes](docs/HOMEKIT_MANAGER_0_9_2.md).
 See [the 0.9.3 implementation notes](docs/HOMEKIT_MANAGER_0_9_3.md).
+See [the 0.9.4 implementation notes](docs/HOMEKIT_MANAGER_0_9_4.md).
 
 ## HACS status
 

@@ -37,7 +37,7 @@ Changes are developed on a branch, tested locally, committed, pushed to `main`, 
 
 ## HACS status
 
-The repository uses the supported single-integration layout and includes `hacs.json`. It is not yet advertised as HACS-ready: current HACS requirements also call for `documentation` and `issue_tracker` fields in `manifest.json` plus repository brand assets. Those additions require a separately tested release.
+The repository uses the supported single-integration layout and includes `hacs.json`. HACS cannot use this repository because it is private; HACS documents that private GitHub repositories are not supported. See `docs/HACS_STATUS.md` and `docs/HOMEKIT_MANAGER_GITHUB_UPDATE.md` for the cause and the supported authenticated GitHub update process.
 
 ## Known limitations
 

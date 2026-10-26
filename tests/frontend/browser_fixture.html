@@ -17,7 +17,7 @@
           domain: "light",
           available: true,
           compatibility: { status: "supported", expected_type: "Lightbulb" },
-          homekit: { configured_by_filter: true, filter_reason: "domain_include", published: "unknown" },
+          homekit: { configured_by_filter: true, current_status: "included", filter_reason: "domain_include", published: "unknown" },
         },
         {
           entity_id: "sensor.temperature",
@@ -28,7 +28,7 @@
           domain: "sensor",
           available: true,
           compatibility: { status: "supported", expected_type: "TemperatureSensor" },
-          homekit: { configured_by_filter: false, filter_reason: "not_in_include", published: "unknown" },
+          homekit: { configured_by_filter: false, current_status: "excluded", filter_reason: "not_in_include", published: "unknown" },
         },
       ];
       const hass = {

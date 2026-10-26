@@ -155,6 +155,7 @@ async def test_homekit_manager_reads_real_registries(hass, enable_custom_integra
     assert record["area_name"] == "Test Area"
     assert record["device_name"] == "Test Device"
     assert record["available"] is True
+    assert record["homekit"]["current_status"] in {"included", "excluded", "unknown"}
     assert coordinator.overview()["active_entities"] >= 1
 
 

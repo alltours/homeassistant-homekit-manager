@@ -103,6 +103,7 @@ async def test_homekit_manager_websocket_registration(hass, enable_custom_integr
         "homekit_manager/rules_preview",
         "homekit_manager/history",
         "homekit_manager/history_restore",
+        "homekit_manager/performance",
         "homekit_manager/yaml_status",
         "homekit_manager/validate_draft",
         "homekit_manager/preview",
@@ -281,3 +282,18 @@ async def test_homekit_manager_history_is_read_only_and_restorable_as_draft(
     assert response["success"] is True
     assert response["result"]["restored"] is True
     assert response["result"]["applied"] is False
+
+
+async def test_homekit_manager_performance_summary_is_bounded(
+    hass, enable_custom_integrations, hass_ws_client
+):
+    """Performance information is a bounded read-only summary."""
+    result = await hass.config_entries.flow.async_init(
+        "homekit_manager", context={"source": config_entries.SOURCE_USER}
+    )
+    await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    client = await hass_ws_client()
+    await client.send_json_auto_id({"type": "homekit_manager/performance"})
+    response = await client.receive_json()
+    assert response["success"] is True
+    assert "recommended_page_size" in response["result"]

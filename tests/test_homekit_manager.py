@@ -24,6 +24,7 @@ from custom_components.homekit_manager.diagnostics import build_diagnostics, dia
 from custom_components.homekit_manager.device_config import build_preview
 from custom_components.homekit_manager.rules import evaluate_rules
 from custom_components.homekit_manager.history import compare_history, make_history_entry, restore_as_draft
+from custom_components.homekit_manager.performance import summarize_inventory
 
 class HomeKitManagerTests(unittest.TestCase):
     def setUp(self):
@@ -97,6 +98,15 @@ class HomeKitManagerTests(unittest.TestCase):
         restored = restore_as_draft(entry)
         self.assertTrue(restored["restored"])
         self.assertFalse(restored["applied"])
+
+    def test_performance_summary_is_deterministic(self):
+        summary = summarize_inventory([
+            {"entity_id": "light.a", "domain": "light", "available": True},
+            {"entity_id": "sensor.b", "domain": "sensor", "available": False},
+        ])
+        self.assertEqual(summary["entity_count"], 2)
+        self.assertEqual(summary["domain_counts"], {"light": 1, "sensor": 1})
+        self.assertFalse(summary["virtualization_recommended"])
 
     def test_state_only_entities_are_visible_with_unknown_registry_metadata(self):
         result = build_inventory(

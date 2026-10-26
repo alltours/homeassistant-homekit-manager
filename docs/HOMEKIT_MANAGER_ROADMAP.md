@@ -65,6 +65,15 @@ Entwürfe werden als begrenzte, redigierte Historieneinträge geführt. Vergleic
 hinzugefügte, entfernte und geänderte Entitäten. Eine Wiederherstellung liefert nur
 einen neuen Entwurf; `applied` bleibt immer `False`.
 
+## Phase 0.9.9 – Performance, Stabilität und Produktreife
+
+Auf `feature/homekit-manager-0.9.9` lokal implementiert. Der read-only-Endpunkt
+`homekit_manager/performance` liefert deterministische Größen-, Domain- und
+Verfügbarkeitsmetriken sowie eine begrenzte Empfehlung zur Seitengröße. Das Frontend
+verwendet weiterhin Pagination und lädt das Inventar nicht bei normalen State-Updates
+neu. Vollständige Lasttests mit 2.500 und 5.000 realen Entitäten sowie eine vollständige
+mobile/Screenreader-Abnahme bleiben vor einer Produktreife-Freigabe offen.
+
 ## Status
 
 Stand: 26.10.2026. Die produktive Home-Assistant-Installation enthält den korrigierten

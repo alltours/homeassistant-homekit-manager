@@ -5,10 +5,13 @@ import logging
 from typing import TYPE_CHECKING
 
 from homeassistant.components import frontend
+from homeassistant.helpers import config_validation as cv
 
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+
+CONFIG_SCHEMA = cv.empty_config_schema(DOMAIN)
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant

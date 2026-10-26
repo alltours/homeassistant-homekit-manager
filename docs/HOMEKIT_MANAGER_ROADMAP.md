@@ -1,5 +1,14 @@
 # HomeKit Manager Roadmap
 
+## Phase 0.9.2 – Umbau und zentrale Modusverwaltung
+
+In Arbeit auf `feature/homekit-manager-0.9.2`. Die neue Oberfläche und die konservative
+Modusverwaltung sind lokal implementiert. Die drei Verwaltungsmodi werden erkannt und
+pro Bridge als gewünschter Zustand gespeichert; Cross-Mode-Aktivierung bleibt bewusst
+gesperrt, bis Bridge-Identität, Pairings, Accessory-IDs und Instance-IDs nachweislich
+erhalten werden können. Die Versionierung verwendet ab diesem Stand die Reihe `0.9.x`;
+historische `1.0.x`-Releases bleiben unverändert.
+
 ## Status
 
 Stand: 26.10.2026. Die produktive Home-Assistant-Installation enthält den korrigierten

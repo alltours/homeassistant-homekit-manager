@@ -21,6 +21,8 @@ from .yaml_store import (
     YamlVersionConflict,
     empty_document,
 )
+from .const import MANAGEMENT_MODES, MODE_HOMEKIT_BRIDGE, MODE_HOMEKIT_MANAGER, MODE_YAML
+from .mode_store import ModeStore
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -35,6 +37,8 @@ class HomeKitManagerCoordinator:
         config_path = getattr(getattr(hass, "config", None), "path", None)
         yaml_path = config_path("homekit_manager.yaml") if callable(config_path) else "/config/homekit_manager.yaml"
         self.yaml_store = YamlStore(yaml_path)
+        self.mode_store = ModeStore(hass)
+        self.desired_modes: dict[str, str] = {}
         # File I/O is intentionally deferred to the executor.  The coordinator
         # is constructed during Home Assistant setup, which runs on the event
         # loop and must not perform synchronous filesystem reads.
@@ -45,6 +49,7 @@ class HomeKitManagerCoordinator:
 
     async def async_initialize(self) -> None:
         """Load the desired-state snapshot without blocking the event loop."""
+        self.desired_modes = await self.mode_store.async_load()
         self.yaml_snapshot = await self.hass.async_add_executor_job(self.yaml_store.load)
 
     def _subscribe_events(self) -> None:
@@ -115,7 +120,57 @@ class HomeKitManagerCoordinator:
             "yaml_exists": self.yaml_snapshot.exists,
             "yaml_file_version": self.yaml_snapshot.file_version,
             "last_error": self.last_error,
+            "last_updated": self.yaml_snapshot.last_modified,
         }
+
+    def _active_mode(self, bridge: dict[str, Any] | None) -> str:
+        """Infer the current mode without claiming a migration occurred."""
+        if bridge:
+            return MODE_HOMEKIT_BRIDGE
+        if self.yaml_snapshot.exists and self.yaml_snapshot.valid:
+            return MODE_YAML
+        return MODE_HOMEKIT_MANAGER
+
+    def mode_status(self) -> dict[str, Any]:
+        """Return conservative mode status and the six-direction matrix."""
+        bridge = self.bridges[0] if len(self.bridges) == 1 else None
+        entry_id = bridge.get("entry_id") if bridge else None
+        active = self._active_mode(bridge)
+        desired = self.desired_modes.get(entry_id, active) if entry_id else active
+        matrix = {}
+        for source in MANAGEMENT_MODES:
+            for target in MANAGEMENT_MODES:
+                key = f"{source}->{target}"
+                matrix[key] = {
+                    "status": "safe" if source == target else "manual_required",
+                    "reason": "Keine Migration erforderlich" if source == target else "Bridge-Identität und Pairings werden nicht automatisch migriert",
+                }
+        return {
+            "active_mode": active,
+            "desired_mode": desired,
+            "prepared_mode": desired if desired != active else None,
+            "transition": "blocked" if desired != active else "stable",
+            "bridge_entry_id": entry_id,
+            "bridge_title": bridge.get("title") if bridge else None,
+            "yaml_path": str(self.yaml_store.path),
+            "yaml_valid": self.yaml_snapshot.valid,
+            "yaml_exists": self.yaml_snapshot.exists,
+            "matrix": matrix,
+            "supported_modes": list(MANAGEMENT_MODES),
+            "message": "Moduswechsel bleiben gesperrt, solange Bridge-Identität und Pairing-Erhalt nicht nachgewiesen sind.",
+        }
+
+    async def async_set_mode(self, mode: str) -> dict[str, Any]:
+        """Persist a desired mode; never activate a risky migration."""
+        if mode not in MANAGEMENT_MODES:
+            raise ValueError("Unbekannter Verwaltungsmodus")
+        bridge = self.bridges[0] if len(self.bridges) == 1 else None
+        entry_id = bridge.get("entry_id") if bridge else None
+        if not entry_id:
+            raise ValueError("Keine eindeutige HomeKit-Bridge gefunden")
+        self.desired_modes[entry_id] = mode
+        await self.mode_store.async_save(self.desired_modes)
+        return self.mode_status()
 
     def yaml_status(self) -> dict[str, Any]:
         snapshot = self.yaml_store.load()

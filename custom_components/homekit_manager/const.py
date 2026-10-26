@@ -10,7 +10,14 @@ SAVE_DRAFT_COMMAND = f"{DOMAIN}/save_draft"
 PREPARE_OPTIONS_DIFF_COMMAND = f"{DOMAIN}/prepare_options_diff"
 RECONCILE_COMMAND = f"{DOMAIN}/reconcile"
 EXPORT_COMMAND = f"{DOMAIN}/export"
+MODE_STATUS_COMMAND = f"{DOMAIN}/mode_status"
+SET_MODE_COMMAND = f"{DOMAIN}/set_mode"
 SCHEMA_VERSION = 1
+MODE_SCHEMA_VERSION = 1
+MODE_YAML = "yaml"
+MODE_HOMEKIT_BRIDGE = "homekit_bridge"
+MODE_HOMEKIT_MANAGER = "homekit_manager"
+MANAGEMENT_MODES = (MODE_YAML, MODE_HOMEKIT_BRIDGE, MODE_HOMEKIT_MANAGER)
 UNKNOWN = "unknown"
 SUPPORTED_DOMAINS = frozenset({
     "alarm_control_panel", "automation", "binary_sensor", "button", "camera",

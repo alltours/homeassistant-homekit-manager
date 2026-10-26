@@ -37,7 +37,9 @@ node --check custom_components/homekit_manager/www/homekit-manager.js
 
 ## Release process
 
-Changes are developed on a branch, tested locally, committed, pushed to `main`, and verified by GitHub Actions. Versioned GitHub Releases are used for HACS installation.
+Changes are developed on a branch, tested locally, committed, pushed to `main`, and verified by GitHub Actions. Starting with `0.9.2`, versioned GitHub Releases use the `0.9.x` series. Existing `1.0.x` releases remain historical. Versioned GitHub Releases are used for HACS installation.
+
+See [the 0.9.2 implementation notes](docs/HOMEKIT_MANAGER_0_9_2.md).
 
 ## HACS status
 

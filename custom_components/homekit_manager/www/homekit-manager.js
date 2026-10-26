@@ -1,298 +1,76 @@
 const PAGE_SIZE = 100;
-const WS_INVENTORY = "homekit_manager/inventory";
-const WS_YAML_STATUS = "homekit_manager/yaml_status";
-const WS_VALIDATE = "homekit_manager/validate_draft";
-const WS_PREVIEW = "homekit_manager/preview";
-const WS_SAVE = "homekit_manager/save_draft";
-const WS_EXPORT = "homekit_manager/export";
+const WS = { inventory: "homekit_manager/inventory", bridges: "homekit_manager/bridges", yaml: "homekit_manager/yaml_status", mode: "homekit_manager/mode_status", setMode: "homekit_manager/set_mode", validate: "homekit_manager/validate_draft", preview: "homekit_manager/preview", save: "homekit_manager/save_draft", export: "homekit_manager/export" };
 
 class HomeKitManagerPanel extends HTMLElement {
   constructor() {
-    super();
-    this.attachShadow({ mode: "open" });
-    this._hass = null;
-    this.entities = [];
-    this.overview = {};
-    this.bridge = null;
-    this.query = "";
-    this.filters = { area_name: "", device_name: "", integration_domain: "", domain: "", device_class: "", entity_category: "", compatibility: "", status: "" };
-    this.sort = { key: "entity_id", direction: 1 };
-    this.page = 0;
-    this.selected = new Set();
-    this.draft = new Map();
-    this.fingerprint = null;
-    this.conflict = false;
-    this.detail = null;
-    this.yamlStatus = { valid: true, exists: false, is_applied: false };
-    this.serverPreview = null;
-    this.statusMessage = "Keine Änderungen";
-    this.loading = false;
-    this.error = null;
-    this._loaded = false;
-    this._panel = null;
-    this._narrow = false;
-    this.render();
+    super(); this.attachShadow({ mode: "open" }); this._hass = null; this._panel = null; this._narrow = false; this._loaded = false;
+    this.entities = []; this.overview = {}; this.bridge = null; this.modeStatus = { active_mode: "unknown", desired_mode: "unknown", transition: "stable", matrix: {} }; this.yamlStatus = { valid: true, exists: false, is_applied: false };
+    this.view = "overview"; this.query = ""; this.page = 0; this.sort = { key: "entity_id", direction: 1 }; this.filters = { area_name: "", device_name: "", integration_domain: "", domain: "", compatibility: "", status: "" };
+    this.selected = new Set(); this.draft = new Map(); this.fingerprint = null; this.conflict = false; this.serverPreview = null; this.detail = null; this.loading = false; this.error = null; this.statusMessage = "Keine Änderungen"; this.render();
   }
-
-  connectedCallback() {
-    this.render();
-  }
-
-  set hass(value) {
-    const previous = this._hass;
-    this._hass = value;
-    this.render();
-    if (!this._loaded) {
-      this._loaded = true;
-      this.refresh();
-    } else if (previous && previous.states !== value.states) {
-      this.scheduleRefresh();
-    }
-  }
+  connectedCallback() { this.render(); }
+  set hass(value) { this._hass = value; if (!this._loaded) { this._loaded = true; this.refresh(); } this.render(); }
   get hass() { return this._hass; }
-
-  set panel(value) {
-    this._panel = value;
-    this.render();
-  }
+  set panel(value) { this._panel = value; }
   get panel() { return this._panel; }
-
-  set narrow(value) {
-    this._narrow = Boolean(value);
-    this.render();
-  }
+  set narrow(value) { this._narrow = Boolean(value); this.render(); }
   get narrow() { return this._narrow; }
-
-  scheduleRefresh() {
-    if (this._refreshTimer) return;
-    this._refreshTimer = setTimeout(() => {
-      this._refreshTimer = null;
-      this.refresh();
-    }, 250);
-  }
-
+  scheduleRefresh() { return this.refresh(); }
   async refresh() {
-    if (!this._hass || this.loading) return;
-    this.loading = true;
-    this.error = null;
-    this.render();
+    if (!this._hass || this.loading) return; this.loading = true; this.error = null; this.render();
     try {
-      if (typeof this._hass.callWS !== "function") {
-        throw new Error("Home-Assistant-WebSocket nicht verfügbar");
-      }
-      const data = await this._hass.callWS({ type: WS_INVENTORY });
-      const next = data.entities || [];
-      if (this.fingerprint && data.overview && this.fingerprint !== data.overview.fingerprint) this.conflict = true;
-      this.entities = next;
-      this.overview = data.overview || {};
-      this.fingerprint = this.overview.fingerprint || null;
-      this.bridge = (await this._hass.callWS({ type: "homekit_manager/bridges" })).bridges?.[0] || null;
-      this.yamlStatus = await this._hass.callWS({ type: WS_YAML_STATUS });
-      if (!this.draft.size) this.statusMessage = this.yamlStatus.exists ? "Entwurf gespeichert" : "Keine Änderungen";
-    } catch (error) {
-      this.error = error?.message || String(error);
-    } finally {
-      this.loading = false;
-      this.render();
-    }
+      if (typeof this._hass.callWS !== "function") throw new Error("Home-Assistant-WebSocket nicht verfügbar");
+      const data = await this._hass.callWS({ type: WS.inventory }); this.entities = data.entities || []; this.overview = data.overview || {};
+      if (this.fingerprint && this.overview.fingerprint && this.fingerprint !== this.overview.fingerprint) this.statusMessage = "Konflikt erkannt";
+      this.fingerprint = this.overview.fingerprint || null; this.bridge = (await this._hass.callWS({ type: WS.bridges })).bridges?.[0] || null; this.yamlStatus = await this._hass.callWS({ type: WS.yaml }); this.modeStatus = await this._hass.callWS({ type: WS.mode });
+      if (!this.draft.size && this.yamlStatus.exists) this.statusMessage = "Entwurf gespeichert";
+    } catch (error) { this.error = error?.message || String(error); } finally { this.loading = false; this.render(); }
   }
-
   get filtered() {
-    const q = this.query.trim().toLowerCase();
-    return this.entities.filter((e) => {
-      if (q && !(String(e.name || "").toLowerCase().includes(q) || e.entity_id.toLowerCase().includes(q))) return false;
-      for (const key of Object.keys(this.filters)) {
-        const wanted = this.filters[key];
-        if (!wanted) continue;
-        if (key === "compatibility" && e.compatibility?.status !== wanted) return false;
-        if (key === "status") {
-          const status = this.draft.has(e.entity_id) ? (this.draft.get(e.entity_id) === "include" ? "included" : "excluded") : e.homekit?.configured_by_filter === true ? "included" : e.homekit?.configured_by_filter === false ? "excluded" : "unknown";
-          if (status !== wanted && !(wanted === "unchanged" && !this.draft.has(e.entity_id))) return false;
-        } else if (String(e[key] ?? "none") !== wanted) return false;
-      }
+    const query = this.query.trim().toLowerCase();
+    return this.entities.filter((entity) => {
+      if (query && !(`${entity.name || ""} ${entity.entity_id}`.toLowerCase().includes(query))) return false;
+      for (const [key, wanted] of Object.entries(this.filters)) { if (!wanted) continue; if (key === "compatibility" && entity.compatibility?.status !== wanted) return false; if (key === "status" && this.status(entity) !== wanted) return false; if (!["compatibility", "status"].includes(key) && String(entity[key] || "none") !== wanted) return false; }
       return true;
-    }).sort((a, b) => {
-      const av = String(this.value(a, this.sort.key) ?? "");
-      const bv = String(this.value(b, this.sort.key) ?? "");
-      return av.localeCompare(bv, "de", { numeric: true }) * this.sort.direction;
-    });
+    }).sort((a, b) => String(this.value(a, this.sort.key) || "").localeCompare(String(this.value(b, this.sort.key) || ""), "de", { numeric: true }) * this.sort.direction);
   }
-
-  value(entity, key) {
-    if (key === "compatibility") return entity.compatibility?.status;
-    if (key === "status") return this.status(entity);
-    return entity[key];
+  value(entity, key) { return key === "compatibility" ? entity.compatibility?.status : key === "status" ? this.status(entity) : entity[key]; }
+  status(entity) { if (this.draft.has(entity.entity_id)) return this.draft.get(entity.entity_id) || "unchanged"; if (entity.homekit?.configured_by_filter === true) return "included"; if (entity.homekit?.configured_by_filter === false) return "excluded"; return "unknown"; }
+  changes() { return [...this.draft.entries()].map(([entity_id, desired]) => ({ entity_id, desired, current: this.status(this.entities.find((e) => e.entity_id === entity_id) || {}) })); }
+  desiredDocument() { const entry = this.bridge?.entry_id; return { schema_version: 1, bridges: entry ? { [entry]: { policy: "explicit_overrides", entities: Object.fromEntries(this.draft) } } : {} }; }
+  escape(value) { return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]); }
+  selectView(view) { this.view = view; this.render(); }
+  setFilter(key, value) { this.filters[key] = value; this.page = 0; this.render(); }
+  toggleSort(key) { this.sort = this.sort.key === key ? { key, direction: this.sort.direction * -1 } : { key, direction: 1 }; this.render(); }
+  setDraft(id, value) { const entity = this.entities.find((item) => item.entity_id === id); if (!entity || entity.compatibility?.status === "unsupported") return; value ? this.draft.set(id, value) : this.draft.delete(id); this.render(); }
+  applyToSelection(value) { [...this.selected].forEach((id) => this.setDraft(id, value)); this.selected.clear(); this.render(); }
+  selectVisible(compatibleOnly) { this.filtered.forEach((entity) => { if (!compatibleOnly || entity.compatibility?.status !== "unsupported") this.selected.add(entity.entity_id); }); this.render(); }
+  discard() { this.draft.clear(); this.selected.clear(); this.serverPreview = null; this.statusMessage = "Keine Änderungen"; this.render(); }
+  async setMode(mode) { try { this.modeStatus = await this._hass.callWS({ type: WS.setMode, mode }); this.statusMessage = this.modeStatus.transition === "blocked" ? "Modus vorbereitet · Aktivierung gesperrt" : "Modus aktualisiert"; } catch (error) { this.error = error?.message || String(error); } this.render(); }
+  async validateDraft() { try { return await this._hass.callWS({ type: WS.validate, document: this.desiredDocument() }); } catch (error) { this.error = error?.message || String(error); return null; } }
+  async previewServer() { const result = await this.validateDraft(); if (!result) return; try { this.serverPreview = await this._hass.callWS({ type: WS.preview, document: result.document }); this.conflict = Boolean(this.serverPreview.summary?.blocked) || Boolean(this.fingerprint && this.serverPreview.fingerprint && this.serverPreview.fingerprint !== this.fingerprint); this.statusMessage = this.conflict ? "Konflikt erkannt" : "Vorschau erstellt"; } catch (error) { this.error = error?.message || String(error); } this.render(); }
+  async saveDraft() { const result = await this.validateDraft(); if (!result) return; try { this.yamlStatus = await this._hass.callWS({ type: WS.save, document: result.document, expected_file_version: this.yamlStatus.file_version, expected_fingerprint: this.fingerprint }); this.statusMessage = "Entwurf gespeichert"; } catch (error) { this.statusMessage = "Konflikt erkannt"; this.error = error?.message || String(error); } this.render(); }
+  async exportDraft() { try { const result = await this._hass.callWS({ type: WS.export, document: this.desiredDocument(), format: "yaml" }); await navigator.clipboard?.writeText(result.content || ""); this.statusMessage = "YAML exportiert"; } catch (error) { this.error = error?.message || String(error); } this.render(); }
+  async loadSaved() { await this.refresh(); const entry = this.bridge?.entry_id; const saved = entry ? this.yamlStatus.document?.bridges?.[entry]?.entities || {} : {}; this.draft = new Map(Object.entries(saved)); this.statusMessage = "Entwurf geladen"; this.render(); }
+  openNativeOptions() { window.open("/config/integrations/integration/homekit", "_blank", "noopener"); }
+  card(label, value, detail = "") { return `<article class="card"><span>${label}</span><strong>${this.escape(value)}</strong>${detail ? `<small>${this.escape(detail)}</small>` : ""}</article>`; }
+  modeLabel(mode) { return ({ yaml: "YAML", homekit_bridge: "HomeKit Bridge", homekit_manager: "HomeKit Manager" })[mode] || "Unbekannt"; }
+  overviewTemplate() { return `<section class="cards">${this.card("Bridge", this.bridge?.title || "Keine eindeutige Bridge", this.bridge ? "aktiv erkannt" : "Status unbekannt")}${this.card("Entitäten", this.overview.total_entities ?? "—")}${this.card("Kompatibel", this.overview.compatible_entities ?? "—")}${this.card("Freigegeben", this.overview.configured_entities ?? "—")}${this.card("Nicht verfügbar", this.overview.unavailable_entities ?? "—")}${this.card("Offene Änderungen", this.changes().length)}</section><section class="panel-card"><h2>Konfigurationsstatus</h2><p>Aktiv: <b>${this.escape(this.modeLabel(this.modeStatus.active_mode))}</b> · Gewünscht: <b>${this.escape(this.modeLabel(this.modeStatus.desired_mode))}</b></p><p>${this.escape(this.modeStatus.message || "Keine Konflikte erkannt.")}</p></section><section class="panel-card"><h2>Synchronisierung</h2><p>${this.escape(this.statusMessage)}${this.overview.last_updated ? ` · zuletzt ${this.escape(this.overview.last_updated)}` : ""}</p></section>`; }
+  configTemplate() { const modes = ["yaml", "homekit_bridge", "homekit_manager"]; const matrix = Object.entries(this.modeStatus.matrix || {}).map(([key, value]) => `<tr><td>${this.escape(key)}</td><td>${value.status === "safe" ? "Sicher" : "Manuell erforderlich"}</td><td>${this.escape(value.reason)}</td></tr>`).join(""); return `<section class="panel-card"><h2>Zentrale Konfigurationsverwaltung</h2><p>Aktiv: <b>${this.escape(this.modeLabel(this.modeStatus.active_mode))}</b> · Vorbereitet: <b>${this.escape(this.modeLabel(this.modeStatus.prepared_mode))}</b></p><div class="mode-grid">${modes.map((mode) => `<button class="mode ${this.modeStatus.desired_mode === mode ? "selected" : ""}" data-mode="${mode}"><strong>${this.modeLabel(mode)}</strong><small>${mode === this.modeStatus.active_mode ? "Aktiv erkannt" : "Nur vorbereiten"}</small></button>`).join("")}</div><p class="hint">${this.escape(this.modeStatus.message || "Moduswechsel erfordern eine gesonderte, nachgewiesene Migration.")}</p><dl><dt>Konfigurationspfad</dt><dd>${this.escape(this.modeStatus.yaml_path || "unbekannt")}</dd><dt>YAML-Status</dt><dd>${this.yamlStatus.valid ? "gültig oder nicht vorhanden" : "ungültig · Aktivierung gesperrt"}</dd></dl></section><section class="panel-card"><h2>Migrationsmatrix</h2><div class="table-wrap"><table><thead><tr><th>Wechsel</th><th>Status</th><th>Begründung</th></tr></thead><tbody>${matrix}</tbody></table></div></section>`; }
+  changesTemplate() { const list = this.serverPreview?.changes || this.changes(); return `<section class="panel-card"><h2>Änderungen</h2><p>${this.changes().length} Entwurfsänderungen · ${this.serverPreview?.summary?.blocked ? "Änderung blockiert" : "keine Blockierung bekannt"}</p><div class="actions"><button data-preview>Änderungen prüfen</button><button data-save>Entwurf speichern</button><button data-load>Entwurf laden</button><button data-export>YAML exportieren</button><button data-discard>Entwurf verwerfen</button></div>${list.length ? `<ul class="change-list">${list.map((item) => `<li><code>${this.escape(item.entity_id)}</code> · ${this.escape(item.current)} → ${this.escape(item.desired)}</li>`).join("")}</ul>` : "<p>Keine offenen Änderungen.</p>"}</section>`; }
+  entitiesTemplate() {
+    const rows = this.filtered; const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE)); this.page = Math.min(this.page, pages - 1); const visible = rows.slice(this.page * PAGE_SIZE, (this.page + 1) * PAGE_SIZE); const options = (key) => [...new Set(this.entities.map((e) => e[key] || "none"))].sort(); const select = (key, label, values) => `<label>${label}<select data-filter="${key}"><option value="">Alle</option>${values.map((v) => `<option value="${this.escape(v)}"${this.filters[key] === v ? " selected" : ""}>${this.escape(v)}</option>`).join("")}</select></label>`;
+    const row = (e) => `<tr data-id="${this.escape(e.entity_id)}"><td><input type="checkbox" data-select${this.selected.has(e.entity_id) ? " checked" : ""}></td><td><button class="link" data-detail>${this.escape(e.name || e.entity_id)}</button></td><td><code>${this.escape(e.entity_id)}</code></td><td>${this.escape(e.area_name || "Kein Bereich")}</td><td>${this.escape(e.device_name || "—")}</td><td><span class="badge ${this.escape(e.compatibility?.status || "unknown")}">${this.escape(e.compatibility?.status || "unknown")}</span></td><td>${this.escape(this.status(e))}</td><td><select data-draft="${this.escape(e.entity_id)}"${e.compatibility?.status === "unsupported" ? " disabled" : ""}><option value="">Unverändert</option><option value="include"${this.status(e) === "include" ? " selected" : ""}>Include</option><option value="exclude"${this.status(e) === "exclude" ? " selected" : ""}>Exclude</option></select></td></tr>`;
+    return `<section class="panel-card"><div class="section-heading"><div><h2>Entitäten</h2><p>${rows.length} Treffer · Seite ${this.page + 1} / ${pages}</p></div><button class="secondary" data-refresh>Aktualisieren</button></div><div class="filters"><input data-query placeholder="Suche nach Name oder Entity-ID" value="${this.escape(this.query)}">${select("area_name", "Bereich", options("area_name"))}${select("device_name", "Gerät", options("device_name"))}${select("integration_domain", "Integration", options("integration_domain"))}${select("domain", "Domäne", options("domain"))}${select("compatibility", "Kompatibilität", ["supported", "conditionally_supported", "unsupported", "unknown"])}${select("status", "Status", ["included", "excluded", "unchanged", "unknown"])}</div><div class="actions"><button data-select-compatible>Kompatible auswählen</button><button data-include>Auswahl einschließen</button><button data-exclude>Auswahl ausschließen</button><button data-unchanged>Auswahl zurücksetzen</button></div><div class="table-wrap"><table><thead><tr><th>Auswahl</th><th data-sort="name">Name</th><th data-sort="entity_id">Entity-ID</th><th data-sort="area_name">Bereich</th><th data-sort="device_name">Gerät</th><th data-sort="compatibility">Kompatibilität</th><th data-sort="status">Status</th><th>Gewünschter Zustand</th></tr></thead><tbody>${visible.map(row).join("")}</tbody></table></div><nav class="pager"><button data-prev${this.page === 0 ? " disabled" : ""}>‹</button><span>${rows.length} Treffer</span><button data-next${this.page + 1 >= pages ? " disabled" : ""}>›</button></nav>${this.detail ? this.detailTemplate(this.detail) : ""}</section>`;
   }
-  status(entity) {
-    if (this.draft.has(entity.entity_id)) return this.draft.get(entity.entity_id) || "unchanged";
-    if (entity.homekit?.configured_by_filter === true) return "included";
-    if (entity.homekit?.configured_by_filter === false) return "excluded";
-    return "unknown";
-  }
-  setFilter(key, value) {
-    this.filters[key] = value;
-    this.page = 0;
-    this.render();
-  }
-  toggleSort(key) {
-    if (this.sort.key === key) this.sort.direction *= -1;
-    else this.sort = { key, direction: 1 };
-    this.render();
-  }
-  setDraft(id, value) {
-    const entity = this.entities.find((e) => e.entity_id === id);
-    if (!entity || entity.compatibility?.status === "unsupported") return;
-    if (!value) this.draft.delete(id); else this.draft.set(id, value);
-    this.render();
-  }
-  applyToSelection(value) {
-    for (const id of this.selected) this.setDraft(id, value);
-    this.selected.clear();
-    this.render();
-  }
-  selectVisible(compatibleOnly) {
-    for (const e of this.filtered) if (!compatibleOnly || e.compatibility?.status !== "unsupported") this.selected.add(e.entity_id);
-    this.render();
-  }
-  discard() {
-    this.draft.clear();
-    this.selected.clear();
-    this.conflict = false;
-    this.serverPreview = null;
-    this.statusMessage = "Keine Änderungen";
-    this.render();
-  }
-  changes() {
-    return [...this.draft.entries()].map(([entity_id, desired]) => {
-      const e = this.entities.find((item) => item.entity_id === entity_id);
-      const current = e ? (e.homekit?.configured_by_filter === true ? "include" : e.homekit?.configured_by_filter === false ? "exclude" : "unknown") : "removed";
-      return { entity_id, current, desired, risk: current === "unknown" || current === "removed" ? "unknown" : "bridge reload and Apple Home placement not guaranteed" };
-    });
-  }
-  async exportDraft() {
-    try {
-      const result = await this._hass.callWS({ type: WS_EXPORT, document: this.desiredDocument(), format: "yaml" });
-      await navigator.clipboard?.writeText(result.content || "");
-      this.statusMessage = "Entwurf exportiert";
-    } catch (error) {
-      this.error = error?.message || String(error);
-      this.statusMessage = "Export fehlgeschlagen";
-    }
-    this.render();
-  }
-
-  desiredDocument() {
-    const entry = this.bridge?.entry_id;
-    return { schema_version: 1, bridges: entry ? { [entry]: { policy: "explicit_overrides", entities: Object.fromEntries(this.draft) } } : {} };
-  }
-
-  async validateDraft() {
-    try {
-      const result = await this._hass.callWS({ type: WS_VALIDATE, document: this.desiredDocument() });
-      this.statusMessage = result.warnings?.length ? "Entwurf gespeichert · Hinweise vorhanden" : "Entwurf validiert";
-      return result;
-    } catch (error) {
-      this.statusMessage = "YAML-Datei ungültig";
-      this.error = error?.message || String(error);
-      return null;
-    }
-  }
-
-  async previewServer() {
-    const result = await this.validateDraft();
-    if (!result) return;
-    try {
-      this.serverPreview = await this._hass.callWS({ type: WS_PREVIEW, document: result.document });
-      this.conflict = Boolean(this.serverPreview.summary?.blocked) || (this.fingerprint && this.serverPreview.fingerprint !== this.fingerprint);
-      this.statusMessage = this.conflict ? "Konflikt erkannt" : "Entwurf validiert";
-    } catch (error) {
-      this.error = error?.message || String(error);
-    }
-    this.render();
-  }
-
-  async saveDraft() {
-    const result = await this.validateDraft();
-    if (!result || this.conflict) return;
-    try {
-      const request = { type: WS_SAVE, document: result.document };
-      if (this.yamlStatus.file_version) request.expected_file_version = this.yamlStatus.file_version;
-      if (this.fingerprint) request.expected_fingerprint = this.fingerprint;
-      this.yamlStatus = await this._hass.callWS(request);
-      this.statusMessage = "Entwurf gespeichert";
-      this.serverPreview = null;
-    } catch (error) {
-      this.conflict = true;
-      this.statusMessage = "Konflikt erkannt";
-      this.error = error?.message || String(error);
-    }
-    this.render();
-  }
-
-  async loadSaved() {
-    await this.refresh();
-    const entry = this.bridge?.entry_id;
-    const saved = entry ? this.yamlStatus.document?.bridges?.[entry]?.entities || {} : {};
-    this.draft = new Map(Object.entries(saved));
-    this.statusMessage = "Entwurf gespeichert";
-    this.render();
-  }
-
-  openNativeOptions() {
-    // This is only the documented frontend integration page. The manager
-    // never starts or submits a Home Assistant flow programmatically.
-    window.open("/config/integrations/integration/homekit", "_blank", "noopener");
-  }
-
+  detailTemplate(entity) { return `<aside class="detail"><button data-close-detail>Schließen</button><h2>${this.escape(entity.name || entity.entity_id)}</h2><dl>${[["Entity-ID", entity.entity_id], ["Bereich", entity.area_name || "Kein Bereich"], ["Gerät", entity.device_name || "—"], ["Integration", entity.integration_domain || "—"], ["Domäne", entity.domain], ["Geräteklasse", entity.device_class || "—"], ["Verfügbarkeit", entity.available ? "verfügbar" : "nicht verfügbar"], ["Kompatibilität", entity.compatibility?.status || "unknown"], ["Begründung", entity.compatibility?.reason || "—"], ["HomeKit-Status", this.status(entity)]].map(([key, value]) => `<dt>${key}</dt><dd>${this.escape(value)}</dd>`).join("")}</dl></aside>`; }
   render() {
-    const rows = this.filtered;
-    const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-    this.page = Math.min(this.page, pages - 1);
-    const visible = rows.slice(this.page * PAGE_SIZE, (this.page + 1) * PAGE_SIZE);
-    const options = (key) => [...new Set(this.entities.map((e) => e[key] || "none"))].sort();
-    const select = (key, label, values) => '<label>' + label + '<select data-filter="' + key + '"><option value="">Alle</option>' + values.map((v) => '<option value="' + this.escape(v) + '"' + (this.filters[key] === v ? " selected" : "") + '>' + this.escape(v) + '</option>').join("") + "</select></label>";
-    const row = (e) => {
-      const state = this.status(e);
-      const disabled = e.compatibility?.status === "unsupported" ? " disabled" : "";
-      const checked = this.selected.has(e.entity_id) ? " checked" : "";
-      return '<tr data-id="' + this.escape(e.entity_id) + '"><td><input type="checkbox" data-select' + checked + '></td><td><button class="link" data-detail>' + this.escape(e.name || e.entity_id) + '</button></td><td><code>' + this.escape(e.entity_id) + '</code></td><td>' + this.escape(e.area_name || "Kein Bereich") + '</td><td>' + this.escape(e.device_name || "—") + '</td><td>' + this.escape(e.integration_domain || "—") + '</td><td>' + this.escape(e.domain) + '</td><td>' + this.escape(e.device_class || "—") + '</td><td>' + this.escape(e.entity_category || "—") + '</td><td><span class="badge ' + this.escape(e.compatibility?.status || "unknown") + '">' + this.escape(e.compatibility?.status || "unknown") + '</span><small>' + this.escape(e.compatibility?.expected_type || "—") + '</small></td><td>' + this.escape(state) + '</td><td>' + (e.available ? "verfügbar" : "nicht verfügbar") + '</td><td><select data-draft="' + this.escape(e.entity_id) + '"' + disabled + '><option value="">Unverändert</option><option value="include"' + (state === "include" ? " selected" : "") + '>Include</option><option value="exclude"' + (state === "exclude" ? " selected" : "") + '>Exclude</option></select></td></tr>';
-    };
-    const preview = this.serverPreview?.changes || this.changes();
-    const error = this.error ? '<aside class="error" role="alert"><strong>Initialisierung fehlgeschlagen</strong><p>' + this.escape(this.error) + '</p><button class="secondary" data-refresh>Erneut versuchen</button></aside>' : '';
-    const loading = this.loading ? '<p class="loading" role="status">Inventardaten werden geladen …</p>' : '';
-    this.shadowRoot.innerHTML = '<style>' + this.styles() + '</style><main><header><div><h1>HomeKit Manager</h1><p>Gewünschter Zustand · keine Änderung an der HomeKit-Bridge</p><p class="status">Status: ' + this.escape(this.statusMessage) + (this.yamlStatus.valid === false ? ' · YAML-Datei ungültig' : '') + '</p></div><button class="secondary" data-refresh>Aktualisieren</button></header>' + loading + error + '<section class="summary">' + this.summary("Bridge", this.bridge?.title || "unbekannt") + this.summary("Entitäten", this.overview.total_entities) + this.summary("Kompatibel", this.overview.compatible_entities ?? "unbekannt") + this.summary("Freigegeben", this.overview.configured_entities ?? "unbekannt") + this.summary("Gefiltert", rows.length) + '</section>' + (this.conflict ? '<aside class="warning">Konflikt oder blockierte Änderung erkannt. Neue Vorschau nach Aktualisierung erforderlich.</aside>' : "") + '<section class="filters"><input data-query placeholder="Name oder Entitäts-ID suchen" value="' + this.escape(this.query) + '">' + select("area_name", "Bereich", options("area_name")) + select("device_name", "Gerät", options("device_name")) + select("integration_domain", "Integration", options("integration_domain")) + select("domain", "Domäne", options("domain")) + select("device_class", "Geräteklasse", options("device_class")) + select("entity_category", "Kategorie", options("entity_category")) + select("compatibility", "Kompatibilität", ["supported", "conditionally_supported", "unsupported", "unknown"]) + select("status", "Status", ["included", "excluded", "unchanged", "unknown"]) + '</section><section class="actions"><button data-select-compatible>Kompatible sichtbare auswählen</button><button data-include>Auswahl einschließen</button><button data-exclude>Auswahl ausschließen</button><button data-unchanged>Auswahl zurücksetzen</button><button class="secondary" data-preview>Änderungen prüfen (' + this.changes().length + ')</button><button class="secondary" data-save>Entwurf speichern</button><button class="secondary" data-load>Gespeicherten Entwurf laden</button><button class="secondary" data-discard>Entwurf verwerfen</button><button class="secondary" data-native-options>Offiziellen HomeKit-Dialog öffnen</button><button disabled title="Wird erst in einer späteren Phase aktiviert">Änderungen übernehmen</button></section><p class="hint">Gespeicherte YAML ist ein gewünschter Zustand und wurde nicht an HomeKit übertragen. Der offizielle Dialog wird nur geöffnet; der Manager übergibt keine Flow-Daten automatisch.</p><section class="table-wrap"><table><thead><tr>' + ["Auswahl", "Name", "Entitäts-ID", "Bereich", "Gerät", "Integration", "Domäne", "Geräteklasse", "Kategorie", "Kompatibilität", "Status", "Verfügbarkeit", "Gewünschte Regel"].map((h, i) => '<th data-sort="' + (i === 0 ? "" : ["", "name", "entity_id", "area_name", "device_name", "integration_domain", "domain", "device_class", "entity_category", "compatibility", "status", "", ""][i]) + '">' + h + '</th>').join("") + '</tr></thead><tbody>' + visible.map(row).join("") + '</tbody></table></section><nav class="pager"><button data-prev' + (this.page === 0 ? " disabled" : "") + '>‹</button><span>Seite ' + (this.page + 1) + ' / ' + pages + ' · ' + rows.length + ' Treffer</span><button data-next' + (this.page + 1 >= pages ? " disabled" : "") + '>›</button></nav>' + (this.detail ? this.detailTemplate(this.detail) : "") + '<dialog data-preview-dialog><h2>Serverseitige Änderungsvorschau</h2>' + (preview.length ? '<ul>' + preview.map((c) => '<li><code>' + this.escape(c.entity_id) + '</code>: ' + this.escape(c.current) + ' → ' + this.escape(c.desired) + ' · ' + this.escape(c.action || "unchanged") + ' <span class="warning-text">(' + this.escape(c.reason || c.risk || "") + ')</span></li>').join("") + '</ul>' : '<p>Keine vorgemerkten Änderungen.</p>') + '<button data-close>Schließen</button><button class="secondary" data-export>Entwurf als YAML kopieren</button></dialog></main>';
-    this.bind();
+    const error = this.error ? `<aside class="error" role="alert"><strong>Initialisierung fehlgeschlagen</strong><p>${this.escape(this.error)}</p><button class="secondary" data-refresh>Erneut versuchen</button></aside>` : ""; const loading = this.loading ? '<p class="loading" role="status">Inventardaten werden geladen …</p>' : ""; const content = this.view === "entities" ? this.entitiesTemplate() : this.view === "configuration" ? this.configTemplate() : this.view === "changes" ? this.changesTemplate() : this.overviewTemplate();
+    this.shadowRoot.innerHTML = `<style>${this.styles()}</style><main><header><div><h1>HomeKit Manager</h1><p>Gewünschter Zustand · keine automatische Änderung an der HomeKit-Bridge</p><p class="status">${this.escape(this.statusMessage)}</p></div><button class="secondary" data-refresh>Aktualisieren</button></header><nav class="tabs" aria-label="Hauptbereiche">${[["overview", "Übersicht"], ["entities", "Entitäten"], ["configuration", "Konfiguration"], ["changes", "Änderungen"]].map(([id, label]) => `<button data-view="${id}" class="${this.view === id ? "active" : ""}">${label}</button>`).join("")}</nav>${loading}${error}${content}</main>`; this.bind();
   }
-
-  summary(label, value) { return '<div><span>' + label + '</span><strong>' + this.escape(value) + '</strong></div>'; }
-  detailTemplate(e) { return '<aside class="detail"><button data-close-detail>Schließen</button><h2>' + this.escape(e.name || e.entity_id) + '</h2><dl>' + [["Entity-ID", e.entity_id], ["Gerät", e.device_name || "—"], ["Integration", e.integration_domain || "—"], ["Bereich", e.area_name || "Kein Bereich"], ["Domäne", e.domain], ["Geräteklasse", e.device_class || "—"], ["Kategorie", e.entity_category || "—"], ["Disabled", e.disabled_by || "nein"], ["Hidden", e.hidden_by || "nein"], ["Verfügbarkeit", e.available ? "verfügbar" : "nicht verfügbar"], ["Kompatibilität", e.compatibility?.status || "unknown"], ["HomeKit-Typ", e.compatibility?.expected_type || "—"], ["Begründung", e.compatibility?.reason || "—"], ["Filterregel", e.homekit?.filter_reason || "unknown"], ["Veröffentlichung", e.homekit?.published || "unknown"]].map(([k, v]) => '<dt>' + k + '</dt><dd>' + this.escape(v) + '</dd>').join("") + '</dl></aside>'; }
-  escape(value) { return String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
-  styles() { return ':host{display:block;color:var(--primary-text-color,#212121);background:var(--primary-background-color,#fafafa);min-height:100vh;font-family:var(--paper-font-body1_-_font-family, sans-serif)}main{max-width:1800px;margin:auto;padding:24px}header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}h1{margin:0;font-size:2rem}h2{margin-top:0}p{color:var(--secondary-text-color,#616161)}button,select,input{font:inherit;color:inherit;background:var(--card-background-color,#fff);border:1px solid var(--divider-color,#ddd);border-radius:8px;padding:8px 10px}button{cursor:pointer}button:disabled{opacity:.5;cursor:not-allowed}.secondary{background:transparent}.link{border:0;background:transparent;padding:0;color:var(--primary-color,#03a9f4);text-align:left}.loading,.error{padding:14px;border-radius:8px}.loading{background:var(--card-background-color,#fff)}.error{background:var(--error-color,#db4437);color:#fff}.error p{color:inherit}.summary{display:grid;grid-template-columns:repeat(5,minmax(120px,1fr));gap:12px;margin:24px 0}.summary div{background:var(--card-background-color,#fff);border-radius:12px;padding:16px}.summary span{display:block;color:var(--secondary-text-color,#616161);font-size:.85rem}.summary strong{font-size:1.6rem}.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin:16px 0}.filters label{display:flex;flex-direction:column;gap:4px;font-size:.8rem;color:var(--secondary-text-color,#616161)}.filters input{min-width:260px}.actions{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}.hint{padding:10px 14px;border-left:3px solid var(--primary-color,#03a9f4)}.warning{padding:12px;background:var(--warning-color,#f5c542);color:var(--primary-text-color,#212121);border-radius:8px}.table-wrap{overflow:auto;border:1px solid var(--divider-color,#ddd);border-radius:12px;background:var(--card-background-color,#fff)}table{border-collapse:collapse;width:100%;min-width:1250px}th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--divider-color,#ddd);white-space:nowrap}th[data-sort]{cursor:pointer}th{position:sticky;top:0;background:var(--card-background-color,#fff);z-index:1}small{display:block;color:var(--secondary-text-color,#616161)}.badge{display:inline-block;border-radius:999px;padding:3px 7px;font-size:.75rem}.supported{background:var(--success-color,#4caf50)}.conditionally_supported{background:var(--warning-color,#f5c542)}.unsupported{background:var(--error-color,#db4437);color:white}.unknown{background:var(--secondary-text-color,#777);color:var(--primary-background-color,#fff)}.pager{display:flex;justify-content:center;gap:20px;align-items:center;padding:16px}.detail{position:fixed;right:24px;top:24px;bottom:24px;width:min(480px,90vw);overflow:auto;background:var(--card-background-color,#fff);box-shadow:var(--ha-box-shadow,0 4px 16px #0005);border-radius:14px;padding:24px;z-index:4}.detail button{float:right}dt{font-weight:bold;margin-top:12px}dd{margin:3px 0;color:var(--secondary-text-color,#616161)}dialog{color:var(--primary-text-color,#212121);background:var(--card-background-color,#fff);border:1px solid var(--divider-color,#ddd);border-radius:12px;max-width:720px}dialog::backdrop{background:#0008}.warning-text{color:var(--error-color,#db4437)}@media(max-width:700px){main{padding:14px}header{align-items:stretch;flex-direction:column}.summary{grid-template-columns:repeat(2,1fr);margin:16px 0}.filters input{min-width:100%}.actions button{flex:1 1 45%}.detail{right:8px;top:8px;bottom:8px;width:auto}}'; }
-
+  styles() { return ':host{display:block;color:var(--primary-text-color,#212121);background:var(--primary-background-color,#fafafa);min-height:100vh;font-family:var(--paper-font-body1_-_font-family,sans-serif)}main{max-width:1600px;margin:auto;padding:24px}header,.section-heading{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}h1{margin:0;font-size:2rem}h2{margin-top:0}p{color:var(--secondary-text-color,#616161)}button,select,input{font:inherit;color:inherit;background:var(--card-background-color,#fff);border:1px solid var(--divider-color,#ddd);border-radius:10px;padding:9px 11px}button{cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}.secondary{background:transparent}.tabs{display:flex;gap:6px;border-bottom:1px solid var(--divider-color,#ddd);margin:22px 0}.tabs button{border:0;border-radius:10px 10px 0 0;background:transparent}.tabs button.active{background:var(--primary-color,#03a9f4);color:#fff}.cards{display:grid;grid-template-columns:repeat(6,minmax(130px,1fr));gap:12px;margin:20px 0}.card,.panel-card{background:var(--card-background-color,#fff);border:1px solid var(--divider-color,#ddd);border-radius:16px;padding:18px}.card span{display:block;color:var(--secondary-text-color,#616161);font-size:.85rem}.card strong{display:block;font-size:1.5rem;margin-top:8px}.card small{display:block;color:var(--secondary-text-color,#616161);margin-top:4px}.panel-card{margin:16px 0}.loading,.error,.hint{padding:14px;border-radius:10px}.loading{background:var(--card-background-color,#fff)}.error{background:var(--error-color,#db4437);color:#fff}.error p{color:inherit}.actions,.filters,.mode-grid{display:flex;flex-wrap:wrap;gap:9px;margin:14px 0}.filters{align-items:end}.filters label{display:flex;flex-direction:column;gap:4px;font-size:.8rem;color:var(--secondary-text-color,#616161)}.filters input{min-width:260px}.mode{display:flex;flex-direction:column;align-items:flex-start;min-width:180px}.mode.selected{outline:2px solid var(--primary-color,#03a9f4)}.mode small{color:var(--secondary-text-color,#616161);margin-top:4px}.hint{border-left:3px solid var(--primary-color,#03a9f4)}.table-wrap{overflow:auto;border:1px solid var(--divider-color,#ddd);border-radius:12px;background:var(--card-background-color,#fff)}table{border-collapse:collapse;width:100%;min-width:800px}th,td{padding:10px;text-align:left;border-bottom:1px solid var(--divider-color,#ddd);white-space:nowrap}th[data-sort]{cursor:pointer}th{background:var(--card-background-color,#fff)}.link{border:0;background:transparent;padding:0;color:var(--primary-color,#03a9f4);text-align:left}.badge{display:inline-block;border-radius:999px;padding:4px 8px;font-size:.78rem}.supported{background:var(--success-color,#4caf50)}.conditionally_supported{background:var(--warning-color,#f5c542)}.unsupported{background:var(--error-color,#db4437);color:#fff}.unknown{background:var(--secondary-text-color,#777);color:#fff}.pager{display:flex;justify-content:center;gap:20px;align-items:center;padding:16px}.detail{position:fixed;right:24px;top:24px;bottom:24px;width:min(480px,90vw);overflow:auto;background:var(--card-background-color,#fff);box-shadow:var(--ha-box-shadow,0 4px 16px #0005);border-radius:14px;padding:24px;z-index:4}.detail button{float:right}dt{font-weight:bold;margin-top:12px}dd{margin:3px 0;color:var(--secondary-text-color,#616161)}.change-list{padding-left:20px}@media(max-width:800px){main{padding:14px}.cards{grid-template-columns:repeat(2,1fr)}header{flex-direction:column}.tabs{overflow:auto}.filters input{min-width:100%}.detail{right:8px;top:8px;bottom:8px;width:auto}}'; }
   bind() {
-    this.shadowRoot.querySelector("[data-refresh]")?.addEventListener("click", () => this.refresh());
-    this.shadowRoot.querySelector("[data-query]")?.addEventListener("input", (e) => { this.query = e.target.value; this.page = 0; this.render(); });
-    this.shadowRoot.querySelectorAll("[data-filter]").forEach((e) => e.addEventListener("change", (event) => this.setFilter(event.target.dataset.filter, event.target.value)));
-    this.shadowRoot.querySelectorAll("[data-sort]").forEach((e) => e.dataset.sort && e.addEventListener("click", () => this.toggleSort(e.dataset.sort)));
-    this.shadowRoot.querySelectorAll("[data-select]").forEach((e) => e.addEventListener("change", (event) => { const id = event.target.closest("tr").dataset.id; event.target.checked ? this.selected.add(id) : this.selected.delete(id); }));
-    this.shadowRoot.querySelectorAll("[data-draft]").forEach((e) => e.addEventListener("change", (event) => this.setDraft(event.target.dataset.draft, event.target.value)));
-    this.shadowRoot.querySelector("[data-select-compatible]")?.addEventListener("click", () => this.selectVisible(true));
-    this.shadowRoot.querySelector("[data-include]")?.addEventListener("click", () => this.applyToSelection("include"));
-    this.shadowRoot.querySelector("[data-exclude]")?.addEventListener("click", () => this.applyToSelection("exclude"));
-    this.shadowRoot.querySelector("[data-unchanged]")?.addEventListener("click", () => this.applyToSelection(""));
-    this.shadowRoot.querySelector("[data-discard]")?.addEventListener("click", () => this.discard());
-    this.shadowRoot.querySelector("[data-preview]")?.addEventListener("click", async () => { await this.previewServer(); this.shadowRoot.querySelector("[data-preview-dialog]")?.showModal(); });
-    this.shadowRoot.querySelector("[data-save]")?.addEventListener("click", () => this.saveDraft());
-    this.shadowRoot.querySelector("[data-load]")?.addEventListener("click", () => this.loadSaved());
-    this.shadowRoot.querySelector("[data-native-options]")?.addEventListener("click", () => this.openNativeOptions());
-    this.shadowRoot.querySelector("[data-close]")?.addEventListener("click", () => this.shadowRoot.querySelector("[data-preview-dialog]").close());
-    this.shadowRoot.querySelector("[data-export]")?.addEventListener("click", () => this.exportDraft());
-    this.shadowRoot.querySelector("[data-prev]")?.addEventListener("click", () => { this.page--; this.render(); });
-    this.shadowRoot.querySelector("[data-next]")?.addEventListener("click", () => { this.page++; this.render(); });
-    this.shadowRoot.querySelectorAll("[data-detail]").forEach((e) => e.addEventListener("click", () => { this.detail = this.entities.find((x) => x.entity_id === e.closest("tr").dataset.id); this.render(); }));
-    this.shadowRoot.querySelector("[data-close-detail]")?.addEventListener("click", () => { this.detail = null; this.render(); });
+    this.shadowRoot.querySelectorAll("[data-view]").forEach((element) => element.addEventListener("click", () => this.selectView(element.dataset.view))); this.shadowRoot.querySelectorAll("[data-mode]").forEach((element) => element.addEventListener("click", () => this.setMode(element.dataset.mode))); this.shadowRoot.querySelectorAll("[data-refresh]").forEach((element) => element.addEventListener("click", () => this.refresh())); this.shadowRoot.querySelector("[data-query]")?.addEventListener("input", (event) => { this.query = event.target.value; this.page = 0; this.render(); }); this.shadowRoot.querySelectorAll("[data-filter]").forEach((element) => element.addEventListener("change", (event) => this.setFilter(event.target.dataset.filter, event.target.value))); this.shadowRoot.querySelectorAll("[data-sort]").forEach((element) => element.addEventListener("click", () => this.toggleSort(element.dataset.sort))); this.shadowRoot.querySelectorAll("[data-select]").forEach((element) => element.addEventListener("change", (event) => { const id = event.target.closest("tr").dataset.id; event.target.checked ? this.selected.add(id) : this.selected.delete(id); })); this.shadowRoot.querySelectorAll("[data-draft]").forEach((element) => element.addEventListener("change", (event) => this.setDraft(event.target.dataset.draft, event.target.value))); this.shadowRoot.querySelector("[data-select-compatible]")?.addEventListener("click", () => this.selectVisible(true)); this.shadowRoot.querySelector("[data-include]")?.addEventListener("click", () => this.applyToSelection("include")); this.shadowRoot.querySelector("[data-exclude]")?.addEventListener("click", () => this.applyToSelection("exclude")); this.shadowRoot.querySelector("[data-unchanged]")?.addEventListener("click", () => this.applyToSelection("")); this.shadowRoot.querySelector("[data-preview]")?.addEventListener("click", () => this.previewServer()); this.shadowRoot.querySelector("[data-save]")?.addEventListener("click", () => this.saveDraft()); this.shadowRoot.querySelector("[data-load]")?.addEventListener("click", () => this.loadSaved()); this.shadowRoot.querySelector("[data-export]")?.addEventListener("click", () => this.exportDraft()); this.shadowRoot.querySelector("[data-discard]")?.addEventListener("click", () => this.discard()); this.shadowRoot.querySelector("[data-prev]")?.addEventListener("click", () => { this.page--; this.render(); }); this.shadowRoot.querySelector("[data-next]")?.addEventListener("click", () => { this.page++; this.render(); }); this.shadowRoot.querySelectorAll("[data-detail]").forEach((element) => element.addEventListener("click", () => { this.detail = this.entities.find((item) => item.entity_id === element.closest("tr").dataset.id); this.render(); })); this.shadowRoot.querySelector("[data-close-detail]")?.addEventListener("click", () => { this.detail = null; this.render(); });
   }
 }
-if (!customElements.get("homekit-manager-panel")) {
-  customElements.define("homekit-manager-panel", HomeKitManagerPanel);
-}
+if (!customElements.get("homekit-manager-panel")) customElements.define("homekit-manager-panel", HomeKitManagerPanel);

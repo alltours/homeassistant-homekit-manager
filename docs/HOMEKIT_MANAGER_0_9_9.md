@@ -52,6 +52,8 @@ Noch nicht vollständig nachgewiesen sind:
 - JavaScript-Syntaxprüfung: bestanden.
 - Frontend-Verhaltenstest: bestanden.
 - Home-Assistant-Integrationstests und Unit-Tests: 42 bestanden.
+- Lokales Installationsarchiv `homekit-manager-0.9.9.zip`: 30 Dateien, SHA-256
+  `911976dd5df1e1c0e09ed98368c9629ca5f537e12808ff880e47e01addce1077`
 - Echte Chromium-Fixture-Prüfung: bestanden; die Fixture wurde über einen kurzlebigen
   lokalen HTTP-Server geladen. Erfolgssicht, Fehleranzeige und leere Browserkonsole wurden
   geprüft.

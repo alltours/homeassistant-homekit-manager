@@ -35,6 +35,9 @@ Ergebnisse:
   Konfiguration und Änderungen renderten ohne Browserfehler. Der absichtlich ausgelöste
   WebSocket-Fehlerzustand wurde sichtbar angezeigt und anschließend der Erfolgszustand
   erneut bestätigt.
+- Release-Archiv: **bestanden**. `homekit-manager-0.9.9.zip` enthält exakt 30 Dateien;
+  alle Inhalte stimmen mit dem Release-Manifest überein. SHA-256:
+  `911976dd5df1e1c0e09ed98368c9629ca5f537e12808ff880e47e01addce1077`.
 - Chromium-Mobile-Screenshot: **bestanden** bei einer Fenstergröße von `500x844`. Zwei
   Karten-Spalten bleiben innerhalb des Viewports lesbar; die Tab-Leiste ist kontrolliert
   horizontal scrollbar.

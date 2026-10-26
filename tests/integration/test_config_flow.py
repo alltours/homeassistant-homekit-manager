@@ -268,6 +268,14 @@ async def test_homekit_manager_apply_uses_authenticated_websocket(
     assert response["success"] is True
     assert response["result"]["applied"] is True
     assert "input_boolean.test_a" in hass.config_entries.async_get_entry(bridge.entry_id).options["filter"]["include_entities"]
+    await client.send_json_auto_id({
+        "type": "homekit_manager/activation_status",
+        "entry_id": bridge.entry_id,
+        "request_id": response["result"]["request_id"],
+    })
+    status_response = await client.receive_json()
+    assert status_response["success"] is True
+    assert status_response["result"]["state"] == "active"
 
 
 async def test_homekit_manager_mode_status_is_conservative(

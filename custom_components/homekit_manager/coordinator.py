@@ -5,6 +5,8 @@ import hashlib
 import json
 import logging
 from pathlib import Path
+from datetime import datetime, timezone
+from uuid import uuid4
 from typing import Any
 from homeassistant.core import callback
 from .compatibility import classify_entity
@@ -12,7 +14,7 @@ from .homekit_reader import read_homekit_entries
 from .inventory import build_inventory
 from .change_planner import plan_changes
 from .fingerprint import build_fingerprint
-from .homekit_writer import HomeKitWriter, OptionsDiff, build_options_diff, HomeKitWriteBlocked
+from .homekit_writer import HomeKitWriter, OptionsDiff, build_options_diff, HomeKitWriteBlocked, HomeKitActivationUnknown
 from .reconcile import reconcile_desired_state
 from .exporter import export_desired_state
 from .yaml_store import (
@@ -64,6 +66,8 @@ class HomeKitManagerCoordinator:
         self.yaml_snapshot = YamlSnapshot(empty_document(), None, False, True, None, None)
         self._unsubscribers = []
         self._refresh_task: asyncio.Task | None = None
+        self.activation_statuses: dict[str, dict[str, Any]] = {}
+        self._activation_locks: dict[str, asyncio.Lock] = {}
         self._subscribe_events()
 
     async def async_initialize(self) -> None:
@@ -201,6 +205,37 @@ class HomeKitManagerCoordinator:
     def diagnostics(self) -> dict[str, Any]:
         """Return the current diagnostic snapshot without applying corrections."""
         return {"findings": self.diagnostic_findings, "summary": diagnostics_summary(self.diagnostic_findings), "fingerprint": self.fingerprint}
+
+    def activation_status(self, entry_id: str | None = None, request_id: str | None = None) -> dict[str, Any]:
+        """Return the last in-memory activation state; restart means unknown."""
+        entry_id = entry_id or self.selected_bridge_id
+        status = self.activation_statuses.get(entry_id or "")
+        if status is None:
+            return {
+                "entry_id": entry_id,
+                "request_id": request_id,
+                "state": "unknown",
+                "message": "Für diesen Anwendungsvorgang liegt kein bestätigter Laufzeitstatus vor.",
+            }
+        if request_id and status.get("request_id") != request_id:
+            return {
+                "entry_id": entry_id,
+                "request_id": request_id,
+                "state": "unknown",
+                "message": "Der angeforderte Anwendungsvorgang ist nicht mehr im Speicher vorhanden.",
+            }
+        return dict(status)
+
+    def _set_activation_status(self, entry_id: str, request_id: str, state: str, **details: Any) -> dict[str, Any]:
+        status = {
+            "entry_id": entry_id,
+            "request_id": request_id,
+            "state": state,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            **details,
+        }
+        self.activation_statuses[entry_id] = status
+        return status
 
     def history(self) -> dict[str, Any]:
         """Return bounded desired-state history without pairing material."""
@@ -358,23 +393,75 @@ class HomeKitManagerCoordinator:
         return diff.as_dict()
 
     async def async_apply_options_diff(
-        self, document: Any, expected_fingerprint: str | None
+        self, document: Any, expected_fingerprint: str | None, request_id: str | None = None
     ) -> dict[str, Any]:
         """Apply a freshly validated diff to a supported SOURCE_USER bridge."""
-        if expected_fingerprint and expected_fingerprint != self.fingerprint:
-            raise YamlVersionConflict("Live-Konfiguration oder Inventar wurde seit der Vorschau verändert")
         validated = self.validate_draft(document)
         bridge = self.selected_bridge()
         if bridge is None:
             raise ValueError("Die Ziel-Bridge ist nicht eindeutig")
         if bridge.get("source") != "user":
             raise HomeKitWriteBlocked("Nur reguläre SOURCE_USER-Bridges können angewendet werden")
-        diff = build_options_diff(bridge, validated["document"], self.inventory)
-        result = await HomeKitWriter(self.hass, allow_production=True).async_apply(diff)
-        await self.async_refresh()
-        result["fingerprint"] = self.fingerprint
-        result["warnings"] = validated["warnings"]
-        return result
+        entry_id = bridge["entry_id"]
+        request_id = request_id or uuid4().hex
+        lock = self._activation_locks.setdefault(entry_id, asyncio.Lock())
+        async with lock:
+            if expected_fingerprint and expected_fingerprint != self.fingerprint:
+                self._set_activation_status(entry_id, request_id, "failed", message="Fingerprint-Konflikt")
+                raise YamlVersionConflict("Live-Konfiguration oder Inventar wurde seit der Vorschau verändert")
+            diff = build_options_diff(bridge, validated["document"], self.inventory)
+            existing = self.activation_statuses.get(entry_id)
+            if existing and existing.get("request_id") == request_id:
+                if existing["state"] in {"activating", "saved", "active", "unknown"}:
+                    return existing | {
+                        "applied": existing["state"] == "active",
+                        "activation_status": existing["state"],
+                        "warnings": validated["warnings"],
+                    }
+            self._set_activation_status(
+                entry_id, request_id, "validated", fingerprint=self.fingerprint,
+                changed_keys=list(diff.changed_keys),
+            )
+            if not diff.changed_keys:
+                status = self._set_activation_status(
+                    entry_id, request_id, "active", fingerprint=self.fingerprint,
+                    idempotent=True, message="Der gewünschte Zustand ist bereits aktiv.",
+                )
+                return status | {"applied": False, "activation_status": "active", "warnings": validated["warnings"]}
+            self._set_activation_status(
+                entry_id, request_id, "activating", fingerprint=self.fingerprint,
+                changed_keys=list(diff.changed_keys),
+            )
+            try:
+                result = await HomeKitWriter(self.hass, allow_production=True).async_apply(diff)
+                self._set_activation_status(entry_id, request_id, "saved", fingerprint=self.fingerprint)
+                if self.selected_bridge_id != entry_id:
+                    raise HomeKitActivationUnknown(
+                        "Bridge-Kontext wurde während der Aktivierung gewechselt; Ergebnis muss erneut geprüft werden"
+                    )
+                await self.async_refresh()
+                if self.last_error:
+                    raise HomeKitActivationUnknown(
+                        "Optionen gespeichert, aber der aktuelle Bridge-Zustand konnte nicht erneut gelesen werden"
+                    )
+                status = self._set_activation_status(
+                    entry_id, request_id, "active", fingerprint=self.fingerprint,
+                    activation_status=result.get("activation_status", "active"),
+                )
+                result["fingerprint"] = self.fingerprint
+                result["warnings"] = validated["warnings"]
+                result["activation_status"] = status["state"]
+                result["request_id"] = request_id
+                return result
+            except asyncio.CancelledError:
+                self._set_activation_status(entry_id, request_id, "unknown", message="Aktivierung unterbrochen")
+                raise
+            except HomeKitActivationUnknown as err:
+                self._set_activation_status(entry_id, request_id, "unknown", message=str(err))
+                raise
+            except Exception as err:
+                self._set_activation_status(entry_id, request_id, "failed", message=str(err))
+                raise
 
     def reconcile(self, document: Any, baseline_fingerprint: str | None = None) -> dict[str, Any]:
         validated = self.validate_draft(document)

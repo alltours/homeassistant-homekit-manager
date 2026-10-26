@@ -32,6 +32,10 @@ class HomeKitWriteBlocked(HomeKitWriteError):
     """The proposed diff is not provably safe."""
 
 
+class HomeKitActivationUnknown(HomeKitWriteError):
+    """The options may be saved, but activation cannot be confirmed."""
+
+
 @dataclass(frozen=True)
 class OptionsDiff:
     entry_id: str
@@ -58,6 +62,7 @@ _FILTER_LIST_KEYS = (
     "include_entity_globs", "exclude_entity_globs",
 )
 _locks: dict[str, asyncio.Lock] = {}
+ACTIVATION_TIMEOUT = 30.0
 
 
 def _entry_options(bridge: Mapping[str, Any]) -> dict[str, Any]:
@@ -168,6 +173,8 @@ class HomeKitWriter:
             raise HomeKitWriteBlocked(
                 "Nur reguläre HomeKit-Config-Entries vom Typ SOURCE_USER werden unterstützt"
             )
+        if self.allow_production and getattr(getattr(entry, "state", None), "value", getattr(entry, "state", None)) != "loaded":
+            raise HomeKitWriteBlocked("HomeKit-Config-Entry ist vor der Anwendung nicht geladen")
         # Core 2026.10.4 reloads HomeKit options through the integration's
         # update listener. Without that listener, async_update_entry would
         # persist options while leaving the running bridge untouched.
@@ -180,6 +187,7 @@ class HomeKitWriter:
             raise HomeKitWriteBlocked("Options-Diff enthält nicht freigegebene Schlüssel")
         lock = _locks.setdefault(diff.entry_id, asyncio.Lock())
         async with lock:
+            previous_runtime_data = getattr(entry, "runtime_data", None)
             current_options = dict(entry.options)
             current_data = dict(entry.data)
             for key in diff.changed_keys:
@@ -195,7 +203,14 @@ class HomeKitWriter:
                     "HomeKit-Config-Entry wurde nicht aktualisiert; Aktivierung abgebrochen"
                 )
             if hasattr(self.hass, "async_block_till_done"):
-                await self.hass.async_block_till_done()
+                try:
+                    await asyncio.wait_for(
+                        self.hass.async_block_till_done(), ACTIVATION_TIMEOUT
+                    )
+                except asyncio.TimeoutError as err:
+                    raise HomeKitActivationUnknown(
+                        "Aktivierung wurde nicht innerhalb des Zeitlimits bestätigt"
+                    ) from err
         state = getattr(getattr(entry, "state", None), "value", getattr(entry, "state", None))
         if state != "loaded":
             reason = getattr(entry, "reason", None)
@@ -204,8 +219,13 @@ class HomeKitWriter:
                 "HomeKit-Bridge wurde nach der Optionsänderung nicht erfolgreich aktiviert"
                 + detail
             )
+        if self.allow_production and previous_runtime_data is getattr(entry, "runtime_data", None):
+            raise HomeKitActivationUnknown(
+                "HomeKit-Optionen wurden gespeichert, aber kein neuer Bridge-Lifecycle wurde bestätigt"
+            )
         return {
             "applied": True,
+            "options_saved": True,
             "activation": "core_update_listener",
             "activation_status": "active" if state == "loaded" else "unknown",
             "entry_id": diff.entry_id,

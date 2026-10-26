@@ -13,6 +13,7 @@ from .const import (
     RECONCILE_COMMAND, EXPORT_COMMAND,
     MODE_STATUS_COMMAND, SET_MODE_COMMAND,
     DEVICES_COMMAND, AREAS_COMMAND, DIAGNOSTICS_COMMAND, DEVICE_PREVIEW_COMMAND, RULES_PREVIEW_COMMAND, HISTORY_COMMAND, HISTORY_RESTORE_COMMAND, PERFORMANCE_COMMAND,
+    ACTIVATION_STATUS_COMMAND,
 )
 from .homekit_writer import HomeKitWriteError
 from .yaml_store import YamlStoreError, YamlValidationError, YamlVersionConflict
@@ -224,7 +225,7 @@ async def websocket_apply_options_diff(hass, connection, msg):
     coordinator = hass.data["homekit_manager"]["coordinator"]
     try:
         result = await coordinator.async_apply_options_diff(
-            _document(msg), msg.get("expected_fingerprint")
+            _document(msg), msg.get("expected_fingerprint"), msg.get("request_id")
         )
     except YamlVersionConflict as err:
         connection.send_error(msg["id"], "conflict", str(err))
@@ -233,6 +234,22 @@ async def websocket_apply_options_diff(hass, connection, msg):
         connection.send_error(msg["id"], "write_blocked", str(err))
         return
     connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({
+    probatio.Required("type"): ACTIVATION_STATUS_COMMAND,
+    probatio.Optional("entry_id"): str,
+    probatio.Optional("request_id"): str,
+})
+@websocket_api.async_response
+async def websocket_activation_status(hass, connection, msg):
+    """Return the last known status without retrying or applying anything."""
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    connection.send_result(
+        msg["id"],
+        coordinator.activation_status(msg.get("entry_id"), msg.get("request_id")),
+    )
 
 
 @websocket_api.require_admin
@@ -271,6 +288,6 @@ def async_register_websocket_commands(hass, coordinator) -> None:
     """Register authenticated inventory, draft, and guarded apply commands."""
     websocket_api.async_register_command(hass, websocket_inventory)
     websocket_api.async_register_command(hass, websocket_bridges)
-    for handler in (websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_mode_status, websocket_set_mode, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_apply_options_diff, websocket_prepare_options_diff, websocket_reconcile, websocket_export):
+    for handler in (websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_activation_status, websocket_mode_status, websocket_set_mode, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_apply_options_diff, websocket_prepare_options_diff, websocket_reconcile, websocket_export):
         websocket_api.async_register_command(hass, handler)
 

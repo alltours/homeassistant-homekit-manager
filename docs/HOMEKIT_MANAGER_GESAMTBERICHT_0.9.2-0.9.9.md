@@ -1,7 +1,7 @@
 # HomeKit Manager – Konsolidierter Gesamtbericht 0.9.2 bis 0.9.9
 
 **Berichtsstand:** 26.10.2026  
-**Lokaler Quellenstand:** Branch `feature/homekit-manager-0.9.9`, Commit `dda86b547f6db11a43458eecf6217bf46d235e59`  
+**Lokaler Quellenstand:** Branch `feature/homekit-manager-0.9.9`, Commit `cc9fca2`
 **Produktiver Zielstand:** zuletzt autorisiert und dokumentiert als 0.9.2  
 **Bewertung:** **CONDITIONAL-GO**
 

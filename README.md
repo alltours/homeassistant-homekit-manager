@@ -22,7 +22,7 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE).
 
 ## Installation
 
-Copy `custom_components/homekit_manager/` into the Home Assistant configuration directory and restart Home Assistant only after reviewing the release and backup plan. Create the integration through the Home Assistant UI. Do not add this repository to a production HACS installation yet.
+Install `custom_components/homekit_manager/` through HACS or copy it into the Home Assistant configuration directory after reviewing the release and backup plan. Create the integration through the Home Assistant UI. A Core restart is required after changing custom-component files.
 
 ## Development
 
@@ -37,11 +37,11 @@ node --check custom_components/homekit_manager/www/homekit-manager.js
 
 ## Release process
 
-Changes are developed on a branch, tested locally, committed, pushed to `main`, and verified by GitHub Actions. GitHub Releases and HACS publication are intentionally not enabled by this repository snapshot.
+Changes are developed on a branch, tested locally, committed, pushed to `main`, and verified by GitHub Actions. Versioned GitHub Releases are used for HACS installation.
 
 ## HACS status
 
-The repository uses the supported single-integration layout and includes `hacs.json`. HACS cannot use this repository because it is private; HACS documents that private GitHub repositories are not supported. See `docs/HACS_STATUS.md` and `docs/HOMEKIT_MANAGER_GITHUB_UPDATE.md` for the cause and the supported authenticated GitHub update process.
+The repository uses the supported single-integration layout, includes `hacs.json`, and is public for HACS discovery. See `docs/HACS_STATUS.md` and `docs/HOMEKIT_MANAGER_GITHUB_UPDATE.md` for the publication and update process.
 
 ## Known limitations
 

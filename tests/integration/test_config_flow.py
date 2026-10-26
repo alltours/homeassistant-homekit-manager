@@ -75,6 +75,8 @@ async def test_homekit_manager_entry_lifecycle(hass, enable_custom_integrations)
     assert entry.state is ConfigEntryState.LOADED
     assert "homekit_manager" in hass.data
     assert frontend.async_panel_exists(hass, "homekit_manager")
+    panel = hass.data[frontend.DATA_PANELS]["homekit_manager"]
+    assert panel.config["_panel_custom"]["name"] == "homekit-manager-panel"
 
     assert await hass.config_entries.async_unload(entry.entry_id)
     assert "homekit_manager" not in hass.data

@@ -97,3 +97,11 @@ unverändert und benötigt eine gesonderte Freigabe.
 
 Der HomeKit-Schreibpfad bleibt deaktiviert. `apply_enabled` bleibt `False`; `HomeKitWriter.async_apply()` verweigert weiterhin jede Anwendung. Bestehende HomeKit-Config-Entries und Pairing-Daten werden nicht verändert.
 
+### Phase 5B.16 – Panel-Element-Namensabgleich 1.0.2
+
+Die Live-Diagnose nach dem HACS-Update zeigte, dass Home Assistant das Custom-Panel als
+`homekit_manager-panel` erzeugte, während das Frontend `homekit-manager-panel` registrierte.
+Der Panelname wird nun aus der Domain mit Bindestrich-Normalisierung abgeleitet. Dadurch
+stimmen Loader und Custom-Element überein. Die Änderung ist lokal getestet und als
+`1.0.2-rc1` vorgesehen; die bestehende HomeKit-Bridge bleibt unverändert.
+

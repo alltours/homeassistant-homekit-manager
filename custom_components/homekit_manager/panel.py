@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from .const import DOMAIN
 
 _STATIC_URL = f"/{DOMAIN}_static"
-_PANEL_NAME = f"{DOMAIN}-panel"
+_PANEL_NAME = f"{DOMAIN.replace('_', '-')}-panel"
 
 
 async def async_register_panel(hass: HomeAssistant) -> None:

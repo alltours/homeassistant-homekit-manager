@@ -33,7 +33,7 @@
     {"path":"translations/de.json","sha256":"dd9511c4a293d702013162c9268c78c9c59dfb37ec0036bb2d2ac0c9034651da"},
     {"path":"translations/en.json","sha256":"93ac0e28518a94d5a07cd4e98e393ee78019a47ce0cac64b14a90ba2383bc5f2"},
     {"path":"websocket.py","sha256":"1606557e926c25c6e4a27509b1aea2841968ab9387eb484b82026abdf98032ca"},
-    {"path":"www/homekit-manager.js","sha256":"6bcfcd8fc11d2aa1c382d30f799522727e8aeab08cc43f510945581762894155"},
+    {"path":"www/homekit-manager.js","sha256":"3069cbfb43a0bd02528a0d712ead57a9b83ee902fd750bf781e6bf6c1614a4bb"},
     {"path":"yaml_store.py","sha256":"87e0e8f028f8fa3d63d1a07610e189cd6dab9f6678dd8e0ecbde8fa70a35b614"}
   ]
 }

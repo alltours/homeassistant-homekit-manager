@@ -1,13 +1,19 @@
-"""Read-only WebSocket API for the future frontend."""
+"""Authenticated WebSocket API for read operations and controlled drafts.
+
+All commands require an administrator connection. The sole mutating HomeKit
+command is the narrow ``SOURCE_USER`` options-diff path, which performs its
+own validation and lifecycle checks in the coordinator and writer.
+"""
 from __future__ import annotations
 import probatio
 from homeassistant.components import websocket_api
 from .const import (
-    BRIDGES_COMMAND, SELECT_BRIDGE_COMMAND, INVENTORY_COMMAND, PREVIEW_COMMAND, SAVE_DRAFT_COMMAND,
+    BRIDGES_COMMAND, SELECT_BRIDGE_COMMAND, INVENTORY_COMMAND, PREVIEW_COMMAND, SAVE_DRAFT_COMMAND, APPLY_OPTIONS_DIFF_COMMAND,
     VALIDATE_DRAFT_COMMAND, YAML_STATUS_COMMAND, PREPARE_OPTIONS_DIFF_COMMAND,
     RECONCILE_COMMAND, EXPORT_COMMAND,
     MODE_STATUS_COMMAND, SET_MODE_COMMAND,
     DEVICES_COMMAND, AREAS_COMMAND, DIAGNOSTICS_COMMAND, DEVICE_PREVIEW_COMMAND, RULES_PREVIEW_COMMAND, HISTORY_COMMAND, HISTORY_RESTORE_COMMAND, PERFORMANCE_COMMAND,
+    ACTIVATION_STATUS_COMMAND,
 )
 from .homekit_writer import HomeKitWriteError
 from .yaml_store import YamlStoreError, YamlValidationError, YamlVersionConflict
@@ -208,6 +214,45 @@ async def websocket_save_draft(hass, connection, msg):
 
 
 @websocket_api.require_admin
+@websocket_api.websocket_command({
+    probatio.Required("type"): APPLY_OPTIONS_DIFF_COMMAND,
+    probatio.Required("document"): dict,
+    probatio.Optional("expected_fingerprint"): str,
+})
+@websocket_api.async_response
+async def websocket_apply_options_diff(hass, connection, msg):
+    """Apply only a freshly validated diff to a supported SOURCE_USER bridge."""
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    try:
+        result = await coordinator.async_apply_options_diff(
+            _document(msg), msg.get("expected_fingerprint"), msg.get("request_id")
+        )
+    except YamlVersionConflict as err:
+        connection.send_error(msg["id"], "conflict", str(err))
+        return
+    except (YamlValidationError, HomeKitWriteError, ValueError) as err:
+        connection.send_error(msg["id"], "write_blocked", str(err))
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({
+    probatio.Required("type"): ACTIVATION_STATUS_COMMAND,
+    probatio.Optional("entry_id"): str,
+    probatio.Optional("request_id"): str,
+})
+@websocket_api.async_response
+async def websocket_activation_status(hass, connection, msg):
+    """Return the last known status without retrying or applying anything."""
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    connection.send_result(
+        msg["id"],
+        coordinator.activation_status(msg.get("entry_id"), msg.get("request_id")),
+    )
+
+
+@websocket_api.require_admin
 @websocket_api.websocket_command({probatio.Required("type"): PREPARE_OPTIONS_DIFF_COMMAND, probatio.Required("document"): dict})
 @websocket_api.async_response
 async def websocket_prepare_options_diff(hass, connection, msg):
@@ -240,9 +285,9 @@ async def websocket_export(hass, connection, msg):
         connection.send_error(msg["id"], "invalid_format", str(err))
 
 def async_register_websocket_commands(hass, coordinator) -> None:
-    """Register read-only commands; HA WebSocket auth is required by default."""
+    """Register authenticated inventory, draft, and guarded apply commands."""
     websocket_api.async_register_command(hass, websocket_inventory)
     websocket_api.async_register_command(hass, websocket_bridges)
-    for handler in (websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_mode_status, websocket_set_mode, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_prepare_options_diff, websocket_reconcile, websocket_export):
+    for handler in (websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_activation_status, websocket_mode_status, websocket_set_mode, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_apply_options_diff, websocket_prepare_options_diff, websocket_reconcile, websocket_export):
         websocket_api.async_register_command(hass, handler)
 

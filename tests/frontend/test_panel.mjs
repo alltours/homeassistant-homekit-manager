@@ -19,7 +19,7 @@ assert.match(panel.shadowRoot.innerHTML, /Änderungen speichern/);
 let calls = 0;
 panel.hass = { callWS: async ({ type }) => { calls += 1; if (type === "homekit_manager/inventory") throw new Error("WebSocket nicht erreichbar"); throw new Error(`unexpected command: ${type}`); } };
 await new Promise((resolve) => setTimeout(resolve, 0));
-assert.equal(calls, 8);
+assert.equal(calls, 9);
 assert.match(panel.shadowRoot.innerHTML, /WebSocket nicht erreichbar/);
 
 panel.entities = [
@@ -56,8 +56,8 @@ assert.equal(panel.renderCount, before, "irrelevant Home Assistant state updates
 
 const successful = new Panel();
 let successCalls = 0;
-successful.hass = { callWS: async ({ type }) => { successCalls += 1; if (type === "homekit_manager/inventory") return { entities: [], overview: {} }; if (type === "homekit_manager/bridges") return { bridges: [] }; if (type === "homekit_manager/devices") return { devices: [] }; if (type === "homekit_manager/areas") return { areas: [] }; if (type === "homekit_manager/diagnostics") return { findings: [], summary: {} }; if (type === "homekit_manager/yaml_status") return { valid: true, exists: false }; if (type === "homekit_manager/mode_status") return { active_mode: "homekit_bridge" }; throw new Error(`unexpected command: ${type}`); } };
+successful.hass = { callWS: async ({ type }) => { successCalls += 1; if (type === "homekit_manager/inventory") return { entities: [], overview: {} }; if (type === "homekit_manager/bridges") return { bridges: [] }; if (type === "homekit_manager/devices") return { devices: [] }; if (type === "homekit_manager/areas") return { areas: [] }; if (type === "homekit_manager/diagnostics") return { findings: [], summary: {} }; if (type === "homekit_manager/yaml_status") return { valid: true, exists: false }; if (type === "homekit_manager/mode_status") return { active_mode: "homekit_bridge" }; if (type === "homekit_manager/activation_status") return { state: "unknown" }; throw new Error(`unexpected command: ${type}`); } };
 await new Promise((resolve) => setTimeout(resolve, 0));
-assert.equal(successCalls, 8);
+assert.equal(successCalls, 9);
 assert.doesNotMatch(successful.shadowRoot.innerHTML, /Verbindung nicht möglich/);
 console.log("frontend panel behavior: ok");

@@ -5,7 +5,7 @@ export default defineConfig({
   timeout: 15000,
   reporter: [["line"]],
   webServer: {
-    command: "/Users/felixalshut/Documents/ChatGPT/Homeassistant/.venv-ha-2026.10.4/bin/python -m http.server 4173 --directory /Users/felixalshut/Documents/ChatGPT/homeassistant-homekit-manager",
+    command: "python3 -m http.server 4173 --directory ../..",
     port: 4173,
     reuseExistingServer: false,
   },

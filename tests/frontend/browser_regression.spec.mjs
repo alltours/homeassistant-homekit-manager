@@ -30,6 +30,7 @@ for (const [name, width, height] of viewports) {
       await panel.locator("[data-dashboard-entity]").first().click();
       await expect(panel.locator("text=Änderungsübersicht")).toBeVisible();
       await expect(panel.locator("text=Entwurf speichern")).toBeVisible();
+      await expect(panel.locator("[data-dashboard-apply]")).toBeVisible();
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
       expect(overflow).toBe(false);
       expect(errors).toEqual([]);

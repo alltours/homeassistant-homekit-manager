@@ -1,6 +1,6 @@
-# HomeKit Manager
+# HomeKit Manager 0.9.16
 
-Home Assistant custom integration for read-only HomeKit Bridge inventory management and configuration planning.
+Home Assistant custom integration for HomeKit Bridge inventory management, safe configuration planning and a version-bound controlled apply path.
 
 ## Features
 
@@ -11,12 +11,13 @@ Home Assistant custom integration for read-only HomeKit Bridge inventory managem
 - Native Home Assistant panel with search, filters, sorting, multi-selection, draft planning, preview, and export.
 - Explicit multi-bridge context selection with bridge-scoped drafts and conflict protection.
 - Persistent, secret-free draft history with restore-as-draft and read-only rule previews.
+- Controlled application for existing `SOURCE_USER` HomeKit entries on Core 2026.10.4.
 
 ## Safety model
 
-The integration is deliberately read-only with respect to HomeKit. `apply_enabled = False` is enforced and `HomeKitWriter.async_apply()` rejects every application attempt. The integration does not update HomeKit config entries, reload HomeKit, manipulate pairings, modify accessory identifiers, or write `.storage` data.
+The integration does not manipulate pairings, accessory identifiers or `.storage` data. The apply path is restricted in the backend to an administrator, Core 2026.10.4, a uniquely selected `SOURCE_USER` HomeKit entry, a fresh validated diff and a successfully loaded entry after activation. YAML-imported entries, migrations and bridge creation/deletion remain blocked.
 
-This project is still under development. A working local test suite does not constitute a production Home Assistant acceptance.
+Version 0.9.16 remains a development/release-candidate line until HACS, Hassfest, GitHub Actions and the authenticated real-bridge WebSocket E2E gate have all passed.
 
 ## License
 
@@ -58,6 +59,8 @@ The repository uses the supported single-integration layout, includes `hacs.json
 ## Known limitations
 
 - No production Home Assistant installation is managed by this repository.
-- No supported API currently enables a safe direct update of an existing HomeKit config entry from this integration.
-- Browser regression coverage is provided as a local fixture with Chromium viewport/theme tests and a five-minute stability test; CI runs the deterministic frontend behavior test and JavaScript syntax checks.
+- YAML-imported HomeKit entries are intentionally not writable through the standard adapter.
+- Migration between configuration methods is not automatic.
+- The final release gate requires a real authenticated WebSocket E2E run against an isolated paired bridge.
+- Browser regression coverage includes Chromium and WebKit viewport/theme tests; production browser acceptance remains separate.
 

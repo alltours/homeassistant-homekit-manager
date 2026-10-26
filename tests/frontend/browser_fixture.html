@@ -52,7 +52,7 @@
             };
           }
           if (message.type === "homekit_manager/bridges") {
-            return { bridges: [{ entry_id: "fixture-bridge", title: "Fixture Bridge", mode: "bridge", filter: { include_domains: ["light"] } }] };
+            return { bridges: [{ entry_id: "fixture-bridge", title: "Fixture Bridge", source: "user", mode: "bridge", filter: { include_domains: ["light"] } }] };
           }
           if (message.type === "homekit_manager/history") {
             return { entries: [], count: 0 };
@@ -65,6 +65,9 @@
           }
           if (message.type === "homekit_manager/mode_status") {
             return { active_mode: "homekit_bridge", desired_mode: "homekit_bridge", transition: "stable", matrix: {} };
+          }
+          if (message.type === "homekit_manager/activation_status") {
+            return { state: "unknown", entry_id: "fixture-bridge", message: "Kein Anwendungsvorgang" };
           }
           if (message.type === "homekit_manager/devices") {
             return { devices: [{ device_id: "fixture-device", name: "Kitchen device", area_name: "Kitchen", entity_count: 1, compatible_count: 1, configured_count: 1, unavailable_count: 0, integrations: ["demo"] }] };
@@ -94,6 +97,9 @@
           }
           if (message.type === "homekit_manager/save_draft") {
             return { exists: true, valid: true, document: message.document, is_applied: false };
+          }
+          if (message.type === "homekit_manager/apply_options_diff") {
+            return { applied: true, activation: "core_update_listener", activation_status: "active", entry_id: "fixture-bridge", core_version: "2026.10.4" };
           }
           throw new Error(`Unsupported fixture command: ${message.type}`);
         },

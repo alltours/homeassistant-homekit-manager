@@ -1,7 +1,9 @@
 """Persist the manager's desired administration mode safely.
 
-The store contains only HomeKit Manager metadata. It never writes Home
-Assistant config entries, HomeKit pairing data, or the .storage directory.
+The official Home Assistant Store persists only HomeKit Manager metadata. This
+does not update Home Assistant config entries, HomeKit pairing data, or any
+HomeKit integration state. The store is intentionally separate from the
+HomeKit configuration and contains no pairing or credential material.
 """
 from __future__ import annotations
 

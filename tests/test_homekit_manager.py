@@ -235,6 +235,18 @@ class HomeKitManagerTests(unittest.TestCase):
             self.assertEqual(store.load().document["bridges"]["bridge-1"]["entities"], {"light.a": "include", "sensor.z": "exclude"})
             self.assertEqual(store.path.read_text(encoding="utf-8").count("schema_version: 1"), 1)
 
+    def test_yaml_store_creates_verified_backup_before_replacement(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = YamlStore(Path(directory) / "homekit_manager.yaml")
+            first = {"schema_version": 1, "bridges": {}}
+            current = store.save(first, None)
+            second = {"schema_version": 1, "bridges": {"bridge-1": {"policy": "explicit_overrides", "entities": {"light.a": "include"}}}}
+            store.save(second, current.file_version)
+            backup = YamlStore(store.backup_path).load()
+            self.assertTrue(store.backup_path.is_file())
+            self.assertTrue(backup.valid)
+            self.assertEqual(backup.document, first)
+
     def test_yaml_store_rejects_invalid_schema_and_does_not_overwrite(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "homekit_manager.yaml"

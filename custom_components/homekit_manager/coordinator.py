@@ -28,7 +28,7 @@ from .grouping import build_area_views, build_device_views
 from .diagnostics import build_diagnostics, diagnostics_summary
 from .history import make_history_entry, restore_as_draft
 from .history_store import HistoryStore
-from .config_source import detect_configuration_sources
+from .config_source import inspect_configuration_sources
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -57,6 +57,7 @@ class HomeKitManagerCoordinator:
         }
         self._configuration_text = ""
         self._manager_file_exists = False
+        self._config_dir = Path("/config")
         # File I/O is intentionally deferred to the executor.  The coordinator
         # is constructed during Home Assistant setup, which runs on the event
         # loop and must not perform synchronous filesystem reads.
@@ -74,6 +75,7 @@ class HomeKitManagerCoordinator:
         if callable(config_path):
             configuration_file = config_path("configuration.yaml")
             manager_file = config_path("homekit_manager.yaml")
+            self._config_dir = Path(configuration_file).parent
             def _read_sources():
                 try:
                     with open(configuration_file, encoding="utf-8") as configuration_stream:
@@ -86,8 +88,11 @@ class HomeKitManagerCoordinator:
                     manager_exists = False
                 return text, manager_exists
             self._configuration_text, self._manager_file_exists = await self.hass.async_add_executor_job(_read_sources)
-            self.configuration_sources = detect_configuration_sources(
-                self._configuration_text, manager_file_exists=self._manager_file_exists, bridge_count=0
+            self.configuration_sources = inspect_configuration_sources(
+                self._configuration_text,
+                config_dir=self._config_dir,
+                manager_file_exists=self._manager_file_exists,
+                bridge_count=0,
             )
 
     def selected_bridge(self) -> dict[str, Any] | None:
@@ -129,8 +134,9 @@ class HomeKitManagerCoordinator:
             states = {state.entity_id: state for state in self.hass.states.async_all()}
             records = build_inventory(entities, devices, areas, states)
             bridges = read_homekit_entries(self.hass)
-            self.configuration_sources = detect_configuration_sources(
+            self.configuration_sources = inspect_configuration_sources(
                 self._configuration_text,
+                config_dir=self._config_dir,
                 manager_file_exists=self._manager_file_exists,
                 bridge_count=len(bridges),
             )
@@ -263,13 +269,13 @@ class HomeKitManagerCoordinator:
     def yaml_status(self) -> dict[str, Any]:
         snapshot = self.yaml_store.load()
         self.yaml_snapshot = snapshot
-        return {"document": snapshot.document, "schema_version": snapshot.document.get("schema_version"), "file_version": snapshot.file_version, "last_modified": snapshot.last_modified, "exists": snapshot.exists, "valid": snapshot.valid, "error": snapshot.error, "is_applied": False}
+        return {"document": snapshot.document, "schema_version": snapshot.document.get("schema_version"), "file_version": snapshot.file_version, "last_modified": snapshot.last_modified, "exists": snapshot.exists, "valid": snapshot.valid, "error": snapshot.error, "backup_exists": self.yaml_store.backup_path.is_file(), "included": self.configuration_sources.get("manager_include", False), "active_mode": self.configuration_sources.get("active_mode"), "is_applied": False}
 
     async def async_yaml_status(self) -> dict[str, Any]:
         """Return YAML status after reading the file in the executor."""
         snapshot = await self.hass.async_add_executor_job(self.yaml_store.load)
         self.yaml_snapshot = snapshot
-        return {"document": snapshot.document, "schema_version": snapshot.document.get("schema_version"), "file_version": snapshot.file_version, "last_modified": snapshot.last_modified, "exists": snapshot.exists, "valid": snapshot.valid, "error": snapshot.error, "is_applied": False}
+        return {"document": snapshot.document, "schema_version": snapshot.document.get("schema_version"), "file_version": snapshot.file_version, "last_modified": snapshot.last_modified, "exists": snapshot.exists, "valid": snapshot.valid, "error": snapshot.error, "backup_exists": await self.hass.async_add_executor_job(self.yaml_store.backup_path.is_file), "included": self.configuration_sources.get("manager_include", False), "active_mode": self.configuration_sources.get("active_mode"), "is_applied": False}
 
     def validate_draft(self, document: Any) -> dict[str, Any]:
         from .yaml_store import validate_document

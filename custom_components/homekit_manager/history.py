@@ -11,7 +11,7 @@ def _safe_document(document: Mapping[str, Any]) -> dict[str, Any]:
     return validate_document(document)
 
 
-def make_history_entry(document: Mapping[str, Any], *, reason: str = "draft_saved", fingerprint: str | None = None) -> dict[str, Any]:
+def make_history_entry(document: Mapping[str, Any], *, reason: str = "draft_saved", fingerprint: str | None = None, bridge_id: str | None = None) -> dict[str, Any]:
     """Create a redacted history entry containing desired state only."""
     safe = _safe_document(document)
     return {
@@ -20,6 +20,7 @@ def make_history_entry(document: Mapping[str, Any], *, reason: str = "draft_save
         "document": safe,
         "fingerprint": fingerprint,
         "applied": False,
+        "bridge_id": bridge_id,
     }
 
 

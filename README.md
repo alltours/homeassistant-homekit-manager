@@ -9,6 +9,8 @@ Home Assistant custom integration for read-only HomeKit Bridge inventory managem
 - HomeKit filter and compatibility status evaluation.
 - Admin-protected WebSocket commands for inventory, validation, preview, drafts, and export.
 - Native Home Assistant panel with search, filters, sorting, multi-selection, draft planning, preview, and export.
+- Explicit multi-bridge context selection with bridge-scoped drafts and conflict protection.
+- Persistent, secret-free draft history with restore-as-draft and read-only rule previews.
 
 ## Safety model
 
@@ -47,6 +49,7 @@ See [the 0.9.6 implementation notes](docs/HOMEKIT_MANAGER_0_9_6.md).
 See [the 0.9.7 implementation notes](docs/HOMEKIT_MANAGER_0_9_7.md).
 See [the 0.9.8 implementation notes](docs/HOMEKIT_MANAGER_0_9_8.md).
 See [the 0.9.9 implementation notes](docs/HOMEKIT_MANAGER_0_9_9.md).
+See [the 0.9.11 stabilization notes](docs/HOMEKIT_MANAGER_0_9_11.md).
 
 ## HACS status
 
@@ -56,5 +59,5 @@ The repository uses the supported single-integration layout, includes `hacs.json
 
 - No production Home Assistant installation is managed by this repository.
 - No supported API currently enables a safe direct update of an existing HomeKit config entry from this integration.
-- Browser regression coverage is provided as a local fixture; CI runs the deterministic frontend behavior test and JavaScript syntax checks.
+- Browser regression coverage is provided as a local fixture with Chromium viewport/theme tests and a five-minute stability test; CI runs the deterministic frontend behavior test and JavaScript syntax checks.
 

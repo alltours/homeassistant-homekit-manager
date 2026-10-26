@@ -22,8 +22,8 @@ assert.equal(calls, 7);
 assert.match(panel.shadowRoot.innerHTML, /WebSocket nicht erreichbar/);
 
 panel.entities = [
-  { entity_id: "light.kitchen", name: "Kitchen", area_name: "Kitchen", device_name: "Ceiling light", domain: "light", compatibility: { status: "supported" }, homekit: { configured_by_filter: true, current_status: "included" } },
-  { entity_id: "sensor.hidden", name: "Hidden sensor", area_name: "Hall", device_name: "Sensor", domain: "sensor", compatibility: { status: "conditionally_supported" }, homekit: { configured_by_filter: false, current_status: "excluded" } },
+  { entity_id: "light.kitchen", device_id: "device-kitchen", name: "Kitchen", area_name: "Kitchen", device_name: "Ceiling light", domain: "light", compatibility: { status: "supported" }, homekit: { configured_by_filter: true, current_status: "included" } },
+  { entity_id: "sensor.hidden", device_id: "device-hidden", name: "Hidden sensor", area_name: "Hall", device_name: "Sensor", domain: "sensor", compatibility: { status: "conditionally_supported" }, homekit: { configured_by_filter: false, current_status: "excluded" } },
 ];
 assert.equal(panel.currentStatus(panel.entities[0]), "included");
 assert.equal(panel.status(panel.entities[1]), "excluded");
@@ -34,6 +34,11 @@ panel.bridge = { entry_id: "bridge-1" };
 panel.draft = new Map([["light.kitchen", "excluded"]]);
 assert.equal(panel.status(panel.entities[0]), "planned");
 assert.equal(JSON.stringify(panel.desiredDocument().bridges["bridge-1"].entities), JSON.stringify({ "light.kitchen": "exclude" }));
+panel.draft.clear();
+panel.toggleDevice("device-kitchen");
+assert.equal(panel.draft.get("light.kitchen"), "excluded");
+panel.toggleDevice("device-kitchen");
+assert.equal(panel.draft.size, 0, "returning a device to its baseline removes the draft");
 panel.selectView("devices");
 assert.match(panel.shadowRoot.innerHTML, /Auswahlmodus/);
 assert.match(panel.shadowRoot.innerHTML, /data-group="areas"/);

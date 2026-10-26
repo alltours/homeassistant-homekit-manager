@@ -272,3 +272,31 @@ GitHub-Release durchgeführt.
 Die konkrete CI-Ursache ist behoben und lokal sowie remote verifiziert. Die Safari-
 Browserabnahme über HTTP ist erfolgreich. Für ein endgültiges GO fehlen weiterhin die
 exakten 390-/430-/768-/1440-Pixel- und Dark-Mode-Abnahmen sowie die Chromium-Abnahme.
+
+## Nachtrag – Finale UX-Abnahme
+
+Die erneute Browserabnahme konnte nicht gestartet werden, weil der Mac gesperrt war. Eine
+automatische Entsperrung wurde nicht versucht. Responsive-, Dark-Mode- und exakte
+Viewport-Prüfungen sind deshalb weiterhin nicht ausgeführt.
+
+Bei der lokalen Code-Review wurde unabhängig davon ein echter Funktionsfehler festgestellt:
+Der Geräteschalter war deaktiviert und nicht mit einem Handler verbunden. Dadurch konnten
+Geräte nicht gesammelt als Entwurf ein- oder ausgeschlossen werden.
+
+Korrektur:
+
+- `toggleDevice()` ergänzt.
+- Geräteschalter bei eindeutigen, kompatiblen Zuständen aktiviert.
+- Gemischte, unbekannte oder inkompatible Geräte bleiben gesperrt.
+- Rückkehr zum ursprünglichen Zustand entfernt den Draft wieder.
+- Frontend-Regressionstest für Geräteschalter und Draft-Rücknahme ergänzt.
+
+Nach der Korrektur bestehen erneut:
+
+- JavaScript-Syntaxprüfung
+- Frontend-Paneltest
+- 42/42 Python-/Home-Assistant-Tests
+- `git diff --check`
+
+Die Korrektur ist lokal verifiziert, aber wegen der gesperrten Browserumgebung noch nicht
+im echten Browser sichtbar geprüft und noch nicht remote durch CI bestätigt.

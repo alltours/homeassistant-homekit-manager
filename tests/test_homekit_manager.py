@@ -403,6 +403,24 @@ class HomeKitManagerTests(unittest.TestCase):
         with self.assertRaises(HomeKitWriteBlocked):
             asyncio.run(HomeKitWriter(hass, test_environment=True, apply_enabled=True).async_apply(diff))
 
+    def test_isolated_writer_blocks_yaml_import_entries_without_reload_contract(self):
+        entry = SimpleNamespace(
+            domain="homekit", entry_id="b", source="import", data={},
+            options={"filter": {"include_entities": ["light.a"]}},
+            state=SimpleNamespace(value="loaded"),
+        )
+        hass = SimpleNamespace(
+            config_entries=SimpleNamespace(async_get_entry=lambda _entry_id: entry),
+            async_block_till_done=lambda: asyncio.sleep(0),
+        )
+        diff = OptionsDiff(
+            "b", {"filter": {"include_entities": ["light.a"]}},
+            {"filter": {"include_entities": ["light.a", "light.b"]}},
+            ("filter",), ("light.b",), {"summary": {"blocked": False}},
+        )
+        with self.assertRaises(HomeKitWriteBlocked):
+            asyncio.run(HomeKitWriter(hass, test_environment=True, apply_enabled=True).async_apply(diff))
+
     def test_reader_is_read_only_and_redacts_sensitive_values(self):
         entry = SimpleNamespace(
             entry_id="bridge-1", title="Test Bridge", source="user", state=SimpleNamespace(value="loaded"),

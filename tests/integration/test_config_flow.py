@@ -64,8 +64,13 @@ async def test_homekit_manager_writer_stays_disabled(hass, enable_custom_integra
         await writer.async_apply(None)
 
 
-async def test_isolated_core_options_adapter_updates_real_config_entries(hass):
+async def test_isolated_core_options_adapter_updates_real_config_entries(hass, monkeypatch):
     """The gated adapter exercises HA's real ConfigEntries update mechanism."""
+    async def no_network_start(_self):
+        return None
+
+    monkeypatch.setattr("homeassistant.components.homekit.HomeKit.async_start", no_network_start)
+    monkeypatch.setattr("homeassistant.components.homekit.async_port_is_available", lambda _port: True)
     entry = config_entries.ConfigEntry(
         version=1,
         minor_version=1,

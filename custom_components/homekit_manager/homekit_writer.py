@@ -153,6 +153,7 @@ class HomeKitWriter:
         if not isinstance(diff, OptionsDiff):
             raise HomeKitWriteBlocked("Ungültiger Options-Diff")
         from homeassistant.const import __version__
+        from homeassistant.config_entries import SOURCE_IMPORT
         if __version__ != SUPPORTED_CORE_VERSION:
             raise HomeKitWriteBlocked(
                 f"Core-Version {__version__} wird für den isolierten Adapter nicht unterstützt"
@@ -160,6 +161,11 @@ class HomeKitWriter:
         entry = self.hass.config_entries.async_get_entry(diff.entry_id)
         if entry is None or getattr(entry, "domain", None) != "homekit":
             raise HomeKitWriteBlocked("HomeKit-Config-Entry nicht gefunden")
+        if getattr(entry, "source", None) == SOURCE_IMPORT:
+            raise HomeKitWriteBlocked(
+                "YAML-importierte HomeKit-Config-Entries werden von Core 2026.10.4 "
+                "nicht über den Options-Update-Listener neu geladen"
+            )
         allowed = {"filter", "entity_config", "homekit_mode", "devices"}
         if any(key not in allowed for key in diff.changed_keys):
             raise HomeKitWriteBlocked("Options-Diff enthält nicht freigegebene Schlüssel")

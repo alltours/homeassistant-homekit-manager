@@ -2,15 +2,15 @@
 
 ## Scope
 
-This repository is private and cannot be installed or updated through HACS. HACS 2.0.5 can only use publicly available GitHub information, so the private repository returns a 404 from HACS even though the repository is valid and reachable with the authorized GitHub CLI account.
+This repository is public and can be installed or updated through HACS. HACS 2.0.5 uses publicly available GitHub information. The earlier private-repository state returned a 404 from HACS even though the repository itself was valid.
 
 The supported update path is:
 
-`GitHub (authenticated Mac) -> verified release archive -> Home Assistant File Editor or approved file transfer -> controlled restart -> live verification`
+`Public GitHub release -> HACS -> controlled update -> controlled restart -> live verification`
 
 ## Required properties
 
-- Keep `alltours/homeassistant-homekit-manager` private.
+- Keep the repository public only while the published source and history have passed the release gate.
 - Use only a tagged GitHub release or a commit explicitly selected for deployment.
 - Do not place GitHub credentials, tokens, `.storage` files, backups, or pairing data in the repository or release archive.
 - Back up Home Assistant before replacing the integration directory.
@@ -19,33 +19,21 @@ The supported update path is:
 - Do not modify the existing HomeKit config entry, HomeKit options, pairings, accessory identifiers, or `.storage`.
 - Keep `apply_enabled = False`; `HomeKitWriter.async_apply()` must continue to reject changes.
 
-## Mac-side update procedure
+## HACS update procedure
 
-1. Authenticate with the official GitHub CLI on the Mac:
+1. Confirm the existing HomeKit Manager directory and config entry before installing:
 
-   ```text
-   gh auth status
-   ```
+   Do not create a second installation.
 
-2. Select the desired release or commit. Do not use an unreviewed branch head for production.
+2. Select the tested GitHub release in HACS.
 
-3. Download the release archive through the authenticated CLI or GitHub UI and verify its SHA-256 against the repository release manifest.
+3. Back up Home Assistant before replacing the integration directory.
 
-4. Confirm the Home Assistant backup is complete.
+4. Update only `custom_components/homekit_manager/` and verify the resulting files.
 
-5. Inspect the existing directory and create a complete, independently verifiable backup of:
+5. Restart Home Assistant only if HACS requests it and the restart is explicitly planned.
 
-   ```text
-   /homeassistant/custom_components/homekit_manager/
-   ```
-
-6. Transfer the verified files into the same directory. Do not change any other custom integration.
-
-7. Recompute hashes or perform a complete content comparison in the target directory.
-
-8. Restart Home Assistant only if the selected release requires it and the restart is explicitly approved for that deployment.
-
-9. Verify integration discovery, version, setup, panel loading, WebSocket behavior, inventory loading, and the unchanged HomeKit bridge.
+6. Verify integration discovery, version, setup, panel loading, WebSocket behavior, inventory loading, and the unchanged HomeKit bridge.
 
 ## Rollback
 
@@ -57,4 +45,4 @@ If verification fails, stop further changes. Restore the previously verified Hom
 - Default branch: `main`
 - Current tested branch commit: `5bebeab8e5917a3f4495d6dd636032cbba22027a`
 - CI: GitHub Actions successful for that commit
-- HACS: not supported for this private repository
+- HACS: public repository path prepared; live update still requires the release and production acceptance steps below

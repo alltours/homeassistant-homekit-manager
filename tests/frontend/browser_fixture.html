@@ -57,6 +57,9 @@
           if (message.type === "homekit_manager/yaml_status") {
             return { exists: false, valid: true, document: { schema_version: 1, bridges: {} }, is_applied: false };
           }
+          if (message.type === "homekit_manager/mode_status") {
+            return { active_mode: "homekit_bridge", desired_mode: "homekit_bridge", transition: "stable", matrix: {} };
+          }
           if (message.type === "homekit_manager/validate_draft") {
             return { valid: true, warnings: [], document: message.document, fingerprint: "fixture-fingerprint" };
           }

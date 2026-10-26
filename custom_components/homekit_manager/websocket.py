@@ -6,6 +6,7 @@ from .const import (
     BRIDGES_COMMAND, INVENTORY_COMMAND, PREVIEW_COMMAND, SAVE_DRAFT_COMMAND,
     VALIDATE_DRAFT_COMMAND, YAML_STATUS_COMMAND, PREPARE_OPTIONS_DIFF_COMMAND,
     RECONCILE_COMMAND, EXPORT_COMMAND,
+    MODE_STATUS_COMMAND, SET_MODE_COMMAND,
 )
 from .homekit_writer import HomeKitWriteError
 from .yaml_store import YamlStoreError, YamlValidationError, YamlVersionConflict
@@ -27,6 +28,27 @@ async def websocket_inventory(hass, connection, msg):
 async def websocket_bridges(hass, connection, msg):
     coordinator = hass.data["homekit_manager"]["coordinator"]
     connection.send_result(msg["id"], {"bridges": coordinator.bridges})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required("type"): MODE_STATUS_COMMAND})
+@websocket_api.async_response
+async def websocket_mode_status(hass, connection, msg):
+    """Return active and desired mode without changing HomeKit."""
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    connection.send_result(msg["id"], coordinator.mode_status())
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required("type"): SET_MODE_COMMAND, probatio.Required("mode"): str})
+@websocket_api.async_response
+async def websocket_set_mode(hass, connection, msg):
+    """Persist a desired mode while keeping risky transitions blocked."""
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    try:
+        connection.send_result(msg["id"], await coordinator.async_set_mode(msg["mode"]))
+    except ValueError as err:
+        connection.send_error(msg["id"], "invalid_mode", str(err))
 
 
 def _document(msg):
@@ -123,6 +145,6 @@ def async_register_websocket_commands(hass, coordinator) -> None:
     """Register read-only commands; HA WebSocket auth is required by default."""
     websocket_api.async_register_command(hass, websocket_inventory)
     websocket_api.async_register_command(hass, websocket_bridges)
-    for handler in (websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_prepare_options_diff, websocket_reconcile, websocket_export):
+    for handler in (websocket_mode_status, websocket_set_mode, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_prepare_options_diff, websocket_reconcile, websocket_export):
         websocket_api.async_register_command(hass, handler)
 

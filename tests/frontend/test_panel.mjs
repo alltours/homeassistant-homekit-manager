@@ -105,13 +105,14 @@ successful.hass = {
     if (type === "homekit_manager/inventory") return { entities: [], overview: { fingerprint: "ok" } };
     if (type === "homekit_manager/bridges") return { bridges: [] };
     if (type === "homekit_manager/yaml_status") return { valid: true, exists: false };
+    if (type === "homekit_manager/mode_status") return { active_mode: "homekit_bridge", desired_mode: "homekit_bridge", transition: "stable", matrix: {} };
     throw new Error(`unexpected command: ${type}`);
   },
 };
 successful.panel = { config: {} };
 successful.narrow = true;
 await new Promise((resolve) => setTimeout(resolve, 0));
-assert.equal(successCalls, 3);
+assert.equal(successCalls, 4);
 assert.doesNotMatch(successful.shadowRoot.innerHTML, /Initialisierung fehlgeschlagen/);
 assert.match(successful.shadowRoot.innerHTML, /HomeKit Manager/);
 

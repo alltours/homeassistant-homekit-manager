@@ -94,6 +94,8 @@ async def test_homekit_manager_websocket_registration(hass, enable_custom_integr
     expected = {
         "homekit_manager/inventory",
         "homekit_manager/bridges",
+        "homekit_manager/mode_status",
+        "homekit_manager/set_mode",
         "homekit_manager/yaml_status",
         "homekit_manager/validate_draft",
         "homekit_manager/preview",
@@ -163,3 +165,21 @@ async def test_homekit_manager_inventory_websocket_round_trip(
     assert response["success"] is True
     assert "overview" in response["result"]
     assert "entities" in response["result"]
+
+
+async def test_homekit_manager_mode_status_is_conservative(
+    hass, enable_custom_integrations, hass_ws_client
+):
+    """Mode reporting never claims that a bridge migration was applied."""
+    result = await hass.config_entries.flow.async_init(
+        "homekit_manager", context={"source": config_entries.SOURCE_USER}
+    )
+    await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    client = await hass_ws_client()
+    await client.send_json_auto_id({"type": "homekit_manager/mode_status"})
+    response = await client.receive_json()
+    assert response["success"] is True
+    status = response["result"]
+    assert status["active_mode"] in {"yaml", "homekit_bridge", "homekit_manager"}
+    assert status["transition"] == "stable"
+    assert all(item["status"] in {"safe", "manual_required"} for item in status["matrix"].values())

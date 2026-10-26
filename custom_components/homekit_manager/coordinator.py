@@ -412,7 +412,7 @@ class HomeKitManagerCoordinator:
             diff = build_options_diff(bridge, validated["document"], self.inventory)
             existing = self.activation_statuses.get(entry_id)
             if existing and existing.get("request_id") == request_id:
-                if existing["state"] in {"activating", "saved", "active", "unknown"}:
+                if existing["state"] in {"activating", "saved", "active", "failed", "unknown"}:
                     return existing | {
                         "applied": existing["state"] == "active",
                         "activation_status": existing["state"],

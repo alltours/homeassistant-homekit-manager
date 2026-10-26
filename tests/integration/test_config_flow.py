@@ -278,6 +278,44 @@ async def test_homekit_manager_apply_uses_authenticated_websocket(
     assert status_response["result"]["state"] == "active"
 
 
+async def test_homekit_manager_duplicate_request_id_does_not_retry_failed_apply(
+    hass, enable_custom_integrations, monkeypatch
+):
+    """A failed request ID is terminal and cannot trigger an implicit retry."""
+    result = await hass.config_entries.flow.async_init(
+        "homekit_manager", context={"source": config_entries.SOURCE_USER}
+    )
+    await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    coordinator.bridges = [{"entry_id": "bridge-a", "source": "user", "filter": {}}]
+    coordinator.selected_bridge_id = "bridge-a"
+    coordinator.inventory = [{
+        "entity_id": "light.test",
+        "compatibility": {"status": "supported"},
+        "homekit": {"configured_by_filter": False, "current_status": "excluded"},
+    }]
+    coordinator.fingerprint = "fingerprint"
+
+    class FailingWriter:
+        calls = 0
+
+        async def async_apply(self, _diff):
+            self.calls += 1
+            raise RuntimeError("reload failed")
+
+    writer = FailingWriter()
+    monkeypatch.setattr("custom_components.homekit_manager.coordinator.HomeKitWriter", lambda *_args, **_kwargs: writer)
+    document = {"schema_version": 1, "bridges": {"bridge-a": {"policy": "explicit_overrides", "entities": {"light.test": "include"}}}}
+
+    with pytest.raises(RuntimeError, match="reload failed"):
+        await coordinator.async_apply_options_diff(document, "fingerprint", "request-1")
+    result = await coordinator.async_apply_options_diff(document, "fingerprint", "request-1")
+
+    assert result["activation_status"] == "failed"
+    assert result["applied"] is False
+    assert writer.calls == 1
+
+
 async def test_homekit_manager_mode_status_is_conservative(
     hass, enable_custom_integrations, hass_ws_client
 ):

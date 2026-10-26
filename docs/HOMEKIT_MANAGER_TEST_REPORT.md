@@ -30,6 +30,11 @@ Ergebnisse:
 - Frische Live-Browserprüfung: **bestanden**. Das Panel, die Entitätenansicht und die
   Konfigurationsansicht wurden gegen die laufende Home-Assistant-Instanz geladen; das
   Inventar wurde angezeigt und die Browser-Logprüfung lieferte keine Warnungen oder Fehler.
+- Echte Chromium-Fixture-Prüfung: **bestanden**. Die Fixture wurde über einen kurzlebigen
+  lokalen HTTP-Server geladen; Übersicht, Navigation, Inventar, Geräte, Bereiche, Diagnose,
+  Konfiguration und Änderungen renderten ohne Browserfehler. Der absichtlich ausgelöste
+  WebSocket-Fehlerzustand wurde sichtbar angezeigt und anschließend der Erfolgszustand
+  erneut bestätigt.
 - Gemeinsame Python-Coverage der Unit- und HA-Integrationstests: **83 %**. Sie ist
   diagnostisch, kein künstlicher Abnahmewert; die nicht ausgeführten Pfade sind überwiegend
   Fehlerzweige und die bewusst deaktivierte produktive Anwendung.
@@ -48,7 +53,7 @@ Ergebnisse:
 ## Nicht ausgeführt oder noch nicht abgenommen
 
 - keine produktive Live-Abnahme
-- keine vollständige End-to-End-Abnahme jedes einzelnen UI-Workflows
+- keine vollständige End-to-End-Abnahme jedes einzelnen produktiven UI-Workflows
 - kein produktiver HACS-Update der lokalen 0.9.9-Entwicklung
 - kein Test einer HomeKit-Optionsänderung
 - kein Pairing-, Reload- oder Bridge-Test

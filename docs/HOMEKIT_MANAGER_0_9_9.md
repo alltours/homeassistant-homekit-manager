@@ -37,6 +37,8 @@ Noch nicht vollständig nachgewiesen sind:
   zugängliche Beschriftungen beziehungsweise tastaturbedienbare Controls
 - mobile Layout-Regeln für schmale Ansichten sind statisch im Frontend enthalten und im
   Verhaltenstest auf Vorhandensein geprüft
+- die Browser-Fixture liefert die seit 0.9.3 verwendeten read-only-Endpunkte für Geräte,
+  Bereiche, Diagnose und simulierte Gerätevorschau
 - vollständige mobile Browserabnahme
 - vollständige Screenreader-Abnahme
 - vollständige Übersetzungsabdeckung aller UI-Texte
@@ -48,5 +50,8 @@ Noch nicht vollständig nachgewiesen sind:
 - JavaScript-Syntaxprüfung: bestanden.
 - Frontend-Verhaltenstest: bestanden.
 - Home-Assistant-Integrationstests und Unit-Tests: 42 bestanden.
+- Echte Chromium-Fixture-Prüfung: bestanden; die Fixture wurde über einen kurzlebigen
+  lokalen HTTP-Server geladen. Erfolgssicht, Fehleranzeige und leere Browserkonsole wurden
+  geprüft.
 
 Die produktive Installation wurde nicht verändert.

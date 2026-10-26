@@ -1,10 +1,12 @@
 """Controlled HomeKit options adapter with explicit production checks.
 
 The HomeKit OptionsFlow is a user-facing flow, not a stable automation API
-for submitting an arbitrary complete option document.  This module therefore
-computes and validates the minimal diff, but deliberately refuses to apply it
-from the custom integration.  A future isolated test harness may consume the
-prepared diff through an explicit test adapter.
+for submitting an arbitrary complete option document. This module therefore
+computes and validates a minimal diff. The regular backend path may apply
+that diff only to an existing ``SOURCE_USER`` HomeKit entry after the
+coordinator has performed the bridge, scope, fingerprint, and lifecycle
+checks. The default writer constructor remains locked for all other callers
+and for isolated tests unless their explicit test gate is enabled.
 """
 from __future__ import annotations
 
@@ -133,10 +135,10 @@ class HomeKitWriter:
     """Version-bound writer for isolated tests and supported user entries.
 
     Home Assistant does not expose a stable external API for another custom
-    integration to submit a HomeKit OptionsFlow. The test adapter mirrors the
-    core's current ConfigEntry update listener contract, but production calls
-    remain disabled unless both explicit gates are enabled in an isolated test
-    harness.
+    integration to submit an arbitrary HomeKit OptionsFlow. The supported
+    path is consequently narrow and version-bound: the coordinator passes a
+    validated minimal diff for an existing ``SOURCE_USER`` entry, while the
+    default constructor remains write-disabled.
     """
 
     def __init__(self, hass: Any, *, test_environment: bool = False, apply_enabled: bool = False, allow_production: bool = False):
@@ -146,7 +148,7 @@ class HomeKitWriter:
         self.allow_production = bool(allow_production)
 
     async def async_apply(self, diff: OptionsDiff) -> dict[str, Any]:
-        """Apply only in an explicitly enabled, isolated test environment."""
+        """Apply only through an explicit test gate or coordinator gate."""
         if not self.allow_production and (not self.test_environment or not self.apply_enabled):
             raise HomeKitWriteDisabled(
                 "HomeKit-Schreibpfad ist gesperrt; nur der geprüfte isolierte oder explizit freigegebene Backend-Pfad darf ihn aktivieren"

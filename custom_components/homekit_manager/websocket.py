@@ -1,4 +1,9 @@
-"""Read-only WebSocket API for the future frontend."""
+"""Authenticated WebSocket API for read operations and controlled drafts.
+
+All commands require an administrator connection. The sole mutating HomeKit
+command is the narrow ``SOURCE_USER`` options-diff path, which performs its
+own validation and lifecycle checks in the coordinator and writer.
+"""
 from __future__ import annotations
 import probatio
 from homeassistant.components import websocket_api
@@ -263,7 +268,7 @@ async def websocket_export(hass, connection, msg):
         connection.send_error(msg["id"], "invalid_format", str(err))
 
 def async_register_websocket_commands(hass, coordinator) -> None:
-    """Register read-only commands; HA WebSocket auth is required by default."""
+    """Register authenticated inventory, draft, and guarded apply commands."""
     websocket_api.async_register_command(hass, websocket_inventory)
     websocket_api.async_register_command(hass, websocket_bridges)
     for handler in (websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_mode_status, websocket_set_mode, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_apply_options_diff, websocket_prepare_options_diff, websocket_reconcile, websocket_export):

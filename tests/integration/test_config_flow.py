@@ -213,6 +213,63 @@ async def test_homekit_manager_inventory_websocket_round_trip(
     assert "entities" in response["result"]
 
 
+async def test_homekit_manager_apply_uses_authenticated_websocket(
+    hass, enable_custom_integrations, hass_ws_client, monkeypatch
+):
+    """The real HA WebSocket transport reaches the guarded SOURCE_USER writer."""
+    async def no_network_start(_self):
+        return None
+
+    monkeypatch.setattr("homeassistant.components.homekit.HomeKit.async_start", no_network_start)
+    monkeypatch.setattr("homeassistant.components.homekit.async_port_is_available", lambda _port: True)
+    bridge = config_entries.ConfigEntry(
+        version=1,
+        minor_version=1,
+        domain="homekit",
+        title="Authenticated WebSocket Bridge",
+        data={"name": "Authenticated WebSocket Bridge", "port": 21064},
+        options={"filter": {"include_entities": []}},
+        source=config_entries.SOURCE_USER,
+        entry_id="authenticated-ws-bridge",
+        unique_id=None,
+        discovery_keys={},
+        subentries_data=None,
+    )
+    await hass.config_entries.async_add(bridge)
+    flow = await hass.config_entries.flow.async_init(
+        "homekit_manager", context={"source": config_entries.SOURCE_USER}
+    )
+    await hass.config_entries.flow.async_configure(flow["flow_id"], {})
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    await coordinator.async_refresh()
+    coordinator.inventory = [{
+        "entity_id": "input_boolean.test_a",
+        "entity_category": None,
+        "hidden_by": None,
+        "compatibility": {"status": "supported"},
+        "homekit": {"configured_by_filter": False, "current_status": "excluded"},
+    }]
+    client = await hass_ws_client()
+    document = {
+        "schema_version": 1,
+        "bridges": {
+            bridge.entry_id: {
+                "policy": "explicit_overrides",
+                "entities": {"input_boolean.test_a": "include"},
+            }
+        },
+    }
+    await client.send_json_auto_id({
+        "type": "homekit_manager/apply_options_diff",
+        "document": document,
+    })
+    response = await client.receive_json()
+    assert response["type"] == "result"
+    assert response["success"] is True
+    assert response["result"]["applied"] is True
+    assert "input_boolean.test_a" in hass.config_entries.async_get_entry(bridge.entry_id).options["filter"]["include_entities"]
+
+
 async def test_homekit_manager_mode_status_is_conservative(
     hass, enable_custom_integrations, hass_ws_client
 ):

@@ -10,9 +10,9 @@
     {"path":"change_planner.py","sha256":"f8e0efd3f1717fd30c2240080fa474c1de270c3bdbe0a81af34ce5e193baf51c"},
     {"path":"compatibility.py","sha256":"1911293db98a99128725d63211f65fce3c91a4f567a3d929b661d9731901f115"},
     {"path":"config_flow.py","sha256":"dc5808229a66b28d83d29b6ec8a9410a7c326526966f9cd8a53e813e96039d26"},
-    {"path":"const.py","sha256":"a0ae15370cae6889f5d08dd016c02488699fab266b19b1d30f6e44bc66e413c9"},
+    {"path":"const.py","sha256":"f5b4ee84df1ea6dd718155ce14e91b22e75055d7ca432ecfc6cd3fdb0cb9483d"},
     {"path":"config_source.py","sha256":"28289ba9c9f4ef3ec9e19c97e27be2daff7e0a59223f0c08bc747307f3b5b550"},
-    {"path":"coordinator.py","sha256":"76ebc42b6553115e4652d71f54668803ac8caad08ae4eaf6f623b27e8f167401"},
+    {"path":"coordinator.py","sha256":"2ba43cd6a9a59eeae70497b0e528d80ec0ab89bb5902b61c35118ad4093df92e"},
     {"path":"device_config.py","sha256":"8e769bc44c9a2403a3b587f99a0f9df06d4c2bb13e57b3c3c32b753c1075bf26"},
     {"path":"diagnostics.py","sha256":"fbb560123f24d791b0c2433d85463314595be9503d3a0ab46f84e9f8be5445cd"},
     {"path":"draft.py","sha256":"5c28f0a25b70f082ee471bcf3975121537dae69d0d3a50d6b4375a2898287783"},
@@ -23,7 +23,7 @@
     {"path":"history.py","sha256":"1dc3921637035480e8dab3e3b735c0e97644a50dea1a594d187ce8f6b6b5537e"},
     {"path":"history_store.py","sha256":"c0a4968f98cb87e116d9167deb81677ae164a4b55d2941e82ed6a0b41797b038"},
     {"path":"homekit_reader.py","sha256":"bc2365b18a9d67a8b440a298aa696a3937bd066ffe3e901f69152ca9070632d2"},
-    {"path":"homekit_writer.py","sha256":"b03f2bb64fe5aad59e22355c9f5ba7d80a00159146c1dcd77b035fe0e9c174c6"},
+    {"path":"homekit_writer.py","sha256":"92e07217d20bcca62c3fd7e9feaf4665d65b6b5d49e645cf883376b3c582eb46"},
     {"path":"inventory.py","sha256":"00765005d0054d430a6e7b2a32647862700c2683ed35b37a61352f80c2fcbedb"},
     {"path":"manifest.json","sha256":"c27fc8d9a799598ca8dc1031b5df6a326f88a6805e62b96b9b0729c570856edb"},
     {"path":"mode_store.py","sha256":"817f331fcc3383e66cd09cd1aa66c0f0c1018126b70e4a4fce68d779245fe543"},
@@ -34,8 +34,8 @@
     {"path":"strings.json","sha256":"9d0b96eb535d446b5630f6f9215b8fc08d950726924e096e6e104f7abe9c8f6e"},
     {"path":"translations/de.json","sha256":"dd9511c4a293d702013162c9268c78c9c59dfb37ec0036bb2d2ac0c9034651da"},
     {"path":"translations/en.json","sha256":"93ac0e28518a94d5a07cd4e98e393ee78019a47ce0cac64b14a90ba2383bc5f2"},
-    {"path":"websocket.py","sha256":"ebbe051d8d25e1e271b8d760ceaec0418ad6b1b54ae8f9edd5404a2a91ae3c8c"},
-    {"path":"www/homekit-manager.js","sha256":"ea160ee840d9e32902174bcc11a015fb067711a5cda3a97f750c20753c2115f4"},
+    {"path":"websocket.py","sha256":"1fbee1e8f4fd7950a0a3ab4eca0af1bada7c3bf164803dc2c5cd0e05a28e3dee"},
+    {"path":"www/homekit-manager.js","sha256":"45dc8547ba656b92ebe95a9a776d1811218b111684fffa389897e2688aa6cf4a"},
     {"path":"yaml_store.py","sha256":"ed21ccda913837a2d91c3c49da89f78bc17bb470efe9dea461cc129905f1f980"}
   ]
 }

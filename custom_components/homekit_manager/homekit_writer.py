@@ -1,4 +1,4 @@
-"""Phase 4B write preparation with a hard production safety gate.
+"""Controlled HomeKit options adapter with explicit production checks.
 
 The HomeKit OptionsFlow is a user-facing flow, not a stable automation API
 for submitting an arbitrary complete option document.  This module therefore
@@ -130,7 +130,7 @@ def build_options_diff(
 
 
 class HomeKitWriter:
-    """Version-bound writer with an isolated-test-only activation adapter.
+    """Version-bound writer for isolated tests and supported user entries.
 
     Home Assistant does not expose a stable external API for another custom
     integration to submit a HomeKit OptionsFlow. The test adapter mirrors the
@@ -139,21 +139,22 @@ class HomeKitWriter:
     harness.
     """
 
-    def __init__(self, hass: Any, *, test_environment: bool = False, apply_enabled: bool = False):
+    def __init__(self, hass: Any, *, test_environment: bool = False, apply_enabled: bool = False, allow_production: bool = False):
         self.hass = hass
         self.test_environment = test_environment
         self.apply_enabled = bool(apply_enabled)
+        self.allow_production = bool(allow_production)
 
     async def async_apply(self, diff: OptionsDiff) -> dict[str, Any]:
         """Apply only in an explicitly enabled, isolated test environment."""
-        if not self.test_environment or not self.apply_enabled:
+        if not self.allow_production and (not self.test_environment or not self.apply_enabled):
             raise HomeKitWriteDisabled(
-                "HomeKit-Schreibpfad ist produktiv gesperrt; nur isolierte Tests dürfen ihn aktivieren"
+                "HomeKit-Schreibpfad ist gesperrt; nur der geprüfte isolierte oder explizit freigegebene Backend-Pfad darf ihn aktivieren"
             )
         if not isinstance(diff, OptionsDiff):
             raise HomeKitWriteBlocked("Ungültiger Options-Diff")
         from homeassistant.const import __version__
-        from homeassistant.config_entries import SOURCE_IMPORT
+        from homeassistant.config_entries import SOURCE_USER
         if __version__ != SUPPORTED_CORE_VERSION:
             raise HomeKitWriteBlocked(
                 f"Core-Version {__version__} wird für den isolierten Adapter nicht unterstützt"
@@ -161,27 +162,32 @@ class HomeKitWriter:
         entry = self.hass.config_entries.async_get_entry(diff.entry_id)
         if entry is None or getattr(entry, "domain", None) != "homekit":
             raise HomeKitWriteBlocked("HomeKit-Config-Entry nicht gefunden")
-        if getattr(entry, "source", None) == SOURCE_IMPORT:
+        if getattr(entry, "source", None) != SOURCE_USER:
             raise HomeKitWriteBlocked(
-                "YAML-importierte HomeKit-Config-Entries werden von Core 2026.10.4 "
-                "nicht über den Options-Update-Listener neu geladen"
+                "Nur reguläre HomeKit-Config-Entries vom Typ SOURCE_USER werden unterstützt"
             )
         allowed = {"filter", "entity_config", "homekit_mode", "devices"}
         if any(key not in allowed for key in diff.changed_keys):
             raise HomeKitWriteBlocked("Options-Diff enthält nicht freigegebene Schlüssel")
-        current_options = dict(entry.options)
-        current_data = dict(entry.data)
-        for key in diff.changed_keys:
-            current_value = current_options.get(key, current_data.get(key))
-            if current_value != diff.before.get(key):
-                raise HomeKitWriteBlocked("HomeKit-Config-Entry wurde seit der Vorschau verändert")
-        next_options = dict(current_options)
-        for key in diff.changed_keys:
-            next_options[key] = copy.deepcopy(diff.after[key])
-        self.hass.config_entries.async_update_entry(entry, options=next_options)
-        if hasattr(self.hass, "async_block_till_done"):
-            await self.hass.async_block_till_done()
+        lock = _locks.setdefault(diff.entry_id, asyncio.Lock())
+        async with lock:
+            current_options = dict(entry.options)
+            current_data = dict(entry.data)
+            for key in diff.changed_keys:
+                current_value = current_options.get(key, current_data.get(key))
+                if current_value != diff.before.get(key):
+                    raise HomeKitWriteBlocked("HomeKit-Config-Entry wurde seit der Vorschau verändert")
+            next_options = dict(current_options)
+            for key in diff.changed_keys:
+                next_options[key] = copy.deepcopy(diff.after[key])
+            self.hass.config_entries.async_update_entry(entry, options=next_options)
+            if hasattr(self.hass, "async_block_till_done"):
+                await self.hass.async_block_till_done()
         state = getattr(getattr(entry, "state", None), "value", getattr(entry, "state", None))
+        if state != "loaded":
+            raise HomeKitWriteBlocked(
+                "HomeKit-Bridge wurde nach der Optionsänderung nicht erfolgreich aktiviert"
+            )
         return {
             "applied": True,
             "activation": "core_update_listener",

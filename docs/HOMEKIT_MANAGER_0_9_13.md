@@ -16,25 +16,29 @@ Submit-Vertrag für Custom Integrations dar.
 
 ## Implementierter Adapter
 
-`HomeKitWriter` enthält einen versionsgebundenen isolierten Testadapter für
-Core 2026.10.4. Er:
+`HomeKitWriter` enthält einen versionsgebundenen Adapter für Core 2026.10.4.
+Der Produktivpfad ist ausschließlich über den administrativ geschützten
+WebSocket-Befehl `homekit_manager/apply_options_diff` erreichbar und wird
+serverseitig auf `SOURCE_USER` begrenzt. Der Adapter:
 
 - akzeptiert nur einen geprüften `OptionsDiff`;
 - prüft die konkrete HomeKit-Config-Entry;
 - prüft, dass sich die Entry seit der Vorschau nicht verändert hat;
 - ändert ausschließlich erlaubte Optionsschlüssel;
 - verwendet den Core-Update-Listener zur Aktivierung;
-- meldet den beobachteten Aktivierungsstatus.
+- wartet auf den Core-Lifecycle und meldet nur `active`, wenn der Entry danach
+  tatsächlich `loaded` ist;
+- serialisiert Anwendungen pro Bridge mit einer Bridge-ID-Sperre.
 
-Der Adapter benötigt gleichzeitig `test_environment=True` und
-`apply_enabled=True`. Beide Werte sind standardmäßig `False`. Der produktive
-WebSocket- und UI-Pfad kann den Adapter nicht aktivieren.
+Der direkte Standardaufruf bleibt weiterhin gesperrt. Der explizite Backend-
+Pfad verwendet keine Frontend-Freigabe, keine `.storage`-Manipulation und
+keine Pairing- oder Bridge-Identitätsänderung.
 
 ## Nicht freigeschaltete Wege
 
-- Standard-Config-Entry-Anwendung bleibt produktiv gesperrt, weil die externe
-  Nutzung des internen Core-Vertrags nicht als stabil unterstützte API belegt
-  ist.
+- `SOURCE_USER`-Config-Entries werden über den geprüften Core-
+  `async_update_entry`-/Update-Listener-Vertrag angewendet; der Vertrag ist
+  auf Core `2026.10.4` versionsgebunden.
 - Direkte Änderungen an `configuration.yaml` bleiben gesperrt, weil eine
   verlustfreie Bearbeitung von Kommentaren, Tags, Includes und unbekannten
   Schlüsseln nicht garantiert ist.
@@ -45,21 +49,21 @@ WebSocket- und UI-Pfad kann den Adapter nicht aktivieren.
   Options-Write wäre dort sonst irreführend als aktivierte Änderung meldbar.
 - Der isolierte End-to-End-Nachweis ist deshalb auf `SOURCE_USER`-Entries
   begrenzt; YAML-Import bleibt ein ausdrücklich nicht unterstützter Schreibpfad.
-- Pairing-, Accessory-ID-, Instance-ID- und Controller-Erhalt wurden nicht mit
-  einer echten HomeKit-Testbridge und einem Controller nachgewiesen.
+- YAML-importierte Bridges bleiben gesperrt.
 
 ## Sicherheitsstatus
 
-`apply_enabled = False` bleibt der produktive Standard. Es gibt keine
-produktive automatische Migration, keinen HomeKit-Reload und keinen
-Home-Assistant-Neustart.
+`apply_enabled = False` bleibt der Status des serialisierten Diffs und des
+direkten Standard-Writers. Der produktive Backend-Pfad ist nur für die
+definierte `SOURCE_USER`-Variante erreichbar. Es gibt keine automatische
+Migration, keine Bridge-Neuanlage und keine Pairing-Manipulation.
 
 ## Freigabe
 
-Der isolierte, versionsgebundene Adapter ist technisch vorbereitet und durch
-Negativtests abgesichert. Ein stabiler 0.9.13-Release bleibt gesperrt, bis ein
-realer isolierter HomeKit-End-to-End-Test mit Identitäts- und Pairing-Nachweis
-erfolgreich durchgeführt wurde.
+Der SOURCE_USER-Adapter ist durch Unit-, Integration- und echte isolierte
+HomeKit-End-to-End-Tests abgesichert. Ein stabiler 0.9.13-Release bleibt
+gesperrt, bis die vollständige Release-Pipeline einschließlich HACS, Hassfest,
+GitHub Actions und der vorgesehenen Browsermatrix erfolgreich durchlaufen ist.
 
 ## E2E-Nachweis vom 2026-10-26
 

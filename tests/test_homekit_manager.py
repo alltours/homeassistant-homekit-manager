@@ -357,7 +357,7 @@ class HomeKitManagerTests(unittest.TestCase):
 
     def test_isolated_writer_applies_only_version_bound_options_diff(self):
         entry = SimpleNamespace(
-            domain="homekit",
+            domain="homekit", source="user",
             entry_id="b",
             data={"name": "Bridge", "port": 21063},
             options={"filter": {"include_entities": ["light.a"]}},
@@ -402,6 +402,27 @@ class HomeKitManagerTests(unittest.TestCase):
         diff = OptionsDiff("b", {"filter": {"include_entities": ["light.a"]}}, {"filter": {"include_entities": ["light.b"]}}, ("filter",), ("light.b",), {"summary": {"blocked": False}})
         with self.assertRaises(HomeKitWriteBlocked):
             asyncio.run(HomeKitWriter(hass, test_environment=True, apply_enabled=True).async_apply(diff))
+
+    def test_writer_does_not_claim_success_when_bridge_is_not_loaded(self):
+        entry = SimpleNamespace(
+            domain="homekit", source="user", entry_id="b", data={},
+            options={"filter": {"include_entities": ["light.a"]}},
+            state=SimpleNamespace(value="setup_error"),
+        )
+        hass = SimpleNamespace(
+            config_entries=SimpleNamespace(
+                async_get_entry=lambda _entry_id: entry,
+                async_update_entry=lambda updated, *, options: setattr(updated, "options", options),
+            ),
+            async_block_till_done=lambda: asyncio.sleep(0),
+        )
+        diff = OptionsDiff(
+            "b", {"filter": {"include_entities": ["light.a"]}},
+            {"filter": {"include_entities": ["light.a", "light.b"]}},
+            ("filter",), ("light.b",), {"summary": {"blocked": False}},
+        )
+        with self.assertRaises(HomeKitWriteBlocked):
+            asyncio.run(HomeKitWriter(hass, allow_production=True).async_apply(diff))
 
     def test_isolated_writer_blocks_yaml_import_entries_without_reload_contract(self):
         entry = SimpleNamespace(

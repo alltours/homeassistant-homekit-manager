@@ -144,6 +144,7 @@ async def test_homekit_manager_websocket_registration(hass, enable_custom_integr
         "homekit_manager/validate_draft",
         "homekit_manager/preview",
         "homekit_manager/save_draft",
+        "homekit_manager/apply_options_diff",
         "homekit_manager/prepare_options_diff",
         "homekit_manager/reconcile",
         "homekit_manager/export",

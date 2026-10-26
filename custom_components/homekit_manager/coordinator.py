@@ -12,7 +12,7 @@ from .homekit_reader import read_homekit_entries
 from .inventory import build_inventory
 from .change_planner import plan_changes
 from .fingerprint import build_fingerprint
-from .homekit_writer import OptionsDiff, build_options_diff
+from .homekit_writer import HomeKitWriter, OptionsDiff, build_options_diff, HomeKitWriteBlocked
 from .reconcile import reconcile_desired_state
 from .exporter import export_desired_state
 from .yaml_store import (
@@ -356,6 +356,25 @@ class HomeKitManagerCoordinator:
             raise ValueError("Die Ziel-Bridge ist nicht eindeutig")
         diff = build_options_diff(bridge, validated["document"], self.inventory)
         return diff.as_dict()
+
+    async def async_apply_options_diff(
+        self, document: Any, expected_fingerprint: str | None
+    ) -> dict[str, Any]:
+        """Apply a freshly validated diff to a supported SOURCE_USER bridge."""
+        if expected_fingerprint and expected_fingerprint != self.fingerprint:
+            raise YamlVersionConflict("Live-Konfiguration oder Inventar wurde seit der Vorschau verändert")
+        validated = self.validate_draft(document)
+        bridge = self.selected_bridge()
+        if bridge is None:
+            raise ValueError("Die Ziel-Bridge ist nicht eindeutig")
+        if bridge.get("source") != "user":
+            raise HomeKitWriteBlocked("Nur reguläre SOURCE_USER-Bridges können angewendet werden")
+        diff = build_options_diff(bridge, validated["document"], self.inventory)
+        result = await HomeKitWriter(self.hass, allow_production=True).async_apply(diff)
+        await self.async_refresh()
+        result["fingerprint"] = self.fingerprint
+        result["warnings"] = validated["warnings"]
+        return result
 
     def reconcile(self, document: Any, baseline_fingerprint: str | None = None) -> dict[str, Any]:
         validated = self.validate_draft(document)

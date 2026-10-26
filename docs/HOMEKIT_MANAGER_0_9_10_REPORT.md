@@ -300,3 +300,13 @@ Nach der Korrektur bestehen erneut:
 
 Die Korrektur ist lokal verifiziert, aber wegen der gesperrten Browserumgebung noch nicht
 im echten Browser sichtbar geprüft und noch nicht remote durch CI bestätigt.
+
+### Finaler Stand
+
+Die SHA-256-Prüfsumme von `www/homekit-manager.js` wurde anschließend im
+`RELEASE_MANIFEST.json` aktualisiert. Der finale Code-Stand ist Commit
+`1f5aaf0dd2e2014cc186aee3c79364c4b47fc366`.
+
+Für diesen Commit sind `quality`, `hassfest` und `hacs` erfolgreich abgeschlossen.
+Die Responsive-/Dark-Mode-Prüfungen mit den exakten Viewports bleiben wegen des gesperrten
+Macs ausstehend. Es erfolgte kein Merge, kein Release und keine Produktivinstallation.

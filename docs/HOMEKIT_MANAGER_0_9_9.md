@@ -31,6 +31,8 @@ Noch nicht vollständig nachgewiesen sind:
 
 - reale Home-Assistant-Live-Lasttests mit 2.500 und 5.000 Entitäten
 - synthetische 2.500-/5.000-Entitätentests der Performance-Zusammenfassung sind abgedeckt
+- der tatsächliche Inventaraufbau einschließlich deterministischer Sortierung ist für
+  1.500, 2.500 und 5.000 synthetische Registry-/State-Einträge abgedeckt
 - vollständige mobile Browserabnahme
 - vollständige Screenreader-Abnahme
 - vollständige Übersetzungsabdeckung aller UI-Texte

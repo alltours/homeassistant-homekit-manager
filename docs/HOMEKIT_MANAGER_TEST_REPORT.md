@@ -55,7 +55,9 @@ Ergebnisse:
 Diese Punkte gelten nicht als bestanden.
 
 Die synthetische Performance-Prüfung für 2.500 und 5.000 Entitäten wurde ausgeführt und
-bestanden. Sie prüft die deterministische Metrikberechnung, Seitengrößenempfehlung,
-Unavailable-Zählung und Virtualisierungsgrenze; sie ersetzt keinen Lasttest mit einer
-laufenden Home-Assistant-Instanz.
+bestanden. Zusätzlich wurde der vollständige Inventaraufbau für 1.500, 2.500 und 5.000
+synthetische Registry-/State-Einträge geprüft. Die Tests prüfen deterministische
+Metrikberechnung, Seitengrößenempfehlung, Unavailable-Zählung, Virtualisierungsgrenze,
+Registry-/State-Merge und Sortierung; sie ersetzen keinen Lasttest mit einer laufenden
+Home-Assistant-Instanz.
 

@@ -180,13 +180,19 @@ class HomeKitManagerTests(unittest.TestCase):
         )
 
     def test_large_inventory(self):
-        entries = {}
-        states = {}
-        for i in range(1500):
-            entity_id = f"light.test_{i}"
-            entries[entity_id] = SimpleNamespace(entity_id=entity_id, name=None, original_name=None, device_id=None, area_id=None, platform="test", device_class=None, original_device_class=None, entity_category=None, disabled_by=None, hidden_by=None, config_entry_id=None)
-            states[entity_id] = SimpleNamespace(state="off", attributes={})
-        self.assertEqual(len(build_inventory({"entities": entries}, {}, {}, states)), 1500)
+        for count in (1500, 2500, 5000):
+            entries = {}
+            states = {}
+            for i in range(count):
+                entity_id = f"light.test_{i}"
+                entries[entity_id] = SimpleNamespace(entity_id=entity_id, name=None, original_name=None, device_id=None, area_id=None, platform="test", device_class=None, original_device_class=None, entity_category=None, disabled_by=None, hidden_by=None, config_entry_id=None)
+                states[entity_id] = SimpleNamespace(state="off", attributes={})
+            result = build_inventory({"entities": entries}, {}, {}, states)
+            self.assertEqual(len(result), count)
+            self.assertEqual(
+                [item.entity_id for item in result],
+                sorted(entries),
+            )
 
     def test_draft_serialization_is_deterministic_and_non_persistent(self):
         result = serialize_draft("bridge-1", {"sensor.z": "exclude", "light.a": "include", "switch.x": "unchanged"})

@@ -18,7 +18,7 @@ assert.match(panel.shadowRoot.innerHTML, /Einstellungen/);
 let calls = 0;
 panel.hass = { callWS: async ({ type }) => { calls += 1; if (type === "homekit_manager/inventory") throw new Error("WebSocket nicht erreichbar"); throw new Error(`unexpected command: ${type}`); } };
 await new Promise((resolve) => setTimeout(resolve, 0));
-assert.equal(calls, 7);
+assert.equal(calls, 8);
 assert.match(panel.shadowRoot.innerHTML, /WebSocket nicht erreichbar/);
 
 panel.entities = [
@@ -53,6 +53,6 @@ const successful = new Panel();
 let successCalls = 0;
 successful.hass = { callWS: async ({ type }) => { successCalls += 1; if (type === "homekit_manager/inventory") return { entities: [], overview: {} }; if (type === "homekit_manager/bridges") return { bridges: [] }; if (type === "homekit_manager/devices") return { devices: [] }; if (type === "homekit_manager/areas") return { areas: [] }; if (type === "homekit_manager/diagnostics") return { findings: [], summary: {} }; if (type === "homekit_manager/yaml_status") return { valid: true, exists: false }; if (type === "homekit_manager/mode_status") return { active_mode: "homekit_bridge" }; throw new Error(`unexpected command: ${type}`); } };
 await new Promise((resolve) => setTimeout(resolve, 0));
-assert.equal(successCalls, 7);
+assert.equal(successCalls, 8);
 assert.doesNotMatch(successful.shadowRoot.innerHTML, /Verbindung nicht möglich/);
 console.log("frontend panel behavior: ok");

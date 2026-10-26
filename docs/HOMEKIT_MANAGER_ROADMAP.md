@@ -232,3 +232,11 @@ Assistant-Executor für Datei-I/O. Die fachliche Sicherheitsgrenze bleibt unver�
 Es gibt keine automatische HomeKit-Anwendung, keine Reloads und keine Config-Entry-
 Änderungen. Die Änderung ist lokal getestet und als `1.0.3-rc1` vorgesehen.
 
+### Phase 0.9.11 – Stabilisierung
+
+Geplant und auf dem Branch `feature/homekit-manager-0.9.11-stabilization` umgesetzt werden
+Multi-Bridge-Kontexttrennung, persistente redigierte Entwurfshistorie, zugängliche Regel- und
+Historienansichten, Bridge-ID-Validierung, konservative Core-Referenzierung und Lifecycle-/Race-
+Regressionstests. Der HomeKit-Schreibpfad bleibt deaktiviert. Release und Produktivinstallation
+bleiben bis zur vollständigen Browser- und CI-Abnahme ausstehend.
+

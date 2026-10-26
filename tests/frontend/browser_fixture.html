@@ -54,6 +54,12 @@
           if (message.type === "homekit_manager/bridges") {
             return { bridges: [{ entry_id: "fixture-bridge", title: "Fixture Bridge", mode: "bridge", filter: { include_domains: ["light"] } }] };
           }
+          if (message.type === "homekit_manager/history") {
+            return { entries: [], count: 0 };
+          }
+          if (message.type === "homekit_manager/select_bridge") {
+            return { selected_bridge_id: message.entry_id, overview: { selected_bridge_id: message.entry_id } };
+          }
           if (message.type === "homekit_manager/yaml_status") {
             return { exists: false, valid: true, document: { schema_version: 1, bridges: {} }, is_applied: false };
           }

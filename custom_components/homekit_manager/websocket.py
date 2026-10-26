@@ -3,7 +3,7 @@ from __future__ import annotations
 import probatio
 from homeassistant.components import websocket_api
 from .const import (
-    BRIDGES_COMMAND, INVENTORY_COMMAND, PREVIEW_COMMAND, SAVE_DRAFT_COMMAND,
+    BRIDGES_COMMAND, SELECT_BRIDGE_COMMAND, INVENTORY_COMMAND, PREVIEW_COMMAND, SAVE_DRAFT_COMMAND,
     VALIDATE_DRAFT_COMMAND, YAML_STATUS_COMMAND, PREPARE_OPTIONS_DIFF_COMMAND,
     RECONCILE_COMMAND, EXPORT_COMMAND,
     MODE_STATUS_COMMAND, SET_MODE_COMMAND,
@@ -32,6 +32,18 @@ async def websocket_inventory(hass, connection, msg):
 async def websocket_bridges(hass, connection, msg):
     coordinator = hass.data["homekit_manager"]["coordinator"]
     connection.send_result(msg["id"], {"bridges": coordinator.bridges})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required("type"): SELECT_BRIDGE_COMMAND, probatio.Required("entry_id"): str})
+@websocket_api.async_response
+async def websocket_select_bridge(hass, connection, msg):
+    """Switch the read-only bridge context without changing HomeKit."""
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    try:
+        connection.send_result(msg["id"], await coordinator.async_select_bridge(msg["entry_id"]))
+    except ValueError as err:
+        connection.send_error(msg["id"], "unknown_bridge", str(err))
 
 
 @websocket_api.require_admin
@@ -231,6 +243,6 @@ def async_register_websocket_commands(hass, coordinator) -> None:
     """Register read-only commands; HA WebSocket auth is required by default."""
     websocket_api.async_register_command(hass, websocket_inventory)
     websocket_api.async_register_command(hass, websocket_bridges)
-    for handler in (websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_mode_status, websocket_set_mode, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_prepare_options_diff, websocket_reconcile, websocket_export):
+    for handler in (websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_mode_status, websocket_set_mode, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_prepare_options_diff, websocket_reconcile, websocket_export):
         websocket_api.async_register_command(hass, handler)
 

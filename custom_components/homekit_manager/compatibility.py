@@ -4,6 +4,8 @@ from dataclasses import asdict, dataclass
 from typing import Any, Mapping
 from .const import SUPPORTED_DOMAINS
 
+CORE_REFERENCE_VERSION = "2026.10.4"
+
 @dataclass(frozen=True)
 class Compatibility:
     status: str
@@ -12,6 +14,16 @@ class Compatibility:
     requirements: tuple[str, ...]
     def as_dict(self) -> dict[str, Any]:
         return asdict(self) | {"requirements": list(self.requirements)}
+
+
+def compatibility_reference() -> dict[str, Any]:
+    """Return the conservative, versioned compatibility reference used here."""
+    return {
+        "core_version": CORE_REFERENCE_VERSION,
+        "supported_domains": sorted(SUPPORTED_DOMAINS),
+        "unknown_domains": sorted(_KNOWN_UNCERTAIN_DOMAINS),
+        "policy": "unknown_when_no_core_accessory_mapping_is_proven",
+    }
 
 _SIMPLE_TYPES = {
     "light": "Lightbulb", "switch": "Switch", "fan": "Fanv2", "cover": "WindowCovering",

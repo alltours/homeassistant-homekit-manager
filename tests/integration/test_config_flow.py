@@ -94,6 +94,7 @@ async def test_homekit_manager_websocket_registration(hass, enable_custom_integr
     expected = {
         "homekit_manager/inventory",
         "homekit_manager/bridges",
+        "homekit_manager/select_bridge",
         "homekit_manager/mode_status",
         "homekit_manager/set_mode",
         "homekit_manager/devices",
@@ -283,6 +284,21 @@ async def test_homekit_manager_history_is_read_only_and_restorable_as_draft(
     assert response["success"] is True
     assert response["result"]["restored"] is True
     assert response["result"]["applied"] is False
+
+
+async def test_homekit_manager_unknown_bridge_selection_is_blocked(
+    hass, enable_custom_integrations, hass_ws_client
+):
+    """A draft context cannot be switched to an arbitrary bridge ID."""
+    result = await hass.config_entries.flow.async_init(
+        "homekit_manager", context={"source": config_entries.SOURCE_USER}
+    )
+    await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    client = await hass_ws_client()
+    await client.send_json_auto_id({"type": "homekit_manager/select_bridge", "entry_id": "not-a-live-bridge"})
+    response = await client.receive_json()
+    assert response["success"] is False
+    assert response["error"]["code"] == "unknown_bridge"
 
 
 async def test_homekit_manager_performance_summary_is_bounded(

@@ -3,6 +3,7 @@ from __future__ import annotations
 DOMAIN = "homekit_manager"
 INVENTORY_COMMAND = f"{DOMAIN}/inventory"
 BRIDGES_COMMAND = f"{DOMAIN}/bridges"
+SELECT_BRIDGE_COMMAND = f"{DOMAIN}/select_bridge"
 YAML_STATUS_COMMAND = f"{DOMAIN}/yaml_status"
 VALIDATE_DRAFT_COMMAND = f"{DOMAIN}/validate_draft"
 PREVIEW_COMMAND = f"{DOMAIN}/preview"
@@ -22,6 +23,8 @@ HISTORY_RESTORE_COMMAND = f"{DOMAIN}/history_restore"
 PERFORMANCE_COMMAND = f"{DOMAIN}/performance"
 SCHEMA_VERSION = 1
 MODE_SCHEMA_VERSION = 1
+HISTORY_SCHEMA_VERSION = 1
+MAX_HISTORY_ENTRIES = 50
 MODE_YAML = "yaml"
 MODE_HOMEKIT_BRIDGE = "homekit_bridge"
 MODE_HOMEKIT_MANAGER = "homekit_manager"

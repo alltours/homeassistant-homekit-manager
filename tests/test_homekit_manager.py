@@ -9,7 +9,7 @@ from unittest.mock import patch
 from types import SimpleNamespace
 sys.path.insert(0, ".")
 
-from custom_components.homekit_manager.compatibility import classify_entity
+from custom_components.homekit_manager.compatibility import classify_entity, compatibility_reference
 from custom_components.homekit_manager.filtering import build_core_filter, evaluate_filter
 from custom_components.homekit_manager.inventory import build_inventory
 from custom_components.homekit_manager.draft import serialize_draft
@@ -25,6 +25,7 @@ from custom_components.homekit_manager.device_config import build_preview
 from custom_components.homekit_manager.rules import evaluate_rules
 from custom_components.homekit_manager.history import compare_history, make_history_entry, restore_as_draft
 from custom_components.homekit_manager.performance import summarize_inventory
+from custom_components.homekit_manager.history_store import HistoryStore
 
 class HomeKitManagerTests(unittest.TestCase):
     def setUp(self):
@@ -98,6 +99,29 @@ class HomeKitManagerTests(unittest.TestCase):
         restored = restore_as_draft(entry)
         self.assertTrue(restored["restored"])
         self.assertFalse(restored["applied"])
+
+    def test_history_store_is_bounded_and_secret_free(self):
+        class FakeStore:
+            def __init__(self, *_args):
+                self.saved = None
+            async def async_load(self):
+                return {"entries": [{"document": {"schema_version": 1, "bridges": {"b": {"policy": "explicit_overrides", "entities": {"light.a": "include"}}}}, "bridge_id": "b", "applied": True, "secret": "never"}]}
+            async def async_save(self, value):
+                self.saved = value
+
+        with patch("custom_components.homekit_manager.history_store.Store", FakeStore):
+            store = HistoryStore(SimpleNamespace())
+            loaded = asyncio.run(store.async_load())
+            self.assertEqual(loaded[0]["bridge_id"], "b")
+            self.assertNotIn("secret", loaded[0])
+            asyncio.run(store.async_save(loaded * 60))
+            self.assertEqual(len(store._store.saved["entries"]), 50)
+
+    def test_compatibility_reference_is_versioned_and_conservative(self):
+        reference = compatibility_reference()
+        self.assertEqual(reference["core_version"], "2026.10.4")
+        self.assertIn("light", reference["supported_domains"])
+        self.assertEqual(reference["policy"], "unknown_when_no_core_accessory_mapping_is_proven")
 
     def test_performance_summary_is_deterministic(self):
         summary = summarize_inventory([

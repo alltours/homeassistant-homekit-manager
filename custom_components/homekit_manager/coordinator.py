@@ -26,6 +26,7 @@ from .mode_store import ModeStore
 from .grouping import build_area_views, build_device_views
 from .diagnostics import build_diagnostics, diagnostics_summary
 from .history import make_history_entry, restore_as_draft
+from .history_store import HistoryStore
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,6 +40,8 @@ class HomeKitManagerCoordinator:
         self.areas: list[dict[str, Any]] = []
         self.diagnostic_findings: list[dict[str, Any]] = []
         self.history_entries: list[dict[str, Any]] = []
+        self.history_store = HistoryStore(hass)
+        self.selected_bridge_id: str | None = None
         self.last_error: str | None = None
         self.fingerprint: str | None = None
         config_path = getattr(getattr(hass, "config", None), "path", None)
@@ -58,6 +61,21 @@ class HomeKitManagerCoordinator:
         """Load the desired-state snapshot without blocking the event loop."""
         self.desired_modes = await self.mode_store.async_load()
         self.yaml_snapshot = await self.hass.async_add_executor_job(self.yaml_store.load)
+        self.history_entries = await self.history_store.async_load()
+
+    def selected_bridge(self) -> dict[str, Any] | None:
+        """Return the selected bridge, never an arbitrary bridge."""
+        if self.selected_bridge_id is None:
+            return self.bridges[0] if len(self.bridges) == 1 else None
+        return next((bridge for bridge in self.bridges if bridge.get("entry_id") == self.selected_bridge_id), None)
+
+    async def async_select_bridge(self, entry_id: str) -> dict[str, Any]:
+        """Select an existing bridge context without changing HomeKit."""
+        if not isinstance(entry_id, str) or not any(bridge.get("entry_id") == entry_id for bridge in self.bridges):
+            raise ValueError("Unbekannte oder nicht verfügbare HomeKit-Bridge")
+        self.selected_bridge_id = entry_id
+        await self.async_refresh()
+        return {"selected_bridge_id": self.selected_bridge_id, "overview": self.overview()}
 
     def _subscribe_events(self) -> None:
         for event_type in ("state_changed", "entity_registry_updated", "device_registry_updated", "area_registry_updated", "homekit_state_change"):
@@ -84,7 +102,11 @@ class HomeKitManagerCoordinator:
             states = {state.entity_id: state for state in self.hass.states.async_all()}
             records = build_inventory(entities, devices, areas, states)
             bridges = read_homekit_entries(self.hass)
-            bridge_filter = bridges[0].filter if len(bridges) == 1 else None
+            bridge_ids = {bridge.entry_id for bridge in bridges}
+            if self.selected_bridge_id not in bridge_ids:
+                self.selected_bridge_id = next(iter(bridge_ids), None) if len(bridges) == 1 else None
+            selected = next((bridge for bridge in bridges if bridge.entry_id == self.selected_bridge_id), None)
+            bridge_filter = selected.filter if selected is not None else None
             self.inventory = []
             from .filtering import evaluate_filter
             from .filtering import build_core_filter
@@ -98,7 +120,7 @@ class HomeKitManagerCoordinator:
                 configured = item["homekit"].get("configured_by_filter")
                 item["homekit"]["current_status"] = "included" if configured is True else "excluded" if configured is False else "unknown"
                 self.inventory.append(item)
-            self.bridges = [bridge.as_dict() for bridge in bridges]
+            self.bridges = [bridge.as_dict() | {"selected": bridge.entry_id == self.selected_bridge_id} for bridge in bridges]
             self.devices = build_device_views(self.inventory)
             self.areas = build_area_views(self.inventory)
             self.diagnostic_findings = build_diagnostics(self.inventory, self.bridges, self.yaml_snapshot.as_dict() if hasattr(self.yaml_snapshot, "as_dict") else {"valid": self.yaml_snapshot.valid, "error": self.yaml_snapshot.error})
@@ -128,6 +150,7 @@ class HomeKitManagerCoordinator:
             "unknown_entities": unknown,
             "bridges": len(self.bridges),
             "bridge_selection_required": len(self.bridges) > 1,
+            "selected_bridge_id": self.selected_bridge_id,
             "fingerprint": self.fingerprint,
             "yaml_valid": self.yaml_snapshot.valid,
             "yaml_exists": self.yaml_snapshot.exists,
@@ -160,7 +183,7 @@ class HomeKitManagerCoordinator:
 
     def mode_status(self) -> dict[str, Any]:
         """Return conservative mode status and the six-direction matrix."""
-        bridge = self.bridges[0] if len(self.bridges) == 1 else None
+        bridge = self.selected_bridge()
         entry_id = bridge.get("entry_id") if bridge else None
         active = self._active_mode(bridge)
         desired = self.desired_modes.get(entry_id, active) if entry_id else active
@@ -193,7 +216,7 @@ class HomeKitManagerCoordinator:
         """Persist a desired mode; never activate a risky migration."""
         if mode not in MANAGEMENT_MODES:
             raise ValueError("Unbekannter Verwaltungsmodus")
-        bridge = self.bridges[0] if len(self.bridges) == 1 else None
+        bridge = self.selected_bridge()
         entry_id = bridge.get("entry_id") if bridge else None
         if not entry_id:
             raise ValueError("Keine eindeutige HomeKit-Bridge gefunden")
@@ -215,6 +238,10 @@ class HomeKitManagerCoordinator:
     def validate_draft(self, document: Any) -> dict[str, Any]:
         from .yaml_store import validate_document
         normalized = validate_document(document)
+        known_bridges = {bridge.get("entry_id") for bridge in self.bridges}
+        unknown_bridges = set(normalized["bridges"]) - known_bridges
+        if unknown_bridges:
+            raise ValueError("Unbekannte HomeKit-Bridge: " + ", ".join(sorted(unknown_bridges)))
         warnings = []
         known = {item["entity_id"] for item in self.inventory}
         for bridge in normalized["bridges"].values():
@@ -228,8 +255,8 @@ class HomeKitManagerCoordinator:
         validated = self.validate_draft(document)
         if not validated["valid"]:
             return validated
-        entry_id = self.bridges[0].get("entry_id") if len(self.bridges) == 1 else None
-        bridge = self.bridges[0] if len(self.bridges) == 1 else None
+        bridge = self.selected_bridge()
+        entry_id = bridge.get("entry_id") if bridge else None
         result = plan_changes(bridge, validated["document"], self.inventory, entry_id)
         result.update({"valid": True, "fingerprint": self.fingerprint, "yaml_file_version": self.yaml_snapshot.file_version})
         return result
@@ -241,8 +268,9 @@ class HomeKitManagerCoordinator:
         snapshot = self.yaml_store.save(validated["document"], expected_file_version)
         self.yaml_snapshot = snapshot
         self.fingerprint = build_fingerprint(self.bridges, self.inventory, snapshot.document)
-        self.history_entries.append(make_history_entry(snapshot.document, fingerprint=self.fingerprint))
+        self.history_entries.append(make_history_entry(snapshot.document, fingerprint=self.fingerprint, bridge_id=self.selected_bridge_id))
         self.history_entries = self.history_entries[-50:]
+        self.hass.async_create_task(self.history_store.async_save(self.history_entries))
         _LOGGER.info(
             "HomeKit-Manager-Entwurf gespeichert: file_version=%s entities=%d",
             snapshot.file_version,
@@ -262,8 +290,15 @@ class HomeKitManagerCoordinator:
         )
         self.yaml_snapshot = snapshot
         self.fingerprint = build_fingerprint(self.bridges, self.inventory, snapshot.document)
-        self.history_entries.append(make_history_entry(snapshot.document, fingerprint=self.fingerprint))
+        self.history_entries.append(
+            make_history_entry(
+                snapshot.document,
+                fingerprint=self.fingerprint,
+                bridge_id=self.selected_bridge_id,
+            )
+        )
         self.history_entries = self.history_entries[-50:]
+        await self.history_store.async_save(self.history_entries)
         _LOGGER.info(
             "HomeKit-Manager-Entwurf gespeichert: file_version=%s entities=%d",
             snapshot.file_version,
@@ -274,16 +309,18 @@ class HomeKitManagerCoordinator:
     def prepare_options_diff(self, document: Any) -> dict[str, Any]:
         """Prepare, but never apply, the native HomeKit options diff."""
         validated = self.validate_draft(document)
-        if len(self.bridges) != 1:
+        bridge = self.selected_bridge()
+        if bridge is None:
             raise ValueError("Die Ziel-Bridge ist nicht eindeutig")
-        diff = build_options_diff(self.bridges[0], validated["document"], self.inventory)
+        diff = build_options_diff(bridge, validated["document"], self.inventory)
         return diff.as_dict()
 
     def reconcile(self, document: Any, baseline_fingerprint: str | None = None) -> dict[str, Any]:
         validated = self.validate_draft(document)
-        if len(self.bridges) != 1:
+        bridge = self.selected_bridge()
+        if bridge is None:
             raise ValueError("Die Ziel-Bridge ist nicht eindeutig")
-        return reconcile_desired_state(validated["document"], self.bridges[0]["entry_id"], self.inventory, baseline_fingerprint=baseline_fingerprint, current_fingerprint=self.fingerprint)
+        return reconcile_desired_state(validated["document"], bridge["entry_id"], self.inventory, baseline_fingerprint=baseline_fingerprint, current_fingerprint=self.fingerprint)
 
     def export(self, document: Any, format_name: str = "yaml") -> dict[str, Any]:
         validated = self.validate_draft(document)

@@ -4,6 +4,10 @@ export default defineConfig({
   testDir: ".",
   timeout: 15000,
   reporter: [["line"]],
+  projects: [
+    { name: "chromium", use: { browserName: "chromium" } },
+    { name: "webkit", use: { browserName: "webkit" } },
+  ],
   webServer: {
     command: "python3 -m http.server 4173 --directory ../..",
     port: 4173,

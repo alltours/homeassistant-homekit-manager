@@ -247,3 +247,37 @@ bridge-scoped editing and the simplified single-page workflow. Productive
 HomeKit application remains disabled until a supported Core write contract
 and pairing-preservation evidence exist.
 
+## HomeKit Manager 0.9.17 – Roadmap-Vervollständigung und Funktionsreparatur
+
+Auf dem Branch `feature/homekit-manager-0.9.17` wird die 0.9.16-Oberfläche auf einen
+einzigen konsolidierten Renderpfad zurückgeführt. HomeKit, Geräte, Änderungen und
+Einstellungen sind wieder erreichbar; innerhalb der Einstellungen stehen Diagnose,
+Regelvorschau, Historie mit Restore-as-Draft, Geräte-Service-Vorschau und Performance-
+Metriken zur Verfügung. Die Geräteansicht unterstützt kombinierte Filter für Status,
+Kompatibilität, Domain, Integration, Bereich, Verfügbarkeit, Veröffentlichung und
+geplante Änderungen. Bestehende Istzustände bleiben von Entwürfen getrennt.
+
+Der YAML-Snapshot wird vor der Diagnoseauswertung geladen. Dieser Ablauf ist durch einen
+echten Home-Assistant-Integrationstest gegen Core 2026.10.4 regressionsgesichert.
+Der HomeKit-Schreibpfad und die SOURCE_USER-/Core-Gates bleiben unverändert; YAML-Import,
+Pairing-Daten, `.storage` und Bridge-Identitäten werden nicht automatisch verändert.
+
+Status: lokale Implementierung und Tests in Arbeit; kein Merge, Tag, GitHub-Release oder
+produktive Installation im Rahmen dieser Phase.
+
+## Phase 0.9.17 – Stabilisierung und Funktionsreparatur
+
+Auf `feature/homekit-manager-0.9.17` wurde die bestehende 0.9.16-Oberfläche gezielt
+stabilisiert. Bridge-Karten besitzen unabhängige, renderfeste Auf-/Zustände. Die
+Konfigurationsquellen unterscheiden aktive und nur vorgemerkte Quellen. Entwürfe werden
+über den vorhandenen persistierenden Speicherpfad gespeichert, nachgeladen und gegen
+veraltete Dateiversionen geschützt. Die Änderungenansicht besitzt eine mobile-safe-area-
+fähige sticky Aktionsleiste. Eine unterbrochene Aktivierung bleibt `unknown` und wird
+nicht automatisch wiederholt. Der Writer und `apply_enabled = False` bleiben unverändert.
+
+Die lokale Prüfung umfasst 63 Python-Tests, den Node-Frontendtest, 11 Chromium- und
+11 WebKit-Browsertests einschließlich eines Sticky-Footer-Scrollcontainer-Tests,
+synthetische 1.000-/2.500-/5.000-Entitätenmessungen sowie eine
+fünfminütige Stabilitätsbeobachtung. Der Branch ist gepusht; Merge, Tag, Release und
+produktive Installation sind ausdrücklich ausstehend.
+

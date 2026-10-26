@@ -95,6 +95,6 @@ jobs:
         run: npx playwright install --with-deps chromium webkit
       - name: Responsive browser regression
         run: |
-          npx playwright test -c tests/frontend/playwright.config.mjs tests/frontend/browser_regression.spec.mjs --browser=chromium
-          npx playwright test -c tests/frontend/playwright.config.mjs tests/frontend/browser_regression.spec.mjs --browser=webkit
+          npx playwright test -c tests/frontend/playwright.config.mjs tests/frontend/browser_regression.spec.mjs --project=chromium
+          npx playwright test -c tests/frontend/playwright.config.mjs tests/frontend/browser_regression.spec.mjs --project=webkit
 

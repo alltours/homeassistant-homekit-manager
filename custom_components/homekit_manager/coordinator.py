@@ -165,8 +165,8 @@ class HomeKitManagerCoordinator:
             self.bridges = [bridge.as_dict() | {"selected": bridge.entry_id == self.selected_bridge_id} for bridge in bridges]
             self.devices = build_device_views(self.inventory)
             self.areas = build_area_views(self.inventory)
-            self.diagnostic_findings = build_diagnostics(self.inventory, self.bridges, self.yaml_snapshot.as_dict() if hasattr(self.yaml_snapshot, "as_dict") else {"valid": self.yaml_snapshot.valid, "error": self.yaml_snapshot.error})
             self.yaml_snapshot = await self.hass.async_add_executor_job(self.yaml_store.load)
+            self.diagnostic_findings = build_diagnostics(self.inventory, self.bridges, self.yaml_snapshot.as_dict() if hasattr(self.yaml_snapshot, "as_dict") else {"valid": self.yaml_snapshot.valid, "error": self.yaml_snapshot.error})
             self.fingerprint = build_fingerprint(self.bridges, self.inventory, self.yaml_snapshot.document)
             self.last_error = None
         except Exception as err:

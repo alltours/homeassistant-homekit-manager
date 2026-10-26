@@ -14,6 +14,9 @@ from custom_components.homekit_manager.homekit_writer import (
     HomeKitWriter,
     OptionsDiff,
 )
+from custom_components.homekit_manager.yaml_store import YamlSnapshot, empty_document
+import custom_components.homekit_manager.coordinator as coordinator_module
+import custom_components.homekit_manager.diagnostics as diagnostics_module
 
 
 async def test_homekit_manager_discovery_and_registration(
@@ -194,6 +197,32 @@ async def test_homekit_manager_reads_real_registries(hass, enable_custom_integra
     assert record["available"] is True
     assert record["homekit"]["current_status"] in {"included", "excluded", "unknown"}
     assert coordinator.overview()["active_entities"] >= 1
+
+
+async def test_diagnostics_use_the_current_yaml_snapshot(
+    hass, enable_custom_integrations, monkeypatch
+):
+    """Diagnostics must evaluate the snapshot read in the same refresh cycle."""
+    result = await hass.config_entries.flow.async_init(
+        "homekit_manager", context={"source": config_entries.SOURCE_USER}
+    )
+    await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    fresh_snapshot = YamlSnapshot(
+        empty_document(), "fresh-version", True, False, "fresh-invalid", None
+    )
+    observed = {}
+
+    def capture_diagnostics(inventory, bridges, yaml_status):
+        observed["yaml_status"] = yaml_status
+        return diagnostics_module.build_diagnostics(inventory, bridges, yaml_status)
+
+    monkeypatch.setattr(coordinator.yaml_store, "load", lambda: fresh_snapshot)
+    monkeypatch.setattr(coordinator_module, "build_diagnostics", capture_diagnostics)
+    await coordinator.async_refresh()
+
+    assert observed["yaml_status"]["valid"] is False
+    assert observed["yaml_status"]["error"] == "fresh-invalid"
 
 
 async def test_homekit_manager_inventory_websocket_round_trip(

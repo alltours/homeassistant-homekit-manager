@@ -247,3 +247,21 @@ bridge-scoped editing and the simplified single-page workflow. Productive
 HomeKit application remains disabled until a supported Core write contract
 and pairing-preservation evidence exist.
 
+## HomeKit Manager 0.9.17 – Roadmap-Vervollständigung und Funktionsreparatur
+
+Auf dem Branch `feature/homekit-manager-0.9.17` wird die 0.9.16-Oberfläche auf einen
+einzigen konsolidierten Renderpfad zurückgeführt. HomeKit, Geräte, Änderungen und
+Einstellungen sind wieder erreichbar; innerhalb der Einstellungen stehen Diagnose,
+Regelvorschau, Historie mit Restore-as-Draft, Geräte-Service-Vorschau und Performance-
+Metriken zur Verfügung. Die Geräteansicht unterstützt kombinierte Filter für Status,
+Kompatibilität, Domain, Integration, Bereich, Verfügbarkeit, Veröffentlichung und
+geplante Änderungen. Bestehende Istzustände bleiben von Entwürfen getrennt.
+
+Der YAML-Snapshot wird vor der Diagnoseauswertung geladen. Dieser Ablauf ist durch einen
+echten Home-Assistant-Integrationstest gegen Core 2026.10.4 regressionsgesichert.
+Der HomeKit-Schreibpfad und die SOURCE_USER-/Core-Gates bleiben unverändert; YAML-Import,
+Pairing-Daten, `.storage` und Bridge-Identitäten werden nicht automatisch verändert.
+
+Status: lokale Implementierung und Tests in Arbeit; kein Merge, Tag, GitHub-Release oder
+produktive Installation im Rahmen dieser Phase.
+

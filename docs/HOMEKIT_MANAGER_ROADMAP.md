@@ -105,3 +105,12 @@ Der Panelname wird nun aus der Domain mit Bindestrich-Normalisierung abgeleitet.
 stimmen Loader und Custom-Element überein. Die Änderung ist lokal getestet und als
 `1.0.2-rc1` vorgesehen; die bestehende HomeKit-Bridge bleibt unverändert.
 
+### Phase 5B.17 – Nicht blockierende Desired-State-Lesezugriffe 1.0.3
+
+Die Live-Abnahme nach dem Panel-Fix zeigte einen Home-Assistant-Warnhinweis, weil
+`homekit_manager.yaml` synchron aus dem Event-Loop gelesen wurde. Die Initialisierung,
+Aktualisierung, YAML-Statusabfrage und Entwurfsspeicherung verwenden nun den Home-
+Assistant-Executor für Datei-I/O. Die fachliche Sicherheitsgrenze bleibt unverändert:
+Es gibt keine automatische HomeKit-Anwendung, keine Reloads und keine Config-Entry-
+Änderungen. Die Änderung ist lokal getestet und als `1.0.3-rc1` vorgesehen.
+

@@ -14,7 +14,13 @@ from .fingerprint import build_fingerprint
 from .homekit_writer import OptionsDiff, build_options_diff
 from .reconcile import reconcile_desired_state
 from .exporter import export_desired_state
-from .yaml_store import YamlStore, YamlValidationError, YamlVersionConflict
+from .yaml_store import (
+    YamlSnapshot,
+    YamlStore,
+    YamlValidationError,
+    YamlVersionConflict,
+    empty_document,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -29,10 +35,17 @@ class HomeKitManagerCoordinator:
         config_path = getattr(getattr(hass, "config", None), "path", None)
         yaml_path = config_path("homekit_manager.yaml") if callable(config_path) else "/config/homekit_manager.yaml"
         self.yaml_store = YamlStore(yaml_path)
-        self.yaml_snapshot = self.yaml_store.load()
+        # File I/O is intentionally deferred to the executor.  The coordinator
+        # is constructed during Home Assistant setup, which runs on the event
+        # loop and must not perform synchronous filesystem reads.
+        self.yaml_snapshot = YamlSnapshot(empty_document(), None, False, True, None, None)
         self._unsubscribers = []
         self._refresh_task: asyncio.Task | None = None
         self._subscribe_events()
+
+    async def async_initialize(self) -> None:
+        """Load the desired-state snapshot without blocking the event loop."""
+        self.yaml_snapshot = await self.hass.async_add_executor_job(self.yaml_store.load)
 
     def _subscribe_events(self) -> None:
         for event_type in ("state_changed", "entity_registry_updated", "device_registry_updated", "area_registry_updated", "homekit_state_change"):
@@ -72,7 +85,7 @@ class HomeKitManagerCoordinator:
                     item["homekit"].update(evaluate_filter(record.entity_id, record.entity_category, record.hidden_by, bridge_filter, core_filter).as_dict())
                 self.inventory.append(item)
             self.bridges = [bridge.as_dict() for bridge in bridges]
-            self.yaml_snapshot = self.yaml_store.load()
+            self.yaml_snapshot = await self.hass.async_add_executor_job(self.yaml_store.load)
             self.fingerprint = build_fingerprint(self.bridges, self.inventory, self.yaml_snapshot.document)
             self.last_error = None
         except Exception as err:
@@ -106,6 +119,12 @@ class HomeKitManagerCoordinator:
 
     def yaml_status(self) -> dict[str, Any]:
         snapshot = self.yaml_store.load()
+        self.yaml_snapshot = snapshot
+        return {"document": snapshot.document, "schema_version": snapshot.document.get("schema_version"), "file_version": snapshot.file_version, "last_modified": snapshot.last_modified, "exists": snapshot.exists, "valid": snapshot.valid, "error": snapshot.error, "is_applied": False}
+
+    async def async_yaml_status(self) -> dict[str, Any]:
+        """Return YAML status after reading the file in the executor."""
+        snapshot = await self.hass.async_add_executor_job(self.yaml_store.load)
         self.yaml_snapshot = snapshot
         return {"document": snapshot.document, "schema_version": snapshot.document.get("schema_version"), "file_version": snapshot.file_version, "last_modified": snapshot.last_modified, "exists": snapshot.exists, "valid": snapshot.valid, "error": snapshot.error, "is_applied": False}
 
@@ -144,6 +163,25 @@ class HomeKitManagerCoordinator:
             sum(len(bridge["entities"]) for bridge in validated["document"]["bridges"].values()),
         )
         return self.yaml_status() | {"fingerprint": self.fingerprint, "warnings": validated["warnings"]}
+
+    async def async_save_draft(self, document: Any, expected_file_version: str | None, expected_fingerprint: str | None) -> dict[str, Any]:
+        """Validate and save a draft without synchronous I/O on the event loop."""
+        if expected_fingerprint and expected_fingerprint != self.fingerprint:
+            raise YamlVersionConflict("Live-Konfiguration oder Inventar wurde seit der Vorschau verändert")
+        validated = self.validate_draft(document)
+        snapshot = await self.hass.async_add_executor_job(
+            self.yaml_store.save,
+            validated["document"],
+            expected_file_version,
+        )
+        self.yaml_snapshot = snapshot
+        self.fingerprint = build_fingerprint(self.bridges, self.inventory, snapshot.document)
+        _LOGGER.info(
+            "HomeKit-Manager-Entwurf gespeichert: file_version=%s entities=%d",
+            snapshot.file_version,
+            sum(len(bridge["entities"]) for bridge in validated["document"]["bridges"].values()),
+        )
+        return await self.async_yaml_status() | {"fingerprint": self.fingerprint, "warnings": validated["warnings"]}
 
     def prepare_options_diff(self, document: Any) -> dict[str, Any]:
         """Prepare, but never apply, the native HomeKit options diff."""

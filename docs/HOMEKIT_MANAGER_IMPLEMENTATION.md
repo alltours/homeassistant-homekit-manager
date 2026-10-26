@@ -17,6 +17,8 @@
 - Responsive Custom Panel mit Suche, Filtern, Sortierung, Auswahl, Entwurf,
   Vorschau, Export und Verweis auf den offiziellen HomeKit-Dialog.
 - Browser-Smoke-Fixture für die isolierte visuelle/interaktive Panelprüfung.
+- Desired-State-Datei-I/O wird bei Laufzeitpfaden über den Home-Assistant-Executor
+  ausgeführt, damit keine synchronen Dateizugriffe den Event-Loop blockieren.
 
 ## Bewusst nicht aktiviert
 

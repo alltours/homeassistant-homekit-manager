@@ -37,7 +37,8 @@ def _document(msg):
 @websocket_api.websocket_command({probatio.Required("type"): YAML_STATUS_COMMAND})
 @websocket_api.async_response
 async def websocket_yaml_status(hass, connection, msg):
-    connection.send_result(msg["id"], hass.data["homekit_manager"]["coordinator"].yaml_status())
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    connection.send_result(msg["id"], await coordinator.async_yaml_status())
 
 
 @websocket_api.require_admin
@@ -73,7 +74,7 @@ async def websocket_preview(hass, connection, msg):
 async def websocket_save_draft(hass, connection, msg):
     coordinator = hass.data["homekit_manager"]["coordinator"]
     try:
-        result = coordinator.save_draft(_document(msg), msg.get("expected_file_version"), msg.get("expected_fingerprint"))
+        result = await coordinator.async_save_draft(_document(msg), msg.get("expected_file_version"), msg.get("expected_fingerprint"))
     except YamlVersionConflict as err:
         connection.send_error(msg["id"], "conflict", str(err))
         return

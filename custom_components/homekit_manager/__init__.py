@@ -25,6 +25,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     from .websocket import async_register_websocket_commands
 
     coordinator = HomeKitManagerCoordinator(hass)
+    await coordinator.async_initialize()
     hass.data[DOMAIN] = {"coordinator": coordinator}
     await coordinator.async_refresh()
     async_register_websocket_commands(hass, coordinator)

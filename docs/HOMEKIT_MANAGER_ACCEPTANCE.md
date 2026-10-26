@@ -13,7 +13,7 @@
 - [ ] Entity Registry wird gelesen.
 - [ ] Device Registry wird gelesen.
 - [ ] Area Registry wird gelesen.
-- [ ] Bestehende HomeKit-Bridge wird über Entry-ID `example-homekit-entry-id` erkannt.
+- [ ] Bestehende HomeKit-Bridge wird über die produktive Entry-ID erkannt (keine produktive ID in diesem Repository dokumentieren).
 - [ ] Filter und Statusmodell stimmen mit der Core-Konfiguration überein.
 - [ ] Authentifizierte WebSocket-Aufrufe funktionieren.
 - [ ] Nicht-Administratoren werden bei Verwaltungsbefehlen abgewiesen.

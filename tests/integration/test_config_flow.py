@@ -99,6 +99,7 @@ async def test_homekit_manager_websocket_registration(hass, enable_custom_integr
         "homekit_manager/devices",
         "homekit_manager/areas",
         "homekit_manager/diagnostics",
+        "homekit_manager/device_preview",
         "homekit_manager/yaml_status",
         "homekit_manager/validate_draft",
         "homekit_manager/preview",
@@ -219,3 +220,21 @@ async def test_homekit_manager_diagnostics_websocket_round_trip(
     assert response["success"] is True
     assert "findings" in response["result"]
     assert "summary" in response["result"]
+
+
+async def test_homekit_manager_device_preview_is_simulated(
+    hass, enable_custom_integrations, hass_ws_client
+):
+    """Device preview never reports an applied HomeKit change."""
+    result = await hass.config_entries.flow.async_init(
+        "homekit_manager", context={"source": config_entries.SOURCE_USER}
+    )
+    await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    coordinator.inventory = [{"entity_id": "light.test", "name": "Test", "domain": "light", "compatibility": {"expected_type": "Lightbulb"}, "attributes": {}, "state": "on"}]
+    client = await hass_ws_client()
+    await client.send_json_auto_id({"type": "homekit_manager/device_preview", "entity_id": "light.test"})
+    response = await client.receive_json()
+    assert response["success"] is True
+    assert response["result"]["simulation"] is True
+    assert response["result"]["applied"] is False

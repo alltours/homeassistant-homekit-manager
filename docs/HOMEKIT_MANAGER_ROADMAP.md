@@ -30,6 +30,18 @@ Korrekturen werden nicht automatisch ausgeführt.
 Die lokale Abnahme ist bestanden. Veröffentlichung und produktive Installation bleiben
 bis zur vollständigen Abnahme der produktiven 0.9.2-Kette zurückgestellt.
 
+## Phase 0.9.5 – Erweiterte Gerätekonfiguration und Vorschau
+
+Auf `feature/homekit-manager-0.9.5` lokal implementiert. Der neue read-only-Endpunkt
+`homekit_manager/device_preview` erzeugt eine explizit als Simulation markierte
+HomeKit-Service-Vorschau aus einer Inventar-Entität. Zulässige Vorschauoptionen sind
+auf Anzeigename und Service-Typ begrenzt; Pairing- und Identitätsdaten werden weder
+angenommen noch gespeichert. Die Detailansicht kann die Simulation anfordern.
+
+Eine echte HomeKit-Übernahme bleibt durch den gesperrten Writer ausgeschlossen.
+Veröffentlichung und produktive Installation bleiben bis zur vollständigen Abnahme der
+produktiven 0.9.2-Kette zurückgestellt.
+
 ## Status
 
 Stand: 26.10.2026. Die produktive Home-Assistant-Installation enthält den korrigierten

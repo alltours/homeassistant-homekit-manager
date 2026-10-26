@@ -108,6 +108,7 @@ successful.hass = {
     if (type === "homekit_manager/devices") return { devices: [] };
     if (type === "homekit_manager/areas") return { areas: [] };
     if (type === "homekit_manager/diagnostics") return { findings: [], summary: {} };
+    if (type === "homekit_manager/device_preview") return { simulation: true, title: "Kitchen", service_type: "Lightbulb", applied: false };
     if (type === "homekit_manager/mode_status") return { active_mode: "homekit_bridge", desired_mode: "homekit_bridge", transition: "stable", matrix: {} };
     throw new Error(`unexpected command: ${type}`);
   },

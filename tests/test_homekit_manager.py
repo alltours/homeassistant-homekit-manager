@@ -21,6 +21,7 @@ from custom_components.homekit_manager.exporter import export_desired_state
 from custom_components.homekit_manager.homekit_reader import read_homekit_entries
 from custom_components.homekit_manager.grouping import build_area_views, build_device_views
 from custom_components.homekit_manager.diagnostics import build_diagnostics, diagnostics_summary
+from custom_components.homekit_manager.device_config import build_preview
 
 class HomeKitManagerTests(unittest.TestCase):
     def setUp(self):
@@ -63,6 +64,13 @@ class HomeKitManagerTests(unittest.TestCase):
         self.assertEqual(findings, build_diagnostics(inventory, bridges, {"valid": False, "error": "bad yaml"}))
         self.assertEqual(diagnostics_summary(findings)["critical"], 2)
         self.assertTrue(any(item["code"] == "stale_filter_reference" for item in findings))
+
+    def test_device_preview_is_explicitly_simulated(self):
+        result = build_preview({"entity_id": "light.a", "name": "Lamp", "domain": "light", "state": "on", "attributes": {}, "compatibility": {"expected_type": "Lightbulb"}})
+        self.assertTrue(result["simulation"])
+        self.assertFalse(result["applied"])
+        with self.assertRaises(ValueError):
+            build_preview({"entity_id": "light.a", "compatibility": {}}, {"pairing_key": "secret"})
 
     def test_state_only_entities_are_visible_with_unknown_registry_metadata(self):
         result = build_inventory(

@@ -19,6 +19,8 @@ for (const [name, width, height] of viewports) {
       await expect(panel).toBeVisible();
       await expect(panel.locator("text=Konfigurationsmethode")).toBeVisible();
       await expect(panel.locator("text=Fixture Bridge")).toBeVisible();
+      await panel.locator('[data-mode="yaml"]').click();
+      await expect(panel.locator('[data-mode="yaml"] small')).toHaveText("Vorgemerkt");
       await panel.locator("[data-bridge-expand]").click();
       await expect(panel.getByText("Modus: bridge", { exact: true })).toBeVisible();
       await panel.locator("[data-bridge-expand]").click();
@@ -100,4 +102,31 @@ test("activation interruption remains explicitly unknown and is not retried", as
   await expect(panel.locator("text=Aktivierungsstatus: unknown")).toBeVisible();
   await expect(panel.locator("text=keine automatische Wiederholung")).toBeVisible();
   await expect(panel.locator("[role=alert]")).not.toBeVisible();
+});
+
+test("sticky change actions remain visible inside a Home Assistant-like scroll container", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/tests/frontend/browser_fixture.html");
+  const panel = page.locator("homekit-manager-panel");
+  await expect(panel).toBeVisible();
+  await panel.getByRole("tab", { name: "Änderungen" }).click();
+  await page.evaluate(() => {
+    const element = document.querySelector("homekit-manager-panel");
+    const wrapper = document.createElement("div");
+    wrapper.id = "ha-scroll-container";
+    wrapper.style.height = "320px";
+    wrapper.style.overflow = "auto";
+    element.replaceWith(wrapper);
+    wrapper.append(element);
+  });
+  const footer = panel.locator(".sticky-actions");
+  const wrapper = page.locator("#ha-scroll-container");
+  await wrapper.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+  const geometry = await page.evaluate(() => {
+    const footer = document.querySelector("homekit-manager-panel").shadowRoot.querySelector(".sticky-actions").getBoundingClientRect();
+    const wrapper = document.querySelector("#ha-scroll-container").getBoundingClientRect();
+    return { footerBottom: footer.bottom, wrapperBottom: wrapper.bottom, footerHeight: footer.height };
+  });
+  expect(geometry.footerHeight).toBeGreaterThan(0);
+  expect(geometry.footerBottom).toBeLessThanOrEqual(geometry.wrapperBottom + 1);
 });

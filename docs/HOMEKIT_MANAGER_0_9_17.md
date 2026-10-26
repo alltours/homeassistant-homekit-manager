@@ -59,6 +59,7 @@ Pairings, `.storage` oder Bridge-Identitäten.
 
 Die Phase wird gegen Home Assistant Core 2026.10.4 mit Python-Integrationstests sowie
 Chromium- und WebKit-Browserprüfungen validiert. Die lokale Abnahme umfasst 63
-Python-Tests, den Node-Paneltest, je 10 Chromium- und WebKit-Tests einschließlich
-5.000-Entitäten-Rendering und die fünfminütige Chromium-Stabilitätsbeobachtung.
+Python-Tests, den Node-Paneltest, je 11 Chromium- und WebKit-Tests einschließlich
+5.000-Entitäten-Rendering und einen Sticky-Footer-Test in einem Home-Assistant-
+ähnlichen Scrollcontainer sowie die fünfminütige Chromium-Stabilitätsbeobachtung.
 Produktive Installation, Merge, Tag und GitHub-Release sind nicht Bestandteil dieser Phase.

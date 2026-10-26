@@ -32,6 +32,7 @@
         },
       ];
       let savedDocument = { schema_version: 1, bridges: {} };
+      let desiredMode = "homekit_bridge";
       const hass = {
         states: { "light.kitchen": {}, "sensor.temperature": {} },
         callWS: async (message) => {
@@ -65,7 +66,11 @@
             return { exists: Object.keys(savedDocument.bridges || {}).length > 0, valid: true, document: savedDocument, file_version: "fixture-version", fingerprint: "fixture-fingerprint", is_applied: false };
           }
           if (message.type === "homekit_manager/mode_status") {
-            return { active_mode: "homekit_bridge", desired_mode: "homekit_bridge", transition: "stable", matrix: {} };
+            return { active_mode: "homekit_bridge", desired_mode: desiredMode, transition: "stable", matrix: {} };
+          }
+          if (message.type === "homekit_manager/set_mode") {
+            desiredMode = message.mode;
+            return { active_mode: "homekit_bridge", desired_mode: desiredMode, transition: "prepared", matrix: {} };
           }
           if (message.type === "homekit_manager/activation_status") {
             return { state: "unknown", entry_id: "fixture-bridge", message: "Kein Anwendungsvorgang" };

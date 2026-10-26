@@ -275,8 +275,9 @@ veraltete Dateiversionen geschützt. Die Änderungenansicht besitzt eine mobile-
 fähige sticky Aktionsleiste. Eine unterbrochene Aktivierung bleibt `unknown` und wird
 nicht automatisch wiederholt. Der Writer und `apply_enabled = False` bleiben unverändert.
 
-Die lokale Prüfung umfasst 63 Python-Tests, den Node-Frontendtest, 10 Chromium- und
-10 WebKit-Browsertests, synthetische 1.000-/2.500-/5.000-Entitätenmessungen sowie eine
+Die lokale Prüfung umfasst 63 Python-Tests, den Node-Frontendtest, 11 Chromium- und
+11 WebKit-Browsertests einschließlich eines Sticky-Footer-Scrollcontainer-Tests,
+synthetische 1.000-/2.500-/5.000-Entitätenmessungen sowie eine
 fünfminütige Stabilitätsbeobachtung. Der Branch ist gepusht; Merge, Tag, Release und
 produktive Installation sind ausdrücklich ausstehend.
 

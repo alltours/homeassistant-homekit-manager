@@ -21,7 +21,7 @@ node tests/frontend/test_panel.mjs
 
 Ergebnisse:
 
-- Unit- und HA-Integrationstests: **41 bestanden, 0 fehlgeschlagen, 0 übersprungen**.
+- Unit- und HA-Integrationstests: **42 bestanden, 0 fehlgeschlagen, 0 übersprungen**.
 - Frontend-Verhaltenstest: **bestanden** (`node tests/frontend/test_panel.mjs`).
 - Browser-Fixture: **bestanden** mit `tests/frontend/browser_fixture.html`.
 - Frische Live-Browserprüfung: **bestanden**. Das Panel, die Entitätenansicht und die
@@ -53,4 +53,9 @@ Ergebnisse:
 - keine vollständige mobile- oder Screenreader-Abnahme
 
 Diese Punkte gelten nicht als bestanden.
+
+Die synthetische Performance-Prüfung für 2.500 und 5.000 Entitäten wurde ausgeführt und
+bestanden. Sie prüft die deterministische Metrikberechnung, Seitengrößenempfehlung,
+Unavailable-Zählung und Virtualisierungsgrenze; sie ersetzt keinen Lasttest mit einer
+laufenden Home-Assistant-Instanz.
 

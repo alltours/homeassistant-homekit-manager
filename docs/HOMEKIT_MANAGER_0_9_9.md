@@ -29,7 +29,8 @@ Die Antwort ist begrenzt und enthält keine Pairing- oder geheimen Daten.
 
 Noch nicht vollständig nachgewiesen sind:
 
-- reale Lasttests mit 2.500 und 5.000 Entitäten
+- reale Home-Assistant-Live-Lasttests mit 2.500 und 5.000 Entitäten
+- synthetische 2.500-/5.000-Entitätentests der Performance-Zusammenfassung sind abgedeckt
 - vollständige mobile Browserabnahme
 - vollständige Screenreader-Abnahme
 - vollständige Übersetzungsabdeckung aller UI-Texte
@@ -40,6 +41,6 @@ Noch nicht vollständig nachgewiesen sind:
 - Python-Kompilierung: bestanden.
 - JavaScript-Syntaxprüfung: bestanden.
 - Frontend-Verhaltenstest: bestanden.
-- Home-Assistant-Integrationstests und Unit-Tests: 41 bestanden.
+- Home-Assistant-Integrationstests und Unit-Tests: 42 bestanden.
 
 Die produktive Installation wurde nicht verändert.

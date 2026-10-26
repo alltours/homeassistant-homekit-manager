@@ -78,7 +78,7 @@ mobile/Screenreader-Abnahme bleiben vor einer Produktreife-Freigabe offen.
 ## Status
 
 Stand: 26.10.2026. Die lokale 0.9.9-Entwicklung ist implementiert, dokumentiert und mit
-41 Tests sowie einer frischen Browser-Liveprüfung validiert. Das Panel rendert, das
+42 Tests sowie einer frischen Browser-Liveprüfung validiert. Das Panel rendert, das
 Inventar wird geladen und `mode_status` antwortet nach vollständigem Home-Assistant-Start.
 
 Der produktive Home Assistant läuft weiterhin auf 0.9.2. Die lokalen Versionen 0.9.3 bis
@@ -159,7 +159,9 @@ noch offenen Last-, Mobile- und Screenreader-Prüfungen.
 13. **Phase 0.9.3–0.9.9 – Lokale Produktreife-Runde**
    Die lokalen Erweiterungen für Geräte/Bereiche, Diagnose, Vorschau, Multi-Bridge-Schutz,
    Regeln, Historie und Performance sind implementiert. Die lokale Prüfung umfasst
-   Python-Kompilierung, JavaScript-Syntax, Frontend-Verhalten und 41 Home-Assistant-Tests.
+   Python-Kompilierung, JavaScript-Syntax, Frontend-Verhalten und 42 Tests. Die
+   synthetischen 2.500-/5.000-Entitätengrößenprüfungen bestehen; echte Live-Lasttests
+   gegen eine große Home-Assistant-Instanz bleiben offen.
    Eine frische Browserprüfung gegen die laufende Instanz zeigt ein sichtbares Panel,
    funktionierende Entitäten- und Konfigurationsansichten sowie keine Browser-Warnungen.
    Die produktive Installation bleibt auf 0.9.2; es erfolgte keine Aktualisierung.

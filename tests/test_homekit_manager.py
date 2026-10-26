@@ -108,6 +108,23 @@ class HomeKitManagerTests(unittest.TestCase):
         self.assertEqual(summary["domain_counts"], {"light": 1, "sensor": 1})
         self.assertFalse(summary["virtualization_recommended"])
 
+    def test_performance_summary_handles_release_scale_inventories(self):
+        for count in (2500, 5000):
+            entities = [
+                {
+                    "entity_id": f"light.synthetic_{index}",
+                    "domain": "light",
+                    "available": index % 10 != 0,
+                }
+                for index in range(count)
+            ]
+            summary = summarize_inventory(entities)
+            self.assertEqual(summary["entity_count"], count)
+            self.assertEqual(summary["unavailable_count"], count // 10)
+            self.assertEqual(summary["domain_counts"], {"light": count})
+            self.assertEqual(summary["recommended_page_size"], 100 if count == 2500 else 50)
+            self.assertEqual(summary["virtualization_recommended"], count > 2500)
+
     def test_state_only_entities_are_visible_with_unknown_registry_metadata(self):
         result = build_inventory(
             {"entities": {}}, {}, {},

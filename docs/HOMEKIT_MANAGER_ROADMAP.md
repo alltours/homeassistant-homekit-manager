@@ -42,6 +42,14 @@ Eine echte HomeKit-Übernahme bleibt durch den gesperrten Writer ausgeschlossen.
 Veröffentlichung und produktive Installation bleiben bis zur vollständigen Abnahme der
 produktiven 0.9.2-Kette zurückgestellt.
 
+## Phase 0.9.6 – Multi-Bridge-Management
+
+Auf `feature/homekit-manager-0.9.6` lokal erweitert. Mehrere Bridges werden vollständig
+erkannt und in der Konfigurationsansicht angezeigt. Bei mehrdeutiger Auswahl wird keine
+Bridge implizit verwendet; Moduswechsel und Änderungsplanung bleiben gesperrt, bis eine
+eindeutige Bridge-Zuordnung vorliegt. Bridge-Neuanlage, Löschung und Verschiebung sind
+nicht implementiert und werden nicht automatisch ausgeführt.
+
 ## Status
 
 Stand: 26.10.2026. Die produktive Home-Assistant-Installation enthält den korrigierten

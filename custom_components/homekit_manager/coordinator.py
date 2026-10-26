@@ -123,6 +123,7 @@ class HomeKitManagerCoordinator:
             "excluded_entities": excluded if filter_known else None,
             "unknown_entities": unknown,
             "bridges": len(self.bridges),
+            "bridge_selection_required": len(self.bridges) > 1,
             "fingerprint": self.fingerprint,
             "yaml_valid": self.yaml_snapshot.valid,
             "yaml_exists": self.yaml_snapshot.exists,
@@ -170,6 +171,8 @@ class HomeKitManagerCoordinator:
             "yaml_exists": self.yaml_snapshot.exists,
             "matrix": matrix,
             "supported_modes": list(MANAGEMENT_MODES),
+            "bridge_count": len(self.bridges),
+            "bridge_selection_required": len(self.bridges) > 1,
             "message": "Moduswechsel bleiben gesperrt, solange Bridge-Identität und Pairing-Erhalt nicht nachgewiesen sind.",
         }
 

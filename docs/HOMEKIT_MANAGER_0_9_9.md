@@ -33,6 +33,10 @@ Noch nicht vollständig nachgewiesen sind:
 - synthetische 2.500-/5.000-Entitätentests der Performance-Zusammenfassung sind abgedeckt
 - der tatsächliche Inventaraufbau einschließlich deterministischer Sortierung ist für
   1.500, 2.500 und 5.000 synthetische Registry-/State-Einträge abgedeckt
+- Tabellen-Checkboxen, Zustandsauswahlen, Sortiersteuerungen und Seitennavigation besitzen
+  zugängliche Beschriftungen beziehungsweise tastaturbedienbare Controls
+- mobile Layout-Regeln für schmale Ansichten sind statisch im Frontend enthalten und im
+  Verhaltenstest auf Vorhandensein geprüft
 - vollständige mobile Browserabnahme
 - vollständige Screenreader-Abnahme
 - vollständige Übersetzungsabdeckung aller UI-Texte

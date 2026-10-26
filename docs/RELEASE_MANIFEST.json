@@ -24,7 +24,7 @@
     {"path":"homekit_writer.py","sha256":"0de3b1910b1e0162a496fe0ac4df0f29d27cc22f76d34312c7abcf5b9aa2c382"},
     {"path":"inventory.py","sha256":"00765005d0054d430a6e7b2a32647862700c2683ed35b37a61352f80c2fcbedb"},
     {"path":"manifest.json","sha256":"c4f1d09f0caa43182d36f3323d0ff45358626d6cd41cdfab5794ebe8868f588e"},
-    {"path":"mode_store.py","sha256":"3c9afeb251e9fcddf68209880881e17869c1c8ae69feebd8b29d73a7f45c217e"},
+    {"path":"mode_store.py","sha256":"817f331fcc3383e66cd09cd1aa66c0f0c1018126b70e4a4fce68d779245fe543"},
     {"path":"panel.py","sha256":"43f833cd291afa75a7744fbe94883dc3795b74f134c54d5929a54bbe9a10ff91"},
     {"path":"performance.py","sha256":"dc554cd935397a24db4ec74982e9674661656400ff15a48dfbd55baff0b2099e"},
     {"path":"reconcile.py","sha256":"9b58b1929b9d465fd8c8b7263f66d6b429bf300b0bf4605bb3f293eb0a6bafa6"},
@@ -33,7 +33,7 @@
     {"path":"translations/de.json","sha256":"dd9511c4a293d702013162c9268c78c9c59dfb37ec0036bb2d2ac0c9034651da"},
     {"path":"translations/en.json","sha256":"93ac0e28518a94d5a07cd4e98e393ee78019a47ce0cac64b14a90ba2383bc5f2"},
     {"path":"websocket.py","sha256":"1606557e926c25c6e4a27509b1aea2841968ab9387eb484b82026abdf98032ca"},
-    {"path":"www/homekit-manager.js","sha256":"3628e09ab348681f1d5be1a5125704fb10df011ca2108ecaafa39128b5dee611"},
+    {"path":"www/homekit-manager.js","sha256":"6258262c9bc93f393a6393e11fb8f338d1b91333ecf483672b9634fda82f3fb2"},
     {"path":"yaml_store.py","sha256":"87e0e8f028f8fa3d63d1a07610e189cd6dab9f6678dd8e0ecbde8fa70a35b614"}
   ]
 }

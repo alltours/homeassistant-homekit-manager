@@ -23,6 +23,9 @@ Ergebnisse:
 
 - Unit- und HA-Integrationstests: **42 bestanden, 0 fehlgeschlagen, 0 übersprungen**.
 - Frontend-Verhaltenstest: **bestanden** (`node tests/frontend/test_panel.mjs`).
+- Frontend-Accessibility-Regressionsassertions: **bestanden**. Beschriftete Auswahl- und
+  Zustandssteuerungen, tastaturbedienbare Sortierbuttons, Pager-Beschriftungen und die
+  mobile CSS-Regel werden geprüft.
 - Browser-Fixture: **bestanden** mit `tests/frontend/browser_fixture.html`.
 - Frische Live-Browserprüfung: **bestanden**. Das Panel, die Entitätenansicht und die
   Konfigurationsansicht wurden gegen die laufende Home-Assistant-Instanz geladen; das

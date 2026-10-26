@@ -73,6 +73,12 @@ panel.query = "";
 panel.filters.area_name = "";
 panel.sort = { key: "name", direction: 1 };
 assert.deepEqual(panel.filtered.map((entity) => entity.entity_id), ["sensor.hidden", "light.kitchen"]);
+panel.selectView("entities");
+assert.match(panel.shadowRoot.innerHTML, /aria-label="Auswahl Kitchen"/);
+assert.match(panel.shadowRoot.innerHTML, /aria-label="Gewünschter Zustand für Kitchen"/);
+assert.match(panel.shadowRoot.innerHTML, /aria-label="Nächste Seite"/);
+assert.match(panel.shadowRoot.innerHTML, /class="sort" data-sort="name"/);
+assert.match(panel.shadowRoot.innerHTML, /@media\(max-width:800px\)/);
 
 panel.bridge = { entry_id: "bridge-1" };
 panel.draft = new Map([["light.kitchen", "exclude"]]);

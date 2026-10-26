@@ -23,7 +23,7 @@
     {"path":"history.py","sha256":"1dc3921637035480e8dab3e3b735c0e97644a50dea1a594d187ce8f6b6b5537e"},
     {"path":"history_store.py","sha256":"c0a4968f98cb87e116d9167deb81677ae164a4b55d2941e82ed6a0b41797b038"},
     {"path":"homekit_reader.py","sha256":"bc2365b18a9d67a8b440a298aa696a3937bd066ffe3e901f69152ca9070632d2"},
-    {"path":"homekit_writer.py","sha256":"b4d37e8391269a0ee6e7c30f39016186afd1f5546c64407cea01d07ef53c5cdc"},
+    {"path":"homekit_writer.py","sha256":"22899b49de31fa5af15429e35c431eb90ef5f35f049ac8088ee47bf5fec327c6"},
     {"path":"inventory.py","sha256":"00765005d0054d430a6e7b2a32647862700c2683ed35b37a61352f80c2fcbedb"},
     {"path":"manifest.json","sha256":"1bff352ee2a4533a07bb9a64b08660440a9e27d64910f3a95b8fc910c9f8e0c0"},
     {"path":"mode_store.py","sha256":"817f331fcc3383e66cd09cd1aa66c0f0c1018126b70e4a4fce68d779245fe543"},

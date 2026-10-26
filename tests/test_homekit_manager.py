@@ -424,6 +424,27 @@ class HomeKitManagerTests(unittest.TestCase):
         with self.assertRaises(HomeKitWriteBlocked):
             asyncio.run(HomeKitWriter(hass, allow_production=True).async_apply(diff))
 
+    def test_production_writer_requires_homekit_update_listener(self):
+        entry = SimpleNamespace(
+            domain="homekit", source="user", entry_id="b", data={},
+            options={"filter": {"include_entities": ["light.a"]}},
+            state=SimpleNamespace(value="loaded"), update_listeners=[],
+        )
+        hass = SimpleNamespace(
+            config_entries=SimpleNamespace(
+                async_get_entry=lambda _entry_id: entry,
+                async_update_entry=lambda updated, *, options: setattr(updated, "options", options) or True,
+            ),
+            async_block_till_done=lambda: asyncio.sleep(0),
+        )
+        diff = OptionsDiff(
+            "b", {"filter": {"include_entities": ["light.a"]}},
+            {"filter": {"include_entities": ["light.a", "light.b"]}},
+            ("filter",), ("light.b",), {"summary": {"blocked": False}},
+        )
+        with self.assertRaises(HomeKitWriteBlocked):
+            asyncio.run(HomeKitWriter(hass, allow_production=True).async_apply(diff))
+
     def test_isolated_writer_blocks_yaml_import_entries_without_reload_contract(self):
         entry = SimpleNamespace(
             domain="homekit", entry_id="b", source="import", data={},

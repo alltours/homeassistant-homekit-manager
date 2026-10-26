@@ -168,6 +168,13 @@ class HomeKitWriter:
             raise HomeKitWriteBlocked(
                 "Nur reguläre HomeKit-Config-Entries vom Typ SOURCE_USER werden unterstützt"
             )
+        # Core 2026.10.4 reloads HomeKit options through the integration's
+        # update listener. Without that listener, async_update_entry would
+        # persist options while leaving the running bridge untouched.
+        if self.allow_production and not getattr(entry, "update_listeners", None):
+            raise HomeKitWriteBlocked(
+                "HomeKit-Config-Entry besitzt keinen registrierten Update-Listener; Aktivierung nicht nachweisbar"
+            )
         allowed = {"filter", "entity_config", "homekit_mode", "devices"}
         if any(key not in allowed for key in diff.changed_keys):
             raise HomeKitWriteBlocked("Options-Diff enthält nicht freigegebene Schlüssel")
@@ -182,13 +189,20 @@ class HomeKitWriter:
             next_options = dict(current_options)
             for key in diff.changed_keys:
                 next_options[key] = copy.deepcopy(diff.after[key])
-            self.hass.config_entries.async_update_entry(entry, options=next_options)
+            changed = self.hass.config_entries.async_update_entry(entry, options=next_options)
+            if self.allow_production and not changed and diff.changed_keys:
+                raise HomeKitWriteBlocked(
+                    "HomeKit-Config-Entry wurde nicht aktualisiert; Aktivierung abgebrochen"
+                )
             if hasattr(self.hass, "async_block_till_done"):
                 await self.hass.async_block_till_done()
         state = getattr(getattr(entry, "state", None), "value", getattr(entry, "state", None))
         if state != "loaded":
+            reason = getattr(entry, "reason", None)
+            detail = f" ({reason})" if reason else ""
             raise HomeKitWriteBlocked(
                 "HomeKit-Bridge wurde nach der Optionsänderung nicht erfolgreich aktiviert"
+                + detail
             )
         return {
             "applied": True,

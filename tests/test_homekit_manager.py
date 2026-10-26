@@ -19,6 +19,7 @@ from custom_components.homekit_manager.homekit_writer import HomeKitWriter, Home
 from custom_components.homekit_manager.reconcile import reconcile_desired_state
 from custom_components.homekit_manager.exporter import export_desired_state
 from custom_components.homekit_manager.homekit_reader import read_homekit_entries
+from custom_components.homekit_manager.grouping import build_area_views, build_device_views
 
 class HomeKitManagerTests(unittest.TestCase):
     def setUp(self):
@@ -37,6 +38,19 @@ class HomeKitManagerTests(unittest.TestCase):
         self.assertEqual(result[0].area_name, "Flur")
         self.assertIsNone(result[1].state)
         self.assertFalse(result[1].available)
+
+    def test_device_and_area_views_are_deterministic_aggregates(self):
+        entities = [
+            {"entity_id": "light.a", "device_id": "d1", "device_name": "Lamp", "area_id": "a1", "area_name": "Living", "available": True, "compatibility": {"status": "supported"}, "homekit": {"configured_by_filter": True}, "integration_domain": "test"},
+            {"entity_id": "sensor.b", "device_id": "d1", "device_name": "Lamp", "area_id": "a1", "area_name": "Living", "available": False, "compatibility": {"status": "unknown"}, "homekit": {"configured_by_filter": False}, "integration_domain": "test"},
+            {"entity_id": "switch.c", "device_id": None, "area_id": None, "area_name": None, "available": True, "compatibility": {"status": "supported"}, "homekit": {"configured_by_filter": None}, "integration_domain": "mqtt"},
+        ]
+        devices = build_device_views(entities)
+        areas = build_area_views(entities)
+        self.assertEqual(devices[0]["entity_ids"], ["light.a", "sensor.b"])
+        self.assertEqual(devices[0]["unavailable_count"], 1)
+        self.assertEqual(areas[0]["name"], "Kein Bereich")
+        self.assertEqual(areas[1]["device_count"], 1)
 
     def test_state_only_entities_are_visible_with_unknown_registry_metadata(self):
         result = build_inventory(

@@ -9,6 +9,16 @@ gesperrt, bis Bridge-Identität, Pairings, Accessory-IDs und Instance-IDs nachwe
 erhalten werden können. Die Versionierung verwendet ab diesem Stand die Reihe `0.9.x`;
 historische `1.0.x`-Releases bleiben unverändert.
 
+## Phase 0.9.3 – Geräte- und Bereichsverwaltung
+
+Auf `feature/homekit-manager-0.9.3` lokal implementiert. Die Entity-Registry wird
+read-only zu stabilen Geräte- und Bereichsansichten aggregiert. Neue authentifizierte
+WebSocket-Endpunkte liefern diese Ansichten; das Frontend erhält eigene Geräte- und
+Bereiche-Tabs. Sammelaktionen verändern weiterhin ausschließlich lokale Entwürfe.
+
+Die lokale Abnahme ist bestanden. Veröffentlichung, HACS-Update und produktive
+Installation bleiben bis zur vollständigen 0.9.2-Produktivabnahme zurückgestellt.
+
 ## Status
 
 Stand: 26.10.2026. Die produktive Home-Assistant-Installation enthält den korrigierten

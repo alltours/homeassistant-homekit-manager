@@ -23,6 +23,7 @@ from .yaml_store import (
 )
 from .const import MANAGEMENT_MODES, MODE_HOMEKIT_BRIDGE, MODE_HOMEKIT_MANAGER, MODE_YAML
 from .mode_store import ModeStore
+from .grouping import build_area_views, build_device_views
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,6 +33,8 @@ class HomeKitManagerCoordinator:
         self.hass = hass
         self.inventory: list[dict[str, Any]] = []
         self.bridges: list[dict[str, Any]] = []
+        self.devices: list[dict[str, Any]] = []
+        self.areas: list[dict[str, Any]] = []
         self.last_error: str | None = None
         self.fingerprint: str | None = None
         config_path = getattr(getattr(hass, "config", None), "path", None)
@@ -90,6 +93,8 @@ class HomeKitManagerCoordinator:
                     item["homekit"].update(evaluate_filter(record.entity_id, record.entity_category, record.hidden_by, bridge_filter, core_filter).as_dict())
                 self.inventory.append(item)
             self.bridges = [bridge.as_dict() for bridge in bridges]
+            self.devices = build_device_views(self.inventory)
+            self.areas = build_area_views(self.inventory)
             self.yaml_snapshot = await self.hass.async_add_executor_job(self.yaml_store.load)
             self.fingerprint = build_fingerprint(self.bridges, self.inventory, self.yaml_snapshot.document)
             self.last_error = None

@@ -96,6 +96,8 @@ async def test_homekit_manager_websocket_registration(hass, enable_custom_integr
         "homekit_manager/bridges",
         "homekit_manager/mode_status",
         "homekit_manager/set_mode",
+        "homekit_manager/devices",
+        "homekit_manager/areas",
         "homekit_manager/yaml_status",
         "homekit_manager/validate_draft",
         "homekit_manager/preview",
@@ -183,3 +185,20 @@ async def test_homekit_manager_mode_status_is_conservative(
     assert status["active_mode"] in {"yaml", "homekit_bridge", "homekit_manager"}
     assert status["transition"] == "stable"
     assert all(item["status"] in {"safe", "manual_required"} for item in status["matrix"].values())
+
+
+async def test_homekit_manager_devices_and_areas_websocket_round_trip(
+    hass, enable_custom_integrations, hass_ws_client
+):
+    """Device and area views are read-only aggregates of the live registries."""
+    result = await hass.config_entries.flow.async_init(
+        "homekit_manager", context={"source": config_entries.SOURCE_USER}
+    )
+    await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    client = await hass_ws_client()
+    for command, key in (("homekit_manager/devices", "devices"), ("homekit_manager/areas", "areas")):
+        await client.send_json_auto_id({"type": command})
+        response = await client.receive_json()
+        assert response["type"] == "result"
+        assert response["success"] is True
+        assert key in response["result"]

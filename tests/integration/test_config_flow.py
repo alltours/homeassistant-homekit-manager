@@ -14,7 +14,7 @@ from custom_components.homekit_manager.homekit_writer import (
     HomeKitWriter,
     OptionsDiff,
 )
-from custom_components.homekit_manager.yaml_store import YamlSnapshot, empty_document
+from custom_components.homekit_manager.yaml_store import YamlSnapshot, YamlVersionConflict, empty_document
 import custom_components.homekit_manager.coordinator as coordinator_module
 import custom_components.homekit_manager.diagnostics as diagnostics_module
 
@@ -240,6 +240,42 @@ async def test_homekit_manager_inventory_websocket_round_trip(
     assert response["success"] is True
     assert "overview" in response["result"]
     assert "entities" in response["result"]
+
+
+async def test_homekit_manager_draft_save_reload_and_conflict(
+    hass, enable_custom_integrations, hass_ws_client
+):
+    """Draft persistence is separate from apply and rejects stale versions."""
+    result = await hass.config_entries.flow.async_init(
+        "homekit_manager", context={"source": config_entries.SOURCE_USER}
+    )
+    await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    client = await hass_ws_client()
+    document = empty_document()
+
+    await client.send_json_auto_id({"type": "homekit_manager/yaml_status"})
+    initial = await client.receive_json()
+    assert initial["success"] is True
+
+    save_message = {"type": "homekit_manager/save_draft", "document": document}
+    if initial["result"].get("file_version") is not None:
+        save_message["expected_file_version"] = initial["result"]["file_version"]
+    if initial["result"].get("fingerprint") is not None:
+        save_message["expected_fingerprint"] = initial["result"]["fingerprint"]
+    await client.send_json_auto_id(save_message)
+    saved = await client.receive_json()
+    assert saved["success"] is True
+    assert saved["result"]["document"] == document
+    assert saved["result"]["is_applied"] is False
+
+    await client.send_json_auto_id({"type": "homekit_manager/yaml_status"})
+    reloaded = await client.receive_json()
+    assert reloaded["success"] is True
+    assert reloaded["result"]["document"] == document
+
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    with pytest.raises(YamlVersionConflict):
+        await coordinator.async_save_draft(document, "stale-version", None)
 
 
 async def test_homekit_manager_apply_uses_authenticated_websocket(

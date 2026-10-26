@@ -31,6 +31,7 @@
           homekit: { configured_by_filter: false, current_status: "excluded", filter_reason: "not_in_include", published: "unknown" },
         },
       ];
+      let savedDocument = { schema_version: 1, bridges: {} };
       const hass = {
         states: { "light.kitchen": {}, "sensor.temperature": {} },
         callWS: async (message) => {
@@ -61,7 +62,7 @@
             return { selected_bridge_id: message.entry_id, overview: { selected_bridge_id: message.entry_id } };
           }
           if (message.type === "homekit_manager/yaml_status") {
-            return { exists: false, valid: true, document: { schema_version: 1, bridges: {} }, is_applied: false };
+            return { exists: Object.keys(savedDocument.bridges || {}).length > 0, valid: true, document: savedDocument, file_version: "fixture-version", fingerprint: "fixture-fingerprint", is_applied: false };
           }
           if (message.type === "homekit_manager/mode_status") {
             return { active_mode: "homekit_bridge", desired_mode: "homekit_bridge", transition: "stable", matrix: {} };
@@ -102,9 +103,11 @@
             return { format: "yaml", content: "schema_version: 1\nbridges: {}\n" };
           }
           if (message.type === "homekit_manager/save_draft") {
-            return { exists: true, valid: true, document: message.document, is_applied: false };
+            savedDocument = message.document;
+            return { exists: true, valid: true, document: savedDocument, file_version: "fixture-version-2", fingerprint: "fixture-fingerprint-2", is_applied: false };
           }
           if (message.type === "homekit_manager/apply_options_diff") {
+            if (new URLSearchParams(window.location.search).has("activation-error")) throw new Error("Verbindung unterbrochen");
             return { applied: true, activation: "core_update_listener", activation_status: "active", entry_id: "fixture-bridge", core_version: "2026.10.4" };
           }
           throw new Error(`Unsupported fixture command: ${message.type}`);

@@ -69,7 +69,8 @@ panel.setSettingsView("performance");
 assert.match(panel.shadowRoot.innerHTML, /Performance/);
 panel.view = "changes";
 panel.render();
-assert.match(panel.shadowRoot.innerHTML, /Vorschau prüfen/);
+assert.match(panel.shadowRoot.innerHTML, /Änderungen prüfen/);
+assert.match(panel.shadowRoot.innerHTML, /sticky-actions/);
 assert.match(panel.shadowRoot.innerHTML, /YAML exportieren/);
 
 const before = panel.renderCount;

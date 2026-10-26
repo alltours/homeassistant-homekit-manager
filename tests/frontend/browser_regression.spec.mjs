@@ -19,6 +19,10 @@ for (const [name, width, height] of viewports) {
       await expect(panel).toBeVisible();
       await expect(panel.locator("text=Konfigurationsmethode")).toBeVisible();
       await expect(panel.locator("text=Fixture Bridge")).toBeVisible();
+      await panel.locator("[data-bridge-expand]").click();
+      await expect(panel.getByText("Modus: bridge", { exact: true })).toBeVisible();
+      await panel.locator("[data-bridge-expand]").click();
+      await expect(panel.getByText("Modus: bridge", { exact: true })).not.toBeVisible();
       await panel.getByRole("tab", { name: "Geräte" }).click();
       await expect(panel.locator("text=Was soll in HomeKit erscheinen?")).toBeVisible();
       const input = panel.locator("[data-query]");
@@ -32,6 +36,10 @@ for (const [name, width, height] of viewports) {
       await expect(panel.locator("text=Nur geplante Änderungen")).toBeVisible();
       await expect(panel.locator("text=Entwurf speichern")).toBeVisible();
       await panel.locator("[data-preview]").click();
+      await panel.locator("[data-save]").click();
+      await expect(panel.locator("text=Entwurf gespeichert")).toBeVisible();
+      await panel.locator("[data-load]").click();
+      await expect(panel.locator("text=Entwurf gespeichert")).toBeVisible();
       await panel.getByRole("tab", { name: "Einstellungen" }).click();
       await expect(panel.locator("[data-settings-view=rules]")).toBeVisible();
       await panel.locator("[data-settings-view=rules]").click();
@@ -77,4 +85,19 @@ test("large inventories render within the browser budget", async ({ page }) => {
   for (const result of results) expect(result.render_ms).toBeLessThan(1000);
   expect(results.map((result) => result.count)).toEqual([1000, 2500, 5000]);
   console.log("browser performance", JSON.stringify(results));
+});
+
+test("activation interruption remains explicitly unknown and is not retried", async ({ page }) => {
+  await page.goto("/tests/frontend/browser_fixture.html?activation-error");
+  const panel = page.locator("homekit-manager-panel");
+  await expect(panel).toBeVisible();
+  await panel.getByRole("tab", { name: "Geräte" }).click();
+  await panel.locator("[data-group=entities]").click();
+  await panel.locator("[data-entity-toggle]").first().click();
+  await panel.getByRole("tab", { name: "Änderungen" }).click();
+  await page.evaluate(() => { window.confirm = () => true; });
+  await panel.locator("[data-apply]").click();
+  await expect(panel.locator("text=Aktivierungsstatus: unknown")).toBeVisible();
+  await expect(panel.locator("text=keine automatische Wiederholung")).toBeVisible();
+  await expect(panel.locator("[role=alert]")).not.toBeVisible();
 });

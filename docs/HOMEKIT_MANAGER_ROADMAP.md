@@ -265,3 +265,18 @@ Pairing-Daten, `.storage` und Bridge-Identitäten werden nicht automatisch verä
 Status: lokale Implementierung und Tests in Arbeit; kein Merge, Tag, GitHub-Release oder
 produktive Installation im Rahmen dieser Phase.
 
+## Phase 0.9.17 – Stabilisierung und Funktionsreparatur
+
+Auf `feature/homekit-manager-0.9.17` wurde die bestehende 0.9.16-Oberfläche gezielt
+stabilisiert. Bridge-Karten besitzen unabhängige, renderfeste Auf-/Zustände. Die
+Konfigurationsquellen unterscheiden aktive und nur vorgemerkte Quellen. Entwürfe werden
+über den vorhandenen persistierenden Speicherpfad gespeichert, nachgeladen und gegen
+veraltete Dateiversionen geschützt. Die Änderungenansicht besitzt eine mobile-safe-area-
+fähige sticky Aktionsleiste. Eine unterbrochene Aktivierung bleibt `unknown` und wird
+nicht automatisch wiederholt. Der Writer und `apply_enabled = False` bleiben unverändert.
+
+Die lokale Prüfung umfasst 63 Python-Tests, den Node-Frontendtest, 10 Chromium- und
+10 WebKit-Browsertests, synthetische 1.000-/2.500-/5.000-Entitätenmessungen sowie eine
+fünfminütige Stabilitätsbeobachtung. Der Branch ist gepusht; Merge, Tag, Release und
+produktive Installation sind ausdrücklich ausstehend.
+

@@ -287,7 +287,7 @@ async def test_homekit_manager_duplicate_request_id_does_not_retry_failed_apply(
     )
     await hass.config_entries.flow.async_configure(result["flow_id"], {})
     coordinator = hass.data["homekit_manager"]["coordinator"]
-    coordinator.bridges = [{"entry_id": "bridge-a", "source": "user", "filter": {}}]
+    coordinator.bridges = [{"entry_id": "bridge-a", "source": "user", "filter": {}, "options": {"filter": {}}}]
     coordinator.selected_bridge_id = "bridge-a"
     coordinator.inventory = [{
         "entity_id": "light.test",

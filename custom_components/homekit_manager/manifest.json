@@ -2,9 +2,11 @@
   "domain": "homekit_manager",
   "name": "HomeKit Manager",
   "version": "1.0.1",
+  "documentation": "https://github.com/alltours/homeassistant-homekit-manager#readme",
+  "issue_tracker": "https://github.com/alltours/homeassistant-homekit-manager/issues",
   "requirements": [],
   "dependencies": ["frontend"],
-  "codeowners": [],
+  "codeowners": ["@alltours"],
   "config_flow": true,
   "integration_type": "hub"
 }

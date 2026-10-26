@@ -12,15 +12,15 @@ Therefore the error
 
 is expected for this private repository. GitHub returns repository-not-found semantics for an unauthenticated or insufficiently authorized API request; the URL itself is correct and the repository is reachable with the authorized GitHub CLI account.
 
-This cannot be repaired by changing `hacs.json`, adding a release tag, changing the integration domain, or adding manifest metadata. Making the repository public would change the required security model and is not part of this project.
+This cannot be repaired while the repository is private. The repository is now prepared for public HACS validation: the manifest contains documentation, issue-tracker, codeowner, name, domain, and version fields, and the repository includes an MIT license plus HACS and Hassfest validation workflows.
 
 ## Repository compatibility
 
-The repository has the supported single-integration layout and a root `hacs.json`. It is not currently suitable for official HACS catalog publication because the repository is private and the tested manifest does not yet include the public-catalog metadata and brand assets required for that separate process. No untested manifest change is made here.
+The repository has the supported single-integration layout and a root `hacs.json`. Home Assistant Brands remains a separate catalog/publication requirement and must be verified by the validation workflow before any catalog submission.
 
 ## Decision
 
-HACS is not an available update channel for this private repository. Do not retry adding it as a HACS custom repository and do not create a second installation.
+HACS is not an available update channel until the repository is public. Do not retry adding it as a HACS custom repository while it remains private and do not create a second installation.
 
 Use the documented GitHub-based update process instead: select an existing GitHub release or commit with the authenticated Mac-side GitHub CLI, verify the archive and file hashes, back up the existing Home Assistant integration directory, replace only that directory, and perform a controlled Home Assistant restart only when explicitly planned.
 

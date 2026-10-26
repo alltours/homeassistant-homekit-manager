@@ -16,6 +16,10 @@ The integration is deliberately read-only with respect to HomeKit. `apply_enable
 
 This project is still under development. A working local test suite does not constitute a production Home Assistant acceptance.
 
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
+
 ## Installation
 
 Copy `custom_components/homekit_manager/` into the Home Assistant configuration directory and restart Home Assistant only after reviewing the release and backup plan. Create the integration through the Home Assistant UI. Do not add this repository to a production HACS installation yet.

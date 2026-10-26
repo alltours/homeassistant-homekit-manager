@@ -12,7 +12,7 @@
     {"path":"config_flow.py","sha256":"dc5808229a66b28d83d29b6ec8a9410a7c326526966f9cd8a53e813e96039d26"},
     {"path":"const.py","sha256":"c993d3c5dfaf20223660be77f466518542d7b5dddb2a117964ce5aeec70543f4"},
     {"path":"config_source.py","sha256":"28289ba9c9f4ef3ec9e19c97e27be2daff7e0a59223f0c08bc747307f3b5b550"},
-    {"path":"coordinator.py","sha256":"960e7bbd3ea69165669aacda0d7034856f2f3a4552ca930f73d1c7c9c5b9643b"},
+    {"path":"coordinator.py","sha256":"9a1f88616c51cca24ed46e8cf31a61a6ee0a6209a5117d33d2ed59878873226d"},
     {"path":"device_config.py","sha256":"8e769bc44c9a2403a3b587f99a0f9df06d4c2bb13e57b3c3c32b753c1075bf26"},
     {"path":"diagnostics.py","sha256":"fbb560123f24d791b0c2433d85463314595be9503d3a0ab46f84e9f8be5445cd"},
     {"path":"draft.py","sha256":"5c28f0a25b70f082ee471bcf3975121537dae69d0d3a50d6b4375a2898287783"},

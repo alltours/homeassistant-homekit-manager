@@ -92,9 +92,11 @@ class HomeKitManagerCoordinator:
             for record in records:
                 item = record.as_dict()
                 item["compatibility"] = classify_entity(record).as_dict()
-                item["homekit"] = {"configured_by_filter": None, "filter_reason": "filter_unavailable", "published": "unknown", "apple_home_visible": "unknown"}
+                item["homekit"] = {"configured_by_filter": None, "current_status": "unknown", "filter_reason": "filter_unavailable", "published": "unknown", "apple_home_visible": "unknown"}
                 if bridge_filter is not None:
                     item["homekit"].update(evaluate_filter(record.entity_id, record.entity_category, record.hidden_by, bridge_filter, core_filter).as_dict())
+                configured = item["homekit"].get("configured_by_filter")
+                item["homekit"]["current_status"] = "included" if configured is True else "excluded" if configured is False else "unknown"
                 self.inventory.append(item)
             self.bridges = [bridge.as_dict() for bridge in bridges]
             self.devices = build_device_views(self.inventory)

@@ -1,6 +1,6 @@
 {
-  "release_candidate": "0.9.9",
-  "integration_version": "0.9.9",
+  "release_candidate": "0.9.10-rc1",
+  "integration_version": "0.9.10",
   "created": "2026-10-26",
   "source_root": "custom_components/homekit_manager",
   "file_count": 30,
@@ -11,7 +11,7 @@
     {"path":"compatibility.py","sha256":"4ee9ca9f11ec24a4e4309e4fe4e5ea7c5b17e4ed7611b1de968ca5a606f39825"},
     {"path":"config_flow.py","sha256":"dc5808229a66b28d83d29b6ec8a9410a7c326526966f9cd8a53e813e96039d26"},
     {"path":"const.py","sha256":"0c11b23b83884cf26cccf339a6b28b689b7297a1fbb1ccf190566d92fbb72e77"},
-    {"path":"coordinator.py","sha256":"c36b33884dda2e33b4ccea2b984cdf58f2c6584440f0fa17801dc022eb446246"},
+    {"path":"coordinator.py","sha256":"eb1e28ac038ba9665ba19aa19133165170aa7ce1144020ec65e6d03a671d7185"},
     {"path":"device_config.py","sha256":"8e769bc44c9a2403a3b587f99a0f9df06d4c2bb13e57b3c3c32b753c1075bf26"},
     {"path":"diagnostics.py","sha256":"fbb560123f24d791b0c2433d85463314595be9503d3a0ab46f84e9f8be5445cd"},
     {"path":"draft.py","sha256":"5c28f0a25b70f082ee471bcf3975121537dae69d0d3a50d6b4375a2898287783"},
@@ -23,7 +23,7 @@
     {"path":"homekit_reader.py","sha256":"bc2365b18a9d67a8b440a298aa696a3937bd066ffe3e901f69152ca9070632d2"},
     {"path":"homekit_writer.py","sha256":"0de3b1910b1e0162a496fe0ac4df0f29d27cc22f76d34312c7abcf5b9aa2c382"},
     {"path":"inventory.py","sha256":"00765005d0054d430a6e7b2a32647862700c2683ed35b37a61352f80c2fcbedb"},
-    {"path":"manifest.json","sha256":"c4f1d09f0caa43182d36f3323d0ff45358626d6cd41cdfab5794ebe8868f588e"},
+    {"path":"manifest.json","sha256":"3dd2dc311a0b7f3523b1d0928611b843daa26a95de769df05ac26b10dd38ad1c"},
     {"path":"mode_store.py","sha256":"817f331fcc3383e66cd09cd1aa66c0f0c1018126b70e4a4fce68d779245fe543"},
     {"path":"panel.py","sha256":"43f833cd291afa75a7744fbe94883dc3795b74f134c54d5929a54bbe9a10ff91"},
     {"path":"performance.py","sha256":"dc554cd935397a24db4ec74982e9674661656400ff15a48dfbd55baff0b2099e"},
@@ -33,7 +33,7 @@
     {"path":"translations/de.json","sha256":"dd9511c4a293d702013162c9268c78c9c59dfb37ec0036bb2d2ac0c9034651da"},
     {"path":"translations/en.json","sha256":"93ac0e28518a94d5a07cd4e98e393ee78019a47ce0cac64b14a90ba2383bc5f2"},
     {"path":"websocket.py","sha256":"1606557e926c25c6e4a27509b1aea2841968ab9387eb484b82026abdf98032ca"},
-    {"path":"www/homekit-manager.js","sha256":"38919c7d1f1b6b8faa0f364856034a2d3b49f62d7f416fa7dfdf30bbffb8882b"},
+    {"path":"www/homekit-manager.js","sha256":"3069cbfb43a0bd02528a0d712ead57a9b83ee902fd750bf781e6bf6c1614a4bb"},
     {"path":"yaml_store.py","sha256":"87e0e8f028f8fa3d63d1a07610e189cd6dab9f6678dd8e0ecbde8fa70a35b614"}
   ]
 }

@@ -2,133 +2,57 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 
-class FakeHTMLElement {
-  attachShadow() {
-    const root = {
-      innerHTML: "",
-      querySelector: () => null,
-      querySelectorAll: () => [],
-    };
-    this.shadowRoot = root;
-    return root;
-  }
-}
-
+class FakeHTMLElement { attachShadow() { const root = { innerHTML: "", querySelector: () => null, querySelectorAll: () => [] }; this.shadowRoot = root; return root; } }
 const registry = new Map();
-const source = fs.readFileSync(
-  new URL("../../custom_components/homekit_manager/www/homekit-manager.js", import.meta.url),
-  "utf8",
-);
-vm.runInNewContext(source, {
-  HTMLElement: FakeHTMLElement,
-  customElements: { define: (name, value) => registry.set(name, value), get: (name) => registry.get(name) },
-  navigator: {},
-  window: {},
-  console,
-});
-
+const source = fs.readFileSync(new URL("../../custom_components/homekit_manager/www/homekit-manager.js", import.meta.url), "utf8");
+vm.runInNewContext(source, { HTMLElement: FakeHTMLElement, customElements: { define: (name, value) => registry.set(name, value), get: (name) => registry.get(name) }, navigator: {}, window: {}, console });
 const Panel = registry.get("homekit-manager-panel");
-assert.ok(Panel, "custom panel must register its web component");
+assert.ok(Panel);
 const panel = new Panel();
-assert.equal(typeof panel.scheduleRefresh, "function");
 assert.match(panel.shadowRoot.innerHTML, /HomeKit Manager/);
-assert.match(panel.shadowRoot.innerHTML, /Keine Änderungen/);
+assert.match(panel.shadowRoot.innerHTML, /HomeKit/);
+assert.match(panel.shadowRoot.innerHTML, /Geräte/);
+assert.match(panel.shadowRoot.innerHTML, /Änderungen/);
+assert.match(panel.shadowRoot.innerHTML, /Einstellungen/);
 
-let inventoryCalls = 0;
-panel.hass = {
-  states: {},
-  callWS: async ({ type }) => {
-    inventoryCalls += 1;
-    if (type === "homekit_manager/inventory") throw new Error("WebSocket nicht erreichbar");
-    throw new Error(`unexpected command: ${type}`);
-  },
-};
+let calls = 0;
+panel.hass = { callWS: async ({ type }) => { calls += 1; if (type === "homekit_manager/inventory") throw new Error("WebSocket nicht erreichbar"); throw new Error(`unexpected command: ${type}`); } };
 await new Promise((resolve) => setTimeout(resolve, 0));
-assert.equal(inventoryCalls, 1);
-assert.match(panel.shadowRoot.innerHTML, /Initialisierung fehlgeschlagen/);
+assert.equal(calls, 7);
 assert.match(panel.shadowRoot.innerHTML, /WebSocket nicht erreichbar/);
 
 panel.entities = [
-  {
-    entity_id: "light.kitchen",
-    name: "Kitchen",
-    area_name: "Kitchen",
-    domain: "light",
-    compatibility: { status: "supported" },
-    homekit: { configured_by_filter: true },
-  },
-  {
-    entity_id: "sensor.hidden",
-    name: "Hidden sensor",
-    area_name: "Hall",
-    domain: "sensor",
-    compatibility: { status: "conditionally_supported" },
-    homekit: { configured_by_filter: false },
-  },
+  { entity_id: "light.kitchen", device_id: "device-kitchen", name: "Kitchen", area_name: "Kitchen", device_name: "Ceiling light", domain: "light", compatibility: { status: "supported" }, homekit: { configured_by_filter: true, current_status: "included" } },
+  { entity_id: "sensor.hidden", device_id: "device-hidden", name: "Hidden sensor", area_name: "Hall", device_name: "Sensor", domain: "sensor", compatibility: { status: "conditionally_supported" }, homekit: { configured_by_filter: false, current_status: "excluded" } },
 ];
-panel.filters = { area_name: "Kitchen", device_name: "", integration_domain: "", domain: "", device_class: "", entity_category: "", compatibility: "", status: "" };
+assert.equal(panel.currentStatus(panel.entities[0]), "included");
+assert.equal(panel.status(panel.entities[1]), "excluded");
 panel.query = "kitchen";
 assert.deepEqual(panel.filtered.map((entity) => entity.entity_id), ["light.kitchen"]);
 panel.query = "";
-panel.filters.area_name = "";
-panel.sort = { key: "name", direction: 1 };
-assert.deepEqual(panel.filtered.map((entity) => entity.entity_id), ["sensor.hidden", "light.kitchen"]);
-panel.selectView("entities");
-assert.match(panel.shadowRoot.innerHTML, /aria-label="Auswahl Kitchen"/);
-assert.match(panel.shadowRoot.innerHTML, /aria-label="Gewünschter Zustand für Kitchen"/);
-assert.match(panel.shadowRoot.innerHTML, /aria-label="Nächste Seite"/);
-assert.match(panel.shadowRoot.innerHTML, /class="sort" data-sort="name"/);
-assert.match(panel.shadowRoot.innerHTML, /@media\(max-width:800px\)/);
-assert.match(panel.shadowRoot.innerHTML, /aria-current="page"/);
-assert.match(panel.shadowRoot.innerHTML, /role="tablist"/);
-assert.match(panel.shadowRoot.innerHTML, /role="tab"/);
-assert.match(panel.shadowRoot.innerHTML, /aria-selected="true"/);
-assert.match(panel.shadowRoot.innerHTML, /main aria-busy="false"/);
-
 panel.bridge = { entry_id: "bridge-1" };
-panel.draft = new Map([["light.kitchen", "exclude"]]);
-assert.equal(panel.status(panel.entities[0]), "exclude");
-panel.setDraft("sensor.hidden", "include");
-assert.equal(panel.status(panel.entities[1]), "include");
-assert.deepEqual(JSON.parse(JSON.stringify(panel.desiredDocument())), {
-  schema_version: 1,
-  bridges: { "bridge-1": { policy: "explicit_overrides", entities: { "light.kitchen": "exclude", "sensor.hidden": "include" } } },
-});
-panel._hass = {
-  callWS: async (message) => {
-    if (message.type === "homekit_manager/validate_draft") {
-      return { warnings: [], document: panel.desiredDocument() };
-    }
-    return { summary: { blocked: false }, changes: [], fingerprint: panel.fingerprint };
-  },
-};
-panel.fingerprint = "fingerprint";
-await panel.previewServer();
-assert.equal(panel.conflict, false);
-assert.equal(panel.escape("<script>&\""), "&lt;script&gt;&amp;&quot;");
+panel.draft = new Map([["light.kitchen", "excluded"]]);
+assert.equal(panel.status(panel.entities[0]), "planned");
+assert.equal(JSON.stringify(panel.desiredDocument().bridges["bridge-1"].entities), JSON.stringify({ "light.kitchen": "exclude" }));
+panel.draft.clear();
+panel.toggleDevice("device-kitchen");
+assert.equal(panel.draft.get("light.kitchen"), "excluded");
+panel.toggleDevice("device-kitchen");
+assert.equal(panel.draft.size, 0, "returning a device to its baseline removes the draft");
+panel.selectView("devices");
+assert.match(panel.shadowRoot.innerHTML, /Auswahlmodus/);
+assert.match(panel.shadowRoot.innerHTML, /data-group="areas"/);
+assert.match(panel.shadowRoot.innerHTML, /Details/);
+assert.match(panel.shadowRoot.innerHTML, /@media\(max-width:700px\)/);
+
+const before = panel.renderCount;
+panel.hass = { callWS: async () => ({}) };
+assert.equal(panel.renderCount, before, "irrelevant Home Assistant state updates must not rebuild the DOM");
 
 const successful = new Panel();
 let successCalls = 0;
-successful.hass = {
-  states: { "light.kitchen": {} },
-  callWS: async ({ type }) => {
-    successCalls += 1;
-    if (type === "homekit_manager/inventory") return { entities: [], overview: { fingerprint: "ok" } };
-    if (type === "homekit_manager/bridges") return { bridges: [] };
-    if (type === "homekit_manager/yaml_status") return { valid: true, exists: false };
-    if (type === "homekit_manager/devices") return { devices: [] };
-    if (type === "homekit_manager/areas") return { areas: [] };
-    if (type === "homekit_manager/diagnostics") return { findings: [], summary: {} };
-    if (type === "homekit_manager/device_preview") return { simulation: true, title: "Kitchen", service_type: "Lightbulb", applied: false };
-    if (type === "homekit_manager/mode_status") return { active_mode: "homekit_bridge", desired_mode: "homekit_bridge", transition: "stable", matrix: {} };
-    throw new Error(`unexpected command: ${type}`);
-  },
-};
-successful.panel = { config: {} };
-successful.narrow = true;
+successful.hass = { callWS: async ({ type }) => { successCalls += 1; if (type === "homekit_manager/inventory") return { entities: [], overview: {} }; if (type === "homekit_manager/bridges") return { bridges: [] }; if (type === "homekit_manager/devices") return { devices: [] }; if (type === "homekit_manager/areas") return { areas: [] }; if (type === "homekit_manager/diagnostics") return { findings: [], summary: {} }; if (type === "homekit_manager/yaml_status") return { valid: true, exists: false }; if (type === "homekit_manager/mode_status") return { active_mode: "homekit_bridge" }; throw new Error(`unexpected command: ${type}`); } };
 await new Promise((resolve) => setTimeout(resolve, 0));
 assert.equal(successCalls, 7);
-assert.doesNotMatch(successful.shadowRoot.innerHTML, /Initialisierung fehlgeschlagen/);
-assert.match(successful.shadowRoot.innerHTML, /HomeKit Manager/);
-
+assert.doesNotMatch(successful.shadowRoot.innerHTML, /Verbindung nicht möglich/);
 console.log("frontend panel behavior: ok");

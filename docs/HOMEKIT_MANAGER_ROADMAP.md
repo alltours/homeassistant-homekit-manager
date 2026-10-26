@@ -194,6 +194,18 @@ noch offenen Last-, Mobile- und Screenreader-Prüfungen.
 
 ## Sicherheitsstatus
 
+### Phase 0.9.10 – Vollständiges UI/UX-Redesign
+
+Auf dem Branch `feature/homekit-manager-0.9.10-ui-redesign` wurde die Oberfläche auf vier
+Hauptbereiche reduziert: HomeKit, Geräte, Änderungen und Einstellungen. Die Geräteansicht
+arbeitet standardmäßig bereichsgruppiert mit kompakten Zeilen, sichtbaren Zuständen,
+aufklappbaren technischen Details und separatem Auswahlmodus. Der serverseitig aus der
+aktuellen Bridge-Konfiguration ermittelte Zustand wird vom geplanten Draft getrennt.
+`set hass` führt nach der Initialisierung keinen vollständigen DOM-Neuaufbau mehr aus.
+Manifest und lokale Dokumentation stehen auf Version `0.9.10`. Syntax-, Kompilierungs-,
+Frontend- und bestehende Python-/Home-Assistant-Tests bestehen lokal. Browser-Screenshot,
+CI, PR und Produktivinstallation sind noch offen.
+
 ### Phase 5B.15 – Frontend-Fix 1.0.1-rc1
 
 Der schwarze Panelzustand wurde lokal durch sichtbare Initialisierungs- und Fehlerzustände,

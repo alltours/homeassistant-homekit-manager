@@ -97,7 +97,7 @@ Für den Commit `8576611feb957a9433ffb7ec24b501737c7457b8` wurden die CI-Prüfun
 |---|---|
 | hassfest | Erfolgreich |
 | hacs | Erfolgreich |
-| quality | Zum Abschluss der Arbeitsphase noch laufend |
+| quality | Erfolgreich |
 
 ## Browser- und Screenshotstatus
 
@@ -261,13 +261,14 @@ Weiterhin bestätigt:
 
 ### Aktualisierter Commit
 
-Der CI-Fix und dieser Nachtrag werden als neuer Commit auf dem bestehenden Branch von
-Pull Request #4 übertragen. Es wird kein Merge und kein GitHub-Release durchgeführt.
+Der CI-Fix und dieser Nachtrag wurden als Commit `30ce77f7b3ba03f0d7d32698607550662bfec4d7`
+auf dem bestehenden Branch von Pull Request #4 übertragen. Es wurde kein Merge und kein
+GitHub-Release durchgeführt.
 
 ### Bewertung
 
 **CONDITIONAL-GO**
 
-Die konkrete CI-Ursache ist behoben und lokal verifiziert. Die Safari-Browserabnahme über
-HTTP ist erfolgreich. Für ein endgültiges GO fehlen weiterhin der Abschluss der neuen
-GitHub-Actions sowie die exakten 390-/430-/768-/1440-Pixel- und Dark-Mode-Abnahmen.
+Die konkrete CI-Ursache ist behoben und lokal sowie remote verifiziert. Die Safari-
+Browserabnahme über HTTP ist erfolgreich. Für ein endgültiges GO fehlen weiterhin die
+exakten 390-/430-/768-/1440-Pixel- und Dark-Mode-Abnahmen sowie die Chromium-Abnahme.

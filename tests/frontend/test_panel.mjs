@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 
-class FakeHTMLElement { attachShadow() { const root = { innerHTML: "", querySelector: () => null, querySelectorAll: () => [] }; this.shadowRoot = root; return root; } }
+class FakeHTMLElement { attachShadow() { const root = { innerHTML: "", querySelector: () => null, querySelectorAll: () => [], addEventListener: () => {} }; this.shadowRoot = root; return root; } }
 const registry = new Map();
 const source = fs.readFileSync(new URL("../../custom_components/homekit_manager/www/homekit-manager.js", import.meta.url), "utf8");
 vm.runInNewContext(source, { HTMLElement: FakeHTMLElement, customElements: { define: (name, value) => registry.set(name, value), get: (name) => registry.get(name) }, navigator: {}, window: {}, console });
@@ -11,10 +11,10 @@ assert.ok(Panel);
 const panel = new Panel();
 assert.match(panel.shadowRoot.innerHTML, /HomeKit Manager/);
 assert.match(panel.shadowRoot.innerHTML, /HomeKit/);
-assert.match(panel.shadowRoot.innerHTML, /Geräte/);
-assert.match(panel.shadowRoot.innerHTML, /Änderungen/);
-assert.match(panel.shadowRoot.innerHTML, /Einstellungen/);
 assert.match(panel.shadowRoot.innerHTML, /Konfigurationsmethode/);
+assert.match(panel.shadowRoot.innerHTML, /HomeKit-Bridges/);
+assert.match(panel.shadowRoot.innerHTML, /Änderungsübersicht/);
+assert.match(panel.shadowRoot.innerHTML, /Änderungen speichern/);
 
 let calls = 0;
 panel.hass = { callWS: async ({ type }) => { calls += 1; if (type === "homekit_manager/inventory") throw new Error("WebSocket nicht erreichbar"); throw new Error(`unexpected command: ${type}`); } };
@@ -40,12 +40,14 @@ panel.toggleDevice("device-kitchen");
 assert.equal(panel.draft.get("light.kitchen"), "excluded");
 panel.toggleDevice("device-kitchen");
 assert.equal(panel.draft.size, 0, "returning a device to its baseline removes the draft");
-panel.selectView("devices");
-assert.match(panel.shadowRoot.innerHTML, /Auswahlmodus/);
-assert.match(panel.shadowRoot.innerHTML, /data-group="areas"/);
-assert.match(panel.shadowRoot.innerHTML, /data-group="types"/);
-assert.match(panel.shadowRoot.innerHTML, /data-group="zones"/);
-assert.match(panel.shadowRoot.innerHTML, /Details/);
+panel.bridges = [{ entry_id: "bridge-1", title: "Test Bridge", state: "loaded" }];
+panel.dashboardExpanded = new Set(["bridge-1"]);
+panel.bridge = panel.bridges[0];
+panel.render();
+assert.match(panel.shadowRoot.innerHTML, /data-dashboard-entity/);
+assert.match(panel.shadowRoot.innerHTML, /Geräte/);
+assert.match(panel.shadowRoot.innerHTML, /Gerätetypen/);
+assert.match(panel.shadowRoot.innerHTML, /Zonen/);
 assert.match(panel.shadowRoot.innerHTML, /@media\(max-width:700px\)/);
 
 const before = panel.renderCount;

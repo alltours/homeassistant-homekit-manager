@@ -2,8 +2,11 @@
 
 ## Version strategy
 
-Starting with this release, the project uses the `0.9.x` series. Existing `1.0.x`
-tags and releases remain historical and are not rewritten or re-labelled.
+Starting with this release, the project uses the `0.9.x` series. The former public
+`1.0.x` tags and releases were removed on 26.10.2026 to prevent HACS from selecting
+an obsolete numerically higher update. Their Git commits remain preserved. Future
+releases must remain in the `0.9.x` series unless a separate versioning decision is
+made.
 
 ## Delivered changes
 

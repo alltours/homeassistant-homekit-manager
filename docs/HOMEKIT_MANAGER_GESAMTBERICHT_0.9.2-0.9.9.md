@@ -1252,3 +1252,106 @@ Ein **NO-GO** für die lokale Weiterentwicklung wäre ebenfalls nicht angemessen
 6. Erst danach eine kontrollierte produktive Aktualisierung mit Backup, Dateivergleich und gegebenenfalls genau einem freigegebenen Home-Assistant-Neustart durchführen.
 7. HomeKit-Bridge, Config-Entry und Pairing-Zustand anschließend ausschließlich lesend abnehmen.
 
+## T. Nachtrag: Merge und Release von 0.9.9
+
+Dieser Nachtrag aktualisiert den externen GitHub- und Release-Zustand nach dem ursprünglichen Berichtsstand.
+
+### GitHub-Status
+
+- Pull Request #2 wurde erfolgreich geprüft und gemergt.
+- Merge-Commit auf `main`: `e43d4077aa54052e0ec2fc2546d4ff0538270c6a`.
+- Der Branch `feature/homekit-manager-0.9.9` wurde vollständig übertragen.
+- Der Tag `v0.9.9` wurde auf den geprüften Quellstand `7e28b61` gesetzt.
+- GitHub-Release `v0.9.9` wurde veröffentlicht.
+- Das Release ist weder Draft noch Pre-Release.
+- Repository und `main` sind öffentlich erreichbar.
+
+### Remote-Qualitätssicherung
+
+- CI für den geprüften Quellstand: erfolgreich.
+- HACS-Validierung: erfolgreich.
+- Hassfest: erfolgreich.
+- Lokaler Home-Assistant-Testlauf: 42/42 Tests bestanden.
+
+### Produktiver Status
+
+Die produktive Home-Assistant-Installation wurde nicht aktualisiert. Es wurden kein HACS-Update, keine produktive Dateiübertragung, kein Home-Assistant-Neustart und keine HomeKit-Änderung durchgeführt.
+
+Die authentifizierte Live-Abnahme bleibt offen, weil der Mac während der letzten Prüfung gesperrt war und der lokale Browserzugriff dadurch nicht zur Verfügung stand.
+
+### Sicherheit
+
+- Die bestehende HomeKit-Bridge blieb unverändert.
+- `apply_enabled = False` bleibt verbindlich.
+- `HomeKitWriter.async_apply()` bleibt gesperrt.
+- Es wurden keine HomeKit-Config-Entries, Pairings, `.storage`-Daten, Accessory-IDs oder Instance-IDs verändert.
+
+### Aktualisierte Gesamtbewertung
+
+**CONDITIONAL-GO für die Produktivsetzung.**
+
+Die Entwicklungsreihe 0.9.2 bis 0.9.9 ist lokal getestet, remote validiert, gemergt und als GitHub-Release veröffentlicht. Die Produktivsetzung bleibt bis zur authentifizierten Live-Abnahme blockiert.
+
+Erforderlicher nächster Schritt:
+
+1. Mac entsperren und authentifizierten Home-Assistant-Zugang bereitstellen.
+2. Produktives Backup und den aktuellen Manager-Stand prüfen.
+3. HACS-Update auf `v0.9.9` beziehungsweise den freigegebenen Release-Stand vorbereiten.
+4. Produktive Dateien und Prüfsummen vergleichen.
+5. Integration kontrolliert aktualisieren.
+6. Einen ausdrücklich freigegebenen Neustart durchführen, falls erforderlich.
+7. Panel, WebSocket, Inventar und HomeKit-Bridge ausschließlich lesend abnehmen.
+
+## U. Nachtrag: GitHub-Release-Bereinigung und HACS-Versionierung
+
+### Ausgangszustand
+
+Vor der Bereinigung existierten auf GitHub die Releases und Tags `v1.0.1`, `v1.0.2`
+und `v1.0.3`. Die zugehörigen Commit-SHAs waren:
+
+| Version | Release-ID | Commit-SHA |
+|---|---:|---|
+| `v1.0.1` | `423955637` | `1e8d529255972d89c2f128fa1520f3cb41fef068` |
+| `v1.0.2` | `423959146` | `d64e51672f0440c26c1567c7d294406510141947` |
+| `v1.0.3` | `423966322` | `cff03a11f77ece28ee2017f5904f44d182208215` |
+
+Alle drei waren veröffentlichte Nicht-Draft-Releases. Die Commit-Historie wurde vor
+der Bereinigung geprüft und blieb erhalten.
+
+### Durchgeführte Bereinigung
+
+Explizit gelöscht wurden ausschließlich:
+
+- GitHub-Release `v1.0.1` und Tag `v1.0.1`.
+- GitHub-Release `v1.0.2` und Tag `v1.0.2`.
+- GitHub-Release `v1.0.3` und Tag `v1.0.3`.
+
+Jede Release- und Tag-Löschung wurde von GitHub mit HTTP 204 bestätigt.
+
+### Verifizierter Zustand danach
+
+- Verbleibende GitHub-Releases: `v0.9.2`, `v0.9.9`.
+- Verbleibende Git-Tags: `v0.9.2`, `v0.9.9`.
+- `/releases/latest`: `v0.9.9`.
+- `v0.9.9`: veröffentlicht, kein Draft, kein Pre-Release.
+- `main`-Manifest: Domain `homekit_manager`, Version `0.9.9`, `config_flow: true`.
+- Die drei historischen Commit-SHAs sind weiterhin über die GitHub-Commit-API erreichbar.
+
+Die höhere historische Versionsreihe ist damit aus der öffentlichen Release- und
+Tag-Auswahl entfernt. Eine HACS-Prüfung in der produktiven Home-Assistant-Instanz
+konnte wegen des gesperrten Macs nicht durchgeführt werden; die HACS-Erkennung bleibt
+als produktive Live-Prüfung ausstehend.
+
+### Dauerhafte Versionsstrategie
+
+Die zukünftige Versionsfolge bleibt auf `0.9.x` beschränkt:
+
+- `0.9.10`
+- `0.9.11`
+- `0.9.12`
+- `0.9.13`
+
+Kein neuer `1.0.x`- oder `2.0.x`-Tag darf ohne separate Versionsentscheidung erzeugt
+werden. Die Commit-Historie wird bei zukünftigen Release-Bereinigungen nicht
+umgeschrieben.
+

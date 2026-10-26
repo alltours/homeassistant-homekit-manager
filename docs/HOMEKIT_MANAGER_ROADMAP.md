@@ -6,8 +6,12 @@ In Arbeit auf `feature/homekit-manager-0.9.2`. Die neue Oberfläche und die kons
 Modusverwaltung sind lokal implementiert. Die drei Verwaltungsmodi werden erkannt und
 pro Bridge als gewünschter Zustand gespeichert; Cross-Mode-Aktivierung bleibt bewusst
 gesperrt, bis Bridge-Identität, Pairings, Accessory-IDs und Instance-IDs nachweislich
-erhalten werden können. Die Versionierung verwendet ab diesem Stand die Reihe `0.9.x`;
-historische `1.0.x`-Releases bleiben unverändert.
+erhalten werden können. Die Versionierung verwendet ab diesem Stand die Reihe `0.9.x`.
+Die ehemaligen `1.0.x`-GitHub-Releases und Tags wurden am 26.10.2026 aus der
+öffentlichen Release-Oberfläche entfernt, weil ihre höheren Versionsnummern HACS ein
+veraltetes Update anbieten ließen. Die zugehörigen Commits bleiben in der Git-Historie
+erhalten. Zukünftige Releases müssen die Reihe `0.9.x` verwenden; `1.0.x` oder `2.0.x`
+dürfen ohne separate Versionsentscheidung nicht erzeugt werden.
 
 ## Phase 0.9.3 – Geräte- und Bereichsverwaltung
 
@@ -74,6 +78,20 @@ Verfügbarkeitsmetriken sowie eine begrenzte Empfehlung zur Seitengröße. Das F
 verwendet weiterhin Pagination und lädt das Inventar nicht bei normalen State-Updates
 neu. Vollständige Lasttests mit 2.500 und 5.000 realen Entitäten sowie eine vollständige
 mobile/Screenreader-Abnahme bleiben vor einer Produktreife-Freigabe offen.
+
+## Release-Strategie nach 0.9.9
+
+Der aktuelle öffentliche Release ist `v0.9.9`. Die geplante Fortsetzung lautet:
+
+- `0.9.10`
+- `0.9.11`
+- `0.9.12`
+- `0.9.13`
+
+Jeder Release benötigt eine passende `manifest.json`-Version, einen `v0.9.x`-Tag,
+erfolgreiche CI-, HACS- und Hassfest-Prüfungen sowie einen Release-Abnahmenachweis.
+Bestehende Git-Commits werden im Rahmen der Release-Bereinigung weder umgeschrieben
+noch gelöscht.
 
 ## Status
 

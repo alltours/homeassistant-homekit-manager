@@ -60,8 +60,9 @@ HomeKit-Optionen oder YAML.
 
 ## Phase 0.9.8 – Konfigurationshistorie und Wiederherstellung
 
-Auf `feature/homekit-manager-0.9.8` lokal implementiert. Gespeicherte Desired-State-
-Entwürfe werden als begrenzte, redigierte Historieneinträge geführt. Vergleiche zeigen
+Auf `feature/homekit-manager-0.9.8` lokal implementiert. Während der laufenden Manager-
+Instanz werden gespeicherte Desired-State-Entwürfe als begrenzte, redigierte
+Historieneinträge geführt. Vergleiche zeigen
 hinzugefügte, entfernte und geänderte Entitäten. Eine Wiederherstellung liefert nur
 einen neuen Entwurf; `applied` bleibt immer `False`.
 

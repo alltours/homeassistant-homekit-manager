@@ -2,8 +2,8 @@
 
 ## Ziel
 
-0.9.8 ergänzt eine begrenzte Historie für gewünschte Konfigurationszustände und eine
-sichere Wiederherstellungsvorschau.
+0.9.8 ergänzt während der laufenden Manager-Instanz eine begrenzte Historie für
+gewünschte Konfigurationszustände und eine sichere Wiederherstellungsvorschau.
 
 ## Historienmodell
 
@@ -16,7 +16,8 @@ Ein Eintrag enthält ausschließlich:
 - `applied: false`
 
 Pairing-Geheimnisse, Accessory-IDs und HomeKit-Identitätsdaten werden nicht gespeichert.
-Die Historie ist auf die letzten 50 Einträge begrenzt.
+Die laufende Historie ist auf die letzten 50 Einträge begrenzt. Eine persistente
+Historienablage über einen Neustart hinweg ist noch nicht implementiert.
 
 ## Schnittstellen
 

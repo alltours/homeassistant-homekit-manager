@@ -175,3 +175,99 @@ Der lokale Implementierungsstand ist technisch geprüft und der Pull Request ist
 Es wurden keine produktiven Änderungen und kein Release durchgeführt.
 
 **CONDITIONAL-GO – nächster Schritt: echter Browser-Regressionstest und Abschluss der GitHub Actions.**
+
+## Nachtrag – CI-Fix und Browserabnahme
+
+### CI-Fehlerursache
+
+Der fehlgeschlagene Job `quality` brach im Schritt `Verify release manifest and file hashes`
+mit `Release manifest version does not match integration manifest` ab. Die Prüflogik war
+korrekt. `custom_components/homekit_manager/manifest.json` enthielt bereits `0.9.10`,
+während `docs/RELEASE_MANIFEST.json` noch den Release-Stand `0.9.9` und dessen alte
+Prüfsummen beschrieb.
+
+### Korrektur
+
+Nur `docs/RELEASE_MANIFEST.json` wurde aktualisiert:
+
+- Release-Kandidat: `0.9.10-rc1`
+- Integrationsversion: `0.9.10`
+- Dateianzahl: 30
+- SHA-256-Prüfsummen für alle 30 Integrationsdateien neu berechnet
+- Keine Änderung an der CI-Prüflogik
+
+Die lokale Prüfung bestätigt:
+
+`Verified 30 release files for version 0.9.10`
+
+### Browserabnahme
+
+Die Fixture wurde in Safari zunächst direkt über `file://` geladen. Diese Variante blieb
+schwarz, weil Safari das lokale ES-Modul in diesem Kontext nicht zuverlässig ausführt.
+Das ist kein Fehler der UI selbst, sondern eine Einschränkung des lokalen Datei-Kontexts.
+
+Für die eigentliche Browserprüfung wurde ausschließlich ein lokaler HTTP-Server auf
+`127.0.0.1:8765` verwendet. Es wurden keine produktiven oder externen Daten übertragen.
+
+Nach dem Laden über HTTP waren sichtbar:
+
+- HomeKit-Startseite
+- Fixture Bridge als Baseline
+- zwei Entitäten und ihre Konfigurationszustände
+- Geräteansicht mit Bereichsgruppierung
+- Entitätenansicht
+- Änderungen mit Vorschau-/Speicher-/Export-Aktionen
+- Einstellungen mit Bridge-/Modus-, Diagnose-, Regeln- und Historie-Bereich
+- Auswahlmodus mit Ein-/Aus-/Zurücksetzen-Aktionen
+- Suchfeld und Filterbereich
+- aufklappbare technische Details
+
+Der sichtbare Safari-Render war nicht schwarz. Die Geräteansicht zeigte kompakte Zeilen,
+verständliche Namen, Statuschips und Touch-fähige Schalter. Ein Screenshot wurde während
+der Abnahme erfasst.
+
+Google Chrome for Testing ist auf dem Mac vorhanden, konnte in dieser Sitzung jedoch nicht
+für die Computersteuerung freigegeben werden. Ein Chromium-Test wird deshalb nicht als
+ausgeführt behauptet.
+
+### Aktuelle Testergebnisse
+
+| Prüfung | Ergebnis |
+|---|---|
+| Release-Manifest und SHA-256 | Erfolgreich, 30/30 Dateien |
+| JavaScript-Syntax | Erfolgreich |
+| Frontend-Paneltest | Erfolgreich |
+| Python-/Home-Assistant-Tests | 42/42 erfolgreich |
+| Read-only-Static-Checks | Erfolgreich |
+| Safari-Fixture über HTTP | Erfolgreich sichtbar gerendert |
+| Safari-Fixture über `file://` | Fehlgeschlagen wegen lokalem Modulkontext |
+| Chromium-Test | Nicht ausgeführt |
+| Screenshots 390/430/768/1440 px | Nicht in exakten Viewportgrößen ausgeführt |
+| Dark-Mode-Screenshot | Nicht ausgeführt |
+| Produktive Installation | Nicht ausgeführt |
+
+### Sicherheitsprüfung
+
+Weiterhin bestätigt:
+
+- `apply_enabled = False`
+- `HomeKitWriter.async_apply()` bleibt gesperrt
+- keine HomeKit-Config-Entry-Änderung
+- keine Pairing-Manipulation
+- keine Bridge-Neuanlage oder Bridge-Löschung
+- kein HomeKit-Reload
+- kein Home-Assistant-Neustart
+- keine produktive Dateiänderung
+
+### Aktualisierter Commit
+
+Der CI-Fix und dieser Nachtrag werden als neuer Commit auf dem bestehenden Branch von
+Pull Request #4 übertragen. Es wird kein Merge und kein GitHub-Release durchgeführt.
+
+### Bewertung
+
+**CONDITIONAL-GO**
+
+Die konkrete CI-Ursache ist behoben und lokal verifiziert. Die Safari-Browserabnahme über
+HTTP ist erfolgreich. Für ein endgültiges GO fehlen weiterhin der Abschluss der neuen
+GitHub-Actions sowie die exakten 390-/430-/768-/1440-Pixel- und Dark-Mode-Abnahmen.

@@ -75,6 +75,13 @@
           if (message.type === "homekit_manager/activation_status") {
             return { state: "unknown", entry_id: "fixture-bridge", message: "Kein Anwendungsvorgang" };
           }
+          if (message.type === "homekit_manager/migration_plan") {
+            const target = message.target || desiredMode;
+            return { source: "homekit_bridge", target, supported: target === "homekit_bridge", status: target === "homekit_bridge" ? "verify_only" : "blocked", reason: target === "homekit_bridge" ? "Quelle wird read-only verifiziert" : "Migration ist aus Sicherheitsgründen gesperrt", steps: [{ key: "validate", label: "Konfiguration prüfen", progress: 16 }] };
+          }
+          if (message.type === "homekit_manager/migration_status") {
+            return { state: "unknown", stale: true };
+          }
           if (message.type === "homekit_manager/devices") {
             return { devices: [{ device_id: "fixture-device", name: "Kitchen device", area_name: "Kitchen", entity_count: 1, compatible_count: 1, configured_count: 1, unavailable_count: 0, integrations: ["demo"] }] };
           }

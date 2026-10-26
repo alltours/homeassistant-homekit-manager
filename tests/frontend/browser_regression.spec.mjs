@@ -30,6 +30,7 @@ for (const [name, width, height] of viewports) {
       const input = panel.locator("[data-query]");
       await input.fill("Kitchen");
       await expect(input).toHaveValue("Kitchen");
+      await panel.locator(".filters summary").click();
       await panel.locator("[data-filter=status]").selectOption("included");
       await panel.locator("[data-reset-filters]").click();
       await panel.locator("[data-group=entities]").click();
@@ -37,6 +38,7 @@ for (const [name, width, height] of viewports) {
       await panel.getByRole("tab", { name: "Änderungen" }).click();
       await expect(panel.locator("text=Nur geplante Änderungen")).toBeVisible();
       await expect(panel.locator("text=Entwurf speichern")).toBeVisible();
+      await panel.locator("[data-action-menu]").click();
       await panel.locator("[data-preview]").click();
       await panel.locator("[data-save]").click();
       await expect(panel.locator("text=Entwurf gespeichert")).toBeVisible();
@@ -129,4 +131,16 @@ test("sticky change actions remain visible inside a Home Assistant-like scroll c
   });
   expect(geometry.footerHeight).toBeGreaterThan(0);
   expect(geometry.footerBottom).toBeLessThanOrEqual(geometry.wrapperBottom + 1);
+});
+
+test("storage cards distinguish verified source from blocked migration", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/tests/frontend/browser_fixture.html");
+  const panel = page.locator("homekit-manager-panel");
+  await expect(panel.locator(".storage-card.active small")).toHaveText("Aktiv");
+  await panel.locator('[data-mode="yaml"]').click();
+  await expect(panel.locator('[data-mode="yaml"] small')).toHaveText("Vorgemerkt");
+  await panel.locator('[data-migration-target]').selectOption("yaml");
+  await expect(panel.locator(".migration-panel .warning")).toContainText("gesperrt");
+  await expect(panel.locator('[data-migration-start]')).toBeDisabled();
 });

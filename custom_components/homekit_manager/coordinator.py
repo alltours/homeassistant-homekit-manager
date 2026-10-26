@@ -27,10 +27,12 @@ from .yaml_store import (
 from .const import MANAGEMENT_MODES, MODE_HOMEKIT_BRIDGE, MODE_HOMEKIT_MANAGER, MODE_YAML
 from .mode_store import ModeStore
 from .grouping import build_area_views, build_device_views
-from .diagnostics import build_diagnostics, diagnostics_summary
+from .diagnostics import build_diagnostics, diagnostics_summary, group_diagnostics
 from .history import make_history_entry, restore_as_draft
 from .history_store import HistoryStore
 from .config_source import inspect_configuration_sources
+from .migration import build_migration_plan, build_migration_matrix, completed_verification
+from .migration_store import MigrationStore
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,6 +54,12 @@ class HomeKitManagerCoordinator:
         yaml_path = config_path("homekit_manager.yaml") if callable(config_path) else "/config/homekit_manager.yaml"
         self.yaml_store = YamlStore(yaml_path)
         self.mode_store = ModeStore(hass)
+        self.migration_store = MigrationStore(hass)
+        self.migration_status: dict[str, Any] = {
+            "state": "unknown",
+            "message": "Noch kein verifizierter Speicherwechselstatus vorhanden.",
+            "stale": True,
+        }
         self.desired_modes: dict[str, str] = {}
         self.configuration_sources: dict[str, Any] = {
             "sources": [], "active_mode": "unknown", "mixed": False,
@@ -75,6 +83,9 @@ class HomeKitManagerCoordinator:
         self.desired_modes = await self.mode_store.async_load()
         self.yaml_snapshot = await self.hass.async_add_executor_job(self.yaml_store.load)
         self.history_entries = await self.history_store.async_load()
+        stored_migration = await self.migration_store.async_load()
+        if stored_migration:
+            self.migration_status = stored_migration
         config_path = getattr(getattr(self.hass, "config", None), "path", None)
         if callable(config_path):
             configuration_file = config_path("configuration.yaml")
@@ -204,7 +215,7 @@ class HomeKitManagerCoordinator:
 
     def diagnostics(self) -> dict[str, Any]:
         """Return the current diagnostic snapshot without applying corrections."""
-        return {"findings": self.diagnostic_findings, "summary": diagnostics_summary(self.diagnostic_findings), "fingerprint": self.fingerprint}
+        return {"findings": self.diagnostic_findings, "grouped_findings": group_diagnostics(self.diagnostic_findings), "summary": diagnostics_summary(self.diagnostic_findings), "fingerprint": self.fingerprint}
 
     def activation_status(self, entry_id: str | None = None, request_id: str | None = None) -> dict[str, Any]:
         """Return the last in-memory activation state; restart means unknown."""
@@ -263,14 +274,7 @@ class HomeKitManagerCoordinator:
         entry_id = bridge.get("entry_id") if bridge else None
         active = self._active_mode(bridge)
         desired = self.desired_modes.get(entry_id, active) if entry_id else active
-        matrix = {}
-        for source in MANAGEMENT_MODES:
-            for target in MANAGEMENT_MODES:
-                key = f"{source}->{target}"
-                matrix[key] = {
-                    "status": "safe" if source == target else "manual_required",
-                    "reason": "Keine Migration erforderlich" if source == target else "Bridge-Identität und Pairings werden nicht automatisch migriert",
-                }
+        matrix = build_migration_matrix()
         return {
             "active_mode": active,
             "desired_mode": desired,
@@ -288,6 +292,55 @@ class HomeKitManagerCoordinator:
             "message": "Moduswechsel bleiben gesperrt, solange Bridge-Identität und Pairing-Erhalt nicht nachgewiesen sind.",
             "source_detection": self.configuration_sources,
         }
+
+    def migration_plan(self, target: str | None = None) -> dict[str, Any]:
+        """Return a verified-source plan without changing Home Assistant."""
+        bridge = self.selected_bridge()
+        source = self._active_mode(bridge)
+        if source not in MANAGEMENT_MODES:
+            source = MODE_HOMEKIT_BRIDGE if bridge else MODE_HOMEKIT_MANAGER
+        target = target or self.desired_modes.get(bridge.get("entry_id") if bridge else "", source)
+        return build_migration_plan(source, target, bridge.get("entry_id") if bridge else None) | {
+            "active_mode": source,
+            "desired_mode": target,
+            "status": self.migration_status,
+        }
+
+    def migration_status_snapshot(self) -> dict[str, Any]:
+        """Return persisted status; stale status is never treated as active."""
+        return dict(self.migration_status)
+
+    async def async_start_migration(self, target: str, confirmed: bool = False) -> dict[str, Any]:
+        """Verify same-source state or explicitly block cross-source migration."""
+        plan = self.migration_plan(target)
+        if not plan["supported"]:
+            status = {
+                "state": "blocked",
+                "progress": None,
+                "step": None,
+                "message": plan["reason"],
+                "bridge_entry_id": plan.get("bridge_entry_id"),
+                "source": plan["source"],
+                "target": plan["target"],
+                "changed": False,
+                "migration_performed": False,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "stale": False,
+            }
+            self.migration_status = status
+            await self.migration_store.async_save(status)
+            return plan | {"status": status}
+        if not confirmed:
+            return plan | {"status": {"state": "awaiting_confirmation", "progress": 0, "message": "Explizite Bestätigung für die schreibfreie Verifikation erforderlich."}}
+        await self.async_refresh()
+        bridge = self.selected_bridge()
+        if plan.get("bridge_entry_id") != (bridge.get("entry_id") if bridge else None):
+            raise ValueError("Bridge-Kontext hat sich während der Verifikation geändert")
+        status = completed_verification(plan, plan.get("bridge_entry_id"))
+        status.update({"source": plan["source"], "target": plan["target"], "stale": False})
+        self.migration_status = status
+        await self.migration_store.async_save(status)
+        return plan | {"status": status}
 
     async def async_set_mode(self, mode: str) -> dict[str, Any]:
         """Persist a desired mode; never activate a risky migration."""

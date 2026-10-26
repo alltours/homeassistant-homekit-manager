@@ -1302,3 +1302,56 @@ Erforderlicher nächster Schritt:
 6. Einen ausdrücklich freigegebenen Neustart durchführen, falls erforderlich.
 7. Panel, WebSocket, Inventar und HomeKit-Bridge ausschließlich lesend abnehmen.
 
+## U. Nachtrag: GitHub-Release-Bereinigung und HACS-Versionierung
+
+### Ausgangszustand
+
+Vor der Bereinigung existierten auf GitHub die Releases und Tags `v1.0.1`, `v1.0.2`
+und `v1.0.3`. Die zugehörigen Commit-SHAs waren:
+
+| Version | Release-ID | Commit-SHA |
+|---|---:|---|
+| `v1.0.1` | `423955637` | `1e8d529255972d89c2f128fa1520f3cb41fef068` |
+| `v1.0.2` | `423959146` | `d64e51672f0440c26c1567c7d294406510141947` |
+| `v1.0.3` | `423966322` | `cff03a11f77ece28ee2017f5904f44d182208215` |
+
+Alle drei waren veröffentlichte Nicht-Draft-Releases. Die Commit-Historie wurde vor
+der Bereinigung geprüft und blieb erhalten.
+
+### Durchgeführte Bereinigung
+
+Explizit gelöscht wurden ausschließlich:
+
+- GitHub-Release `v1.0.1` und Tag `v1.0.1`.
+- GitHub-Release `v1.0.2` und Tag `v1.0.2`.
+- GitHub-Release `v1.0.3` und Tag `v1.0.3`.
+
+Jede Release- und Tag-Löschung wurde von GitHub mit HTTP 204 bestätigt.
+
+### Verifizierter Zustand danach
+
+- Verbleibende GitHub-Releases: `v0.9.2`, `v0.9.9`.
+- Verbleibende Git-Tags: `v0.9.2`, `v0.9.9`.
+- `/releases/latest`: `v0.9.9`.
+- `v0.9.9`: veröffentlicht, kein Draft, kein Pre-Release.
+- `main`-Manifest: Domain `homekit_manager`, Version `0.9.9`, `config_flow: true`.
+- Die drei historischen Commit-SHAs sind weiterhin über die GitHub-Commit-API erreichbar.
+
+Die höhere historische Versionsreihe ist damit aus der öffentlichen Release- und
+Tag-Auswahl entfernt. Eine HACS-Prüfung in der produktiven Home-Assistant-Instanz
+konnte wegen des gesperrten Macs nicht durchgeführt werden; die HACS-Erkennung bleibt
+als produktive Live-Prüfung ausstehend.
+
+### Dauerhafte Versionsstrategie
+
+Die zukünftige Versionsfolge bleibt auf `0.9.x` beschränkt:
+
+- `0.9.10`
+- `0.9.11`
+- `0.9.12`
+- `0.9.13`
+
+Kein neuer `1.0.x`- oder `2.0.x`-Tag darf ohne separate Versionsentscheidung erzeugt
+werden. Die Commit-Historie wird bei zukünftigen Release-Bereinigungen nicht
+umgeschrieben.
+

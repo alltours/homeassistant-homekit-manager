@@ -90,7 +90,7 @@ Die aktuelle erneute Browserprüfung war bei Erstellung dieses Berichts wegen ei
 - 0.9.3 bis 0.9.9 sind lokal entwickelt, aber nicht als 0.9.x-Tags oder 0.9.x-GitHub-Releases veröffentlicht.
 - GitHub enthält zusätzlich historische 1.0.1-, 1.0.2- und 1.0.3-Releases.
 - Der 0.9.9-Branch ist nach GitHub gepusht, aber noch nicht nach `main` gemergt.
-- Der HACS-/Hassfest-Lauf für den Branch ist erfolgreich; der CI-Workflow gegen `main` wurde noch nicht über einen Pull Request ausgeführt.
+- CI, HACS und Hassfest sind für den Branch erfolgreich durchgelaufen.
 - HACS zeigt produktiv zuletzt den Status „Ausstehende Aktualisierung“; eine Aktualisierung wurde nicht durchgeführt.
 - Die Historie ist nur laufzeitbezogen und nicht restartpersistent.
 - Es gibt keine vollständige Screenreader-Abnahme mit einem realen Screenreader.
@@ -1010,7 +1010,7 @@ Bestanden:
 
 ### HACS-Validierung
 
-GitHub Actions zeigen für `v0.9.2` erfolgreiche HACS-Validierung. Der Branch-Lauf für Commit `67b73ac` wurde remote ausgeführt; sowohl `hacs` als auch `hassfest` endeten erfolgreich.
+GitHub Actions zeigen für `v0.9.2` erfolgreiche HACS-Validierung. Die Branch-Läufe für den 0.9.9-Stand endeten für HACS und Hassfest erfolgreich. Der vollständige CI-Lauf für Commit `ef8032a` endete ebenfalls erfolgreich.
 
 ### GitHub Actions
 
@@ -1019,7 +1019,7 @@ Remote selbst überprüft:
 - `v0.9.2` CI: erfolgreich.
 - `v0.9.2` HACS-Validierung: erfolgreich.
 - Historische `v1.0.1`, `v1.0.2`, `v1.0.3` CI-/HACS-Läufe: überwiegend erfolgreich; frühere fehlgeschlagene Zwischenläufe sind ebenfalls vorhanden.
-- 0.9.9-Branch: HACS-/Hassfest-Lauf erfolgreich; vollständiger CI-Lauf gegen `main` noch nicht ausgeführt.
+- 0.9.9-Branch: CI-, HACS- und Hassfest-Läufe erfolgreich.
 
 ## O. GitHub und Releases
 
@@ -1236,7 +1236,7 @@ Ein **NO-GO** für die lokale Weiterentwicklung wäre ebenfalls nicht angemessen
 | Bestehende Bridge lokal verändert | Nein |
 | GitHub-0.9.9-Release | Nicht vorhanden |
 | Remote-HACS-/Hassfest-Prüfung für 0.9.9 | Bestanden |
-| Remote-CI für 0.9.9 | Noch nicht ausgeführt |
+| Remote-CI für 0.9.9 | Bestanden |
 | Produktive Version | Zuletzt dokumentiert 0.9.2 |
 | Produktive 0.9.9-Aktualisierung | Nicht durchgeführt |
 | Apple-Home-Pairing-Erhalt | Nicht unabhängig verifiziert |
@@ -1244,7 +1244,7 @@ Ein **NO-GO** für die lokale Weiterentwicklung wäre ebenfalls nicht angemessen
 ## Konkreter nächster Schritt
 
 1. Mac entsperren und authentifizierte produktive Bestandsaufnahme wiederholen.
-2. Pull Request gegen `main` erstellen und den vollständigen CI-Lauf abwarten.
+2. Pull Request beziehungsweise Review gegen `main` durchführen.
 3. Versionsstrategie und Release-Tag eindeutig festlegen.
 4. Release erstellen.
 5. HACS-Zielversion prüfen.

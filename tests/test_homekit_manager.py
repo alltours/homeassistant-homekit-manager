@@ -23,6 +23,7 @@ from custom_components.homekit_manager.grouping import build_area_views, build_d
 from custom_components.homekit_manager.diagnostics import build_diagnostics, diagnostics_summary
 from custom_components.homekit_manager.device_config import build_preview
 from custom_components.homekit_manager.rules import evaluate_rules
+from custom_components.homekit_manager.history import compare_history, make_history_entry, restore_as_draft
 
 class HomeKitManagerTests(unittest.TestCase):
     def setUp(self):
@@ -85,6 +86,17 @@ class HomeKitManagerTests(unittest.TestCase):
         self.assertEqual(conflict["decisions"][0]["decision"], "unknown")
         self.assertEqual(len(conflict["conflicts"]), 1)
         self.assertFalse(conflict["applied"])
+
+    def test_history_compare_and_restore_never_apply(self):
+        before = {"schema_version": 1, "bridges": {"b": {"policy": "explicit_overrides", "entities": {"light.a": "include"}}}}
+        after = {"schema_version": 1, "bridges": {"b": {"policy": "explicit_overrides", "entities": {"light.a": "exclude", "sensor.b": "include"}}}}
+        diff = compare_history(before, after)
+        self.assertEqual(diff["summary"]["changed"], 1)
+        self.assertEqual(diff["summary"]["added"], 1)
+        entry = make_history_entry(after)
+        restored = restore_as_draft(entry)
+        self.assertTrue(restored["restored"])
+        self.assertFalse(restored["applied"])
 
     def test_state_only_entities_are_visible_with_unknown_registry_metadata(self):
         result = build_inventory(

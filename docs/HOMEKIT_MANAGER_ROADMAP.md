@@ -58,6 +58,13 @@ Manuelle Entscheidungen haben Vorrang; widersprüchliche Regeln werden als Konfl
 gemeldet. Die Auswertung ist ausschließlich Vorschlag und setzt niemals automatisch
 HomeKit-Optionen oder YAML.
 
+## Phase 0.9.8 – Konfigurationshistorie und Wiederherstellung
+
+Auf `feature/homekit-manager-0.9.8` lokal implementiert. Gespeicherte Desired-State-
+Entwürfe werden als begrenzte, redigierte Historieneinträge geführt. Vergleiche zeigen
+hinzugefügte, entfernte und geänderte Entitäten. Eine Wiederherstellung liefert nur
+einen neuen Entwurf; `applied` bleibt immer `False`.
+
 ## Status
 
 Stand: 26.10.2026. Die produktive Home-Assistant-Installation enthält den korrigierten

@@ -7,7 +7,7 @@ from .const import (
     VALIDATE_DRAFT_COMMAND, YAML_STATUS_COMMAND, PREPARE_OPTIONS_DIFF_COMMAND,
     RECONCILE_COMMAND, EXPORT_COMMAND,
     MODE_STATUS_COMMAND, SET_MODE_COMMAND,
-    DEVICES_COMMAND, AREAS_COMMAND, DIAGNOSTICS_COMMAND, DEVICE_PREVIEW_COMMAND, RULES_PREVIEW_COMMAND,
+    DEVICES_COMMAND, AREAS_COMMAND, DIAGNOSTICS_COMMAND, DEVICE_PREVIEW_COMMAND, RULES_PREVIEW_COMMAND, HISTORY_COMMAND, HISTORY_RESTORE_COMMAND,
 )
 from .homekit_writer import HomeKitWriteError
 from .yaml_store import YamlStoreError, YamlValidationError, YamlVersionConflict
@@ -86,6 +86,25 @@ async def websocket_rules_preview(hass, connection, msg):
         connection.send_result(msg["id"], evaluate_rules(coordinator.inventory, msg["rules"], msg.get("manual")))
     except ValueError as err:
         connection.send_error(msg["id"], "invalid_rules", str(err))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required("type"): HISTORY_COMMAND})
+@websocket_api.async_response
+async def websocket_history(hass, connection, msg):
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    connection.send_result(msg["id"], coordinator.history())
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required("type"): HISTORY_RESTORE_COMMAND, probatio.Required("index"): int})
+@websocket_api.async_response
+async def websocket_history_restore(hass, connection, msg):
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    try:
+        connection.send_result(msg["id"], coordinator.restore_history(msg["index"]))
+    except ValueError as err:
+        connection.send_error(msg["id"], "not_found", str(err))
 
 
 @websocket_api.require_admin
@@ -203,6 +222,6 @@ def async_register_websocket_commands(hass, coordinator) -> None:
     """Register read-only commands; HA WebSocket auth is required by default."""
     websocket_api.async_register_command(hass, websocket_inventory)
     websocket_api.async_register_command(hass, websocket_bridges)
-    for handler in (websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_mode_status, websocket_set_mode, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_prepare_options_diff, websocket_reconcile, websocket_export):
+    for handler in (websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_mode_status, websocket_set_mode, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_prepare_options_diff, websocket_reconcile, websocket_export):
         websocket_api.async_register_command(hass, handler)
 

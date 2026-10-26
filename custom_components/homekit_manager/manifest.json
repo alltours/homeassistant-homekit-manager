@@ -1,0 +1,11 @@
+{
+  "domain": "homekit_manager",
+  "name": "HomeKit Manager",
+  "version": "1.0.1",
+  "requirements": [],
+  "dependencies": ["frontend"],
+  "codeowners": [],
+  "config_flow": true,
+  "integration_type": "hub"
+}
+

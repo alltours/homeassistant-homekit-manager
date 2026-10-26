@@ -1,0 +1,163 @@
+"""Home Assistant Core integration tests for the HomeKit Manager."""
+
+import pytest
+
+from homeassistant import config_entries
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant import loader
+from homeassistant.components import websocket_api
+from homeassistant.components import frontend
+from homeassistant.helpers import area_registry, device_registry, entity_registry
+
+from custom_components.homekit_manager.homekit_writer import (
+    HomeKitWriteDisabled,
+    HomeKitWriter,
+)
+
+
+async def test_homekit_manager_discovery_and_registration(
+    hass, enable_custom_integrations
+):
+    """Tests A/B: discovery finds the domain and registration creates a handler."""
+    integrations = await loader.async_get_custom_components(hass)
+    assert "homekit_manager" in integrations
+
+    result = await hass.config_entries.flow.async_init(
+        "homekit_manager",
+        context={"source": config_entries.SOURCE_USER},
+    )
+
+    assert result["type"] == "form"
+    assert result["handler"] == "homekit_manager"
+    assert result["step_id"] == "user"
+
+
+async def test_homekit_manager_user_flow_and_setup(hass, enable_custom_integrations):
+    """Tests C/D/E/G: user flow, entry creation, setup, and regression."""
+    result = await hass.config_entries.flow.async_init(
+        "homekit_manager",
+        context={"source": config_entries.SOURCE_USER},
+    )
+
+    assert result["type"] == "form"
+    assert result["handler"] == "homekit_manager"
+    assert result["step_id"] == "user"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {}
+    )
+
+    assert result["type"] == "create_entry"
+    assert result["title"] == "HomeKit Manager"
+    entry = hass.config_entries.async_entries("homekit_manager")[0]
+    # In Core 2026.10.4, async_configure() sets up a newly created entry before
+    # returning the create_entry result. A second async_setup() is forbidden.
+    assert entry.state is ConfigEntryState.LOADED
+    await hass.async_block_till_done()
+
+
+async def test_homekit_manager_writer_stays_disabled(hass, enable_custom_integrations):
+    """Test F: the production HomeKit writer rejects application."""
+    writer = HomeKitWriter(hass)
+    with pytest.raises(HomeKitWriteDisabled):
+        await writer.async_apply(None)
+
+
+async def test_homekit_manager_entry_lifecycle(hass, enable_custom_integrations):
+    """Setup and unload use the HA config-entry lifecycle without side effects."""
+    result = await hass.config_entries.flow.async_init(
+        "homekit_manager",
+        context={"source": config_entries.SOURCE_USER},
+    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    entry = hass.config_entries.async_entries("homekit_manager")[0]
+    assert result["type"] == "create_entry"
+    assert entry.state is ConfigEntryState.LOADED
+    assert "homekit_manager" in hass.data
+    assert frontend.async_panel_exists(hass, "homekit_manager")
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    assert "homekit_manager" not in hass.data
+    assert not frontend.async_panel_exists(hass, "homekit_manager")
+
+
+async def test_homekit_manager_websocket_registration(hass, enable_custom_integrations):
+    """All manager commands are registered in the real HA WebSocket registry."""
+    result = await hass.config_entries.flow.async_init(
+        "homekit_manager",
+        context={"source": config_entries.SOURCE_USER},
+    )
+    await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    commands = hass.data[websocket_api.DOMAIN]
+    expected = {
+        "homekit_manager/inventory",
+        "homekit_manager/bridges",
+        "homekit_manager/yaml_status",
+        "homekit_manager/validate_draft",
+        "homekit_manager/preview",
+        "homekit_manager/save_draft",
+        "homekit_manager/prepare_options_diff",
+        "homekit_manager/reconcile",
+        "homekit_manager/export",
+    }
+    assert expected.issubset(commands)
+
+
+async def test_homekit_manager_is_singleton(hass, enable_custom_integrations):
+    """The central manager must not create a second config entry."""
+    first = await hass.config_entries.flow.async_init(
+        "homekit_manager", context={"source": config_entries.SOURCE_USER}
+    )
+    await hass.config_entries.flow.async_configure(first["flow_id"], {})
+    second = await hass.config_entries.flow.async_init(
+        "homekit_manager", context={"source": config_entries.SOURCE_USER}
+    )
+    assert second["type"] == "abort"
+    assert second["reason"] == "already_configured"
+
+
+async def test_homekit_manager_reads_real_registries(hass, enable_custom_integrations):
+    """The coordinator reads live HA registries and state values."""
+    result = await hass.config_entries.flow.async_init(
+        "homekit_manager", context={"source": config_entries.SOURCE_USER}
+    )
+    await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    manager_entry = hass.config_entries.async_entries("homekit_manager")[0]
+    device = device_registry.async_get(hass).async_get_or_create(
+        config_entry_id=manager_entry.entry_id,
+        identifiers={("test", "device-1")},
+        name="Test Device",
+    )
+    area = area_registry.async_get(hass).async_get_or_create("Test Area")
+    entity = entity_registry.async_get(hass).async_get_or_create(
+        "light", "test", "light-1", suggested_object_id="test_light", device_id=device.id,
+        original_name="Test Light",
+    )
+    entity_registry.async_get(hass).async_update_entity(entity.entity_id, area_id=area.id)
+    hass.states.async_set(entity.entity_id, "on", {"friendly_name": "Test Light"})
+    await hass.async_block_till_done()
+
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    await coordinator.async_refresh()
+    record = next(item for item in coordinator.inventory if item["entity_id"] == entity.entity_id)
+    assert record["area_name"] == "Test Area"
+    assert record["device_name"] == "Test Device"
+    assert record["available"] is True
+    assert coordinator.overview()["active_entities"] >= 1
+
+
+async def test_homekit_manager_inventory_websocket_round_trip(
+    hass, enable_custom_integrations, hass_ws_client
+):
+    """An authenticated administrator can read the inventory through HA WebSocket."""
+    result = await hass.config_entries.flow.async_init(
+        "homekit_manager", context={"source": config_entries.SOURCE_USER}
+    )
+    await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    client = await hass_ws_client()
+    await client.send_json_auto_id({"type": "homekit_manager/inventory"})
+    response = await client.receive_json()
+    assert response["type"] == "result"
+    assert response["success"] is True
+    assert "overview" in response["result"]
+    assert "entities" in response["result"]

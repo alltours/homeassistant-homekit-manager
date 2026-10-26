@@ -1,0 +1,8 @@
+# Isolated integration-test dependencies for Phase 5B.10.
+# Install with the project-local Python 3.14+ environment; Home Assistant Core
+# 2026.10.4 declares Python >=3.14.2 and its frontend package is a runtime
+# requirement of the frontend integration.
+homeassistant==2026.10.4
+home-assistant-frontend==20260930.5
+pytest
+pytest-homeassistant-custom-component

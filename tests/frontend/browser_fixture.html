@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>HomeKit Manager browser fixture</title>
+    <script type="module">
+      import "../../custom_components/homekit_manager/www/homekit-manager.js";
+
+      const entities = [
+        {
+          entity_id: "light.kitchen",
+          name: "Kitchen light",
+          area_name: "Kitchen",
+          device_name: "Kitchen device",
+          integration_domain: "demo",
+          domain: "light",
+          available: true,
+          compatibility: { status: "supported", expected_type: "Lightbulb" },
+          homekit: { configured_by_filter: true, filter_reason: "domain_include", published: "unknown" },
+        },
+        {
+          entity_id: "sensor.temperature",
+          name: "Temperature",
+          area_name: "Hall",
+          device_name: "Hall device",
+          integration_domain: "demo",
+          domain: "sensor",
+          available: true,
+          compatibility: { status: "supported", expected_type: "TemperatureSensor" },
+          homekit: { configured_by_filter: false, filter_reason: "not_in_include", published: "unknown" },
+        },
+      ];
+      const hass = {
+        states: { "light.kitchen": {}, "sensor.temperature": {} },
+        callWS: async (message) => {
+          if (new URLSearchParams(window.location.search).has("error")) {
+            throw new Error("Fixture-WebSocket nicht erreichbar");
+          }
+          if (message.type === "homekit_manager/inventory") {
+            return {
+              overview: {
+                total_entities: entities.length,
+                active_entities: entities.length,
+                disabled_entities: 0,
+                unavailable_entities: 0,
+                compatible_entities: entities.length,
+                configured_entities: 1,
+                fingerprint: "fixture-fingerprint",
+              },
+              entities,
+            };
+          }
+          if (message.type === "homekit_manager/bridges") {
+            return { bridges: [{ entry_id: "fixture-bridge", title: "Fixture Bridge", mode: "bridge", filter: { include_domains: ["light"] } }] };
+          }
+          if (message.type === "homekit_manager/yaml_status") {
+            return { exists: false, valid: true, document: { schema_version: 1, bridges: {} }, is_applied: false };
+          }
+          if (message.type === "homekit_manager/validate_draft") {
+            return { valid: true, warnings: [], document: message.document, fingerprint: "fixture-fingerprint" };
+          }
+          if (message.type === "homekit_manager/preview") {
+            return {
+              valid: true,
+              changes: [{ entity_id: "light.kitchen", current: "included", desired: "excluded", action: "remove", reason: "explicit_exclude" }],
+              summary: { blocked: false },
+              fingerprint: "fixture-fingerprint",
+            };
+          }
+          if (message.type === "homekit_manager/export") {
+            return { format: "yaml", content: "schema_version: 1\nbridges: {}\n" };
+          }
+          if (message.type === "homekit_manager/save_draft") {
+            return { exists: true, valid: true, document: message.document, is_applied: false };
+          }
+          throw new Error(`Unsupported fixture command: ${message.type}`);
+        },
+      };
+      window.addEventListener("DOMContentLoaded", () => {
+        document.querySelector("homekit-manager-panel").hass = hass;
+      }, { once: true });
+    </script>
+  </head>
+  <body style="margin:0;background:#111;color:#fff">
+    <homekit-manager-panel></homekit-manager-panel>
+  </body>
+</html>

@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          cache: pip
+          cache-dependency-path: tests/integration/requirements-ha-2026.10.4.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Python test dependencies
+        run: python -m pip install -r tests/integration/requirements-ha-2026.10.4.txt
+      - name: Validate JSON and integration structure
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for path in [Path('custom_components/homekit_manager/manifest.json'), Path('custom_components/homekit_manager/strings.json'), Path('hacs.json')]:
+              json.loads(path.read_text())
+          for path in Path('custom_components/homekit_manager/translations').glob('*.json'):
+              json.loads(path.read_text())
+          required = ['__init__.py', 'manifest.json', 'config_flow.py', 'panel.py', 'websocket.py', 'www/homekit-manager.js']
+          missing = [name for name in required if not (Path('custom_components/homekit_manager') / name).is_file()]
+          if missing:
+              raise SystemExit(f'Missing integration files: {missing}')
+          PY
+      - name: Python syntax
+        run: python -m compileall -q custom_components tests
+      - name: Static read-only safety checks
+        run: |
+          ! grep -R "apply_enabled[[:space:]]*=[[:space:]]*True" -n custom_components
+          grep -R "HomeKitWriteDisabled" -n custom_components/homekit_manager/homekit_writer.py
+          ! grep -R "async_update_entry\|async_reload\|pairing" -n custom_components/homekit_manager/homekit_writer.py
+      - name: Python tests
+        run: pytest -c tests/integration/pytest.ini -q tests/integration tests/test_homekit_manager.py
+      - name: Frontend tests
+        run: |
+          node --check custom_components/homekit_manager/www/homekit-manager.js
+          node tests/frontend/test_panel.mjs
+

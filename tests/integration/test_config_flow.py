@@ -193,6 +193,12 @@ async def test_homekit_manager_mode_status_is_conservative(
     assert status["active_mode"] in {"yaml", "homekit_bridge", "homekit_manager"}
     assert status["transition"] == "stable"
     assert all(item["status"] in {"safe", "manual_required"} for item in status["matrix"].values())
+    for direction in (
+        "yaml->homekit_bridge", "homekit_bridge->yaml",
+        "homekit_bridge->homekit_manager", "homekit_manager->homekit_bridge",
+        "yaml->homekit_manager", "homekit_manager->yaml",
+    ):
+        assert status["matrix"][direction]["status"] == "manual_required"
 
 
 async def test_homekit_manager_devices_and_areas_websocket_round_trip(

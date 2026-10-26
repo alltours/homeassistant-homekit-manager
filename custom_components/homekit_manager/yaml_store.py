@@ -11,12 +11,18 @@ import os
 import re
 import tempfile
 import threading
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
 import yaml
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows development fallback
+    fcntl = None
 
 from .const import SCHEMA_VERSION
 
@@ -133,6 +139,59 @@ class YamlStore:
         self.path = Path(path)
         self._lock = _lock_for(self.path)
 
+    @property
+    def backup_path(self) -> Path:
+        """Return the side-by-side backup path used before replacement."""
+        return self.path.with_name(f"{self.path.name}.bak")
+
+    @property
+    def lock_path(self) -> Path:
+        """Return the cross-process lock path for this store."""
+        return self.path.with_name(f".{self.path.name}.lock")
+
+    @contextmanager
+    def _file_lock(self):
+        """Serialize writers across threads and independent processes."""
+        if fcntl is None:
+            yield
+            return
+        self.lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with self.lock_path.open("a+b") as lock_file:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+    def _backup_current(self, content: bytes) -> None:
+        """Atomically preserve the current file before replacing it."""
+        if not self.path.exists():
+            return
+        temporary: str | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "wb", dir=self.path.parent, prefix=f".{self.backup_path.name}.", suffix=".tmp", delete=False
+            ) as backup_file:
+                temporary = backup_file.name
+                backup_file.write(content)
+                backup_file.flush()
+                os.fsync(backup_file.fileno())
+            os.replace(temporary, self.backup_path)
+            temporary = None
+            try:
+                mode = self.path.stat().st_mode & 0o777
+                os.chmod(self.backup_path, mode)
+            except OSError:
+                pass
+        except OSError as err:
+            raise YamlWriteError(f"Sicherung konnte nicht erstellt werden: {err}") from err
+        finally:
+            if temporary:
+                try:
+                    os.unlink(temporary)
+                except FileNotFoundError:
+                    pass
+
     def _read_bytes(self) -> bytes:
         try:
             return self.path.read_bytes()
@@ -165,18 +224,22 @@ class YamlStore:
     def save(self, document: Mapping[str, Any], expected_file_version: str | None) -> YamlSnapshot:
         """Validate and atomically save, refusing stale or invalid overwrites."""
         content = _dump(document)
-        with self._lock:
+        with self._lock, self._file_lock():
             current = self._read_bytes()
             current_version = self._version_for_bytes(current)
             if self.path.exists() and not current:
                 raise YamlWriteError("Vorhandene leere YAML-Datei wird aus Sicherheitsgründen nicht überschrieben")
-            if self.path.exists() and not self.load().valid:
-                raise YamlWriteError("Vorhandene ungültige YAML-Datei wird nicht überschrieben")
+            if self.path.exists():
+                try:
+                    validate_document(yaml.safe_load(current.decode("utf-8")))
+                except (UnicodeDecodeError, yaml.YAMLError, YamlValidationError) as err:
+                    raise YamlWriteError("Vorhandene ungültige YAML-Datei wird nicht überschrieben") from err
             if current_version != expected_file_version:
                 raise YamlVersionConflict("Die YAML-Datei wurde seit der Vorschau verändert")
             if current == content:
-                return self.load()
+                return YamlSnapshot(validate_document(document), current_version, True, True, None, self._mtime())
             self.path.parent.mkdir(parents=True, exist_ok=True)
+            self._backup_current(current)
             temp_name: str | None = None
             try:
                 with tempfile.NamedTemporaryFile("wb", dir=self.path.parent, prefix=f".{self.path.name}.", suffix=".tmp", delete=False) as temp:
@@ -204,4 +267,4 @@ class YamlStore:
                         os.unlink(temp_name)
                     except FileNotFoundError:
                         pass
-            return self.load()
+            return YamlSnapshot(validate_document(document), self._version_for_bytes(content), True, True, None, self._mtime())

@@ -76,7 +76,7 @@ jobs:
           grep -R "SOURCE_USER\|allow_production\|async_update_entry" -n custom_components/homekit_manager/homekit_writer.py
           ! grep -R "async_reload\|\.storage\|pairing" -n custom_components/homekit_manager/homekit_writer.py
       - name: Python tests
-        run: pytest -c tests/integration/pytest.ini -q tests/integration tests/test_homekit_manager.py
+        run: pytest -c tests/integration/pytest.ini -q tests/integration tests/test_homekit_manager.py tests/test_config_source.py
       - name: Frontend tests
         run: |
           node --check custom_components/homekit_manager/www/homekit-manager.js

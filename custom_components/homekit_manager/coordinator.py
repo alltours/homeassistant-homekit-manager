@@ -76,7 +76,8 @@ class HomeKitManagerCoordinator:
             manager_file = config_path("homekit_manager.yaml")
             def _read_sources():
                 try:
-                    text = open(configuration_file, encoding="utf-8").read()
+                    with open(configuration_file, encoding="utf-8") as configuration_stream:
+                        text = configuration_stream.read()
                 except OSError:
                     text = ""
                 try:

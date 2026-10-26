@@ -37,6 +37,7 @@ Noch nicht vollständig nachgewiesen sind:
   zugängliche Beschriftungen beziehungsweise tastaturbedienbare Controls
 - aktive Registerkarte, Ladezustand und Statusmeldungen sind für assistive Technologien
   semantisch ausgezeichnet
+- die Hauptnavigation verwendet `tablist`-/`tab`-Semantik mit `aria-selected`
 - mobile Layout-Regeln für schmale Ansichten sind statisch im Frontend enthalten und im
   Verhaltenstest auf Vorhandensein geprüft
 - die Browser-Fixture liefert die seit 0.9.3 verwendeten read-only-Endpunkte für Geräte,
@@ -55,7 +56,7 @@ Noch nicht vollständig nachgewiesen sind:
 - Frontend-Verhaltenstest: bestanden.
 - Home-Assistant-Integrationstests und Unit-Tests: 42 bestanden.
 - Lokales Installationsarchiv `homekit-manager-0.9.9.zip`: 30 Dateien, SHA-256
-  `06f5fd74455bece492beb9067f0789d86e1e86b2d3d364da268346b7f2d2822d`
+  `1cff20e3c492912d60c303996fc30ee6c481ea12b17e672381a0008bf50d1628`
 - Echte Chromium-Fixture-Prüfung: bestanden; die Fixture wurde über einen kurzlebigen
   lokalen HTTP-Server geladen. Erfolgssicht, Fehleranzeige und leere Browserkonsole wurden
   geprüft.

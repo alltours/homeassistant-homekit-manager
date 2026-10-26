@@ -35,6 +35,9 @@ Ergebnisse:
   Konfiguration und Änderungen renderten ohne Browserfehler. Der absichtlich ausgelöste
   WebSocket-Fehlerzustand wurde sichtbar angezeigt und anschließend der Erfolgszustand
   erneut bestätigt.
+- Chromium-Mobile-Screenshot: **bestanden** bei einer Fenstergröße von `500x844`. Zwei
+  Karten-Spalten bleiben innerhalb des Viewports lesbar; die Tab-Leiste ist kontrolliert
+  horizontal scrollbar.
 - Gemeinsame Python-Coverage der Unit- und HA-Integrationstests: **83 %**. Sie ist
   diagnostisch, kein künstlicher Abnahmewert; die nicht ausgeführten Pfade sind überwiegend
   Fehlerzweige und die bewusst deaktivierte produktive Anwendung.

@@ -39,6 +39,8 @@ Noch nicht vollständig nachgewiesen sind:
   Verhaltenstest auf Vorhandensein geprüft
 - die Browser-Fixture liefert die seit 0.9.3 verwendeten read-only-Endpunkte für Geräte,
   Bereiche, Diagnose und simulierte Gerätevorschau
+- der echte Chromium-Mobile-Lauf mit 500px CSS-Fensterbreite zeigt zwei lesbare Karten-
+  spalten; die Tab-Leiste bleibt kontrolliert horizontal scrollbar
 - vollständige mobile Browserabnahme
 - vollständige Screenreader-Abnahme
 - vollständige Übersetzungsabdeckung aller UI-Texte
@@ -53,5 +55,7 @@ Noch nicht vollständig nachgewiesen sind:
 - Echte Chromium-Fixture-Prüfung: bestanden; die Fixture wurde über einen kurzlebigen
   lokalen HTTP-Server geladen. Erfolgssicht, Fehleranzeige und leere Browserkonsole wurden
   geprüft.
+- Chromium-Mobile-Screenshot: bestanden bei `500x844`; die Karten bleiben innerhalb des
+  Viewports lesbar und die Tab-Leiste scrollt horizontal.
 
 Die produktive Installation wurde nicht verändert.

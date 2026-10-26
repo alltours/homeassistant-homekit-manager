@@ -15,7 +15,7 @@ from custom_components.homekit_manager.inventory import build_inventory
 from custom_components.homekit_manager.draft import serialize_draft
 from custom_components.homekit_manager.yaml_store import YamlStore, YamlValidationError, YamlVersionConflict, YamlWriteError
 from custom_components.homekit_manager.change_planner import plan_changes
-from custom_components.homekit_manager.homekit_writer import HomeKitWriter, HomeKitWriteBlocked, HomeKitWriteDisabled, build_options_diff
+from custom_components.homekit_manager.homekit_writer import OptionsDiff, HomeKitWriter, HomeKitWriteBlocked, HomeKitWriteDisabled, build_options_diff
 from custom_components.homekit_manager.reconcile import reconcile_desired_state
 from custom_components.homekit_manager.exporter import export_desired_state
 from custom_components.homekit_manager.homekit_reader import read_homekit_entries
@@ -354,6 +354,54 @@ class HomeKitManagerTests(unittest.TestCase):
         with self.assertRaises(HomeKitWriteDisabled):
             asyncio.run(HomeKitWriter(fake_hass, test_environment=True).async_apply(SimpleNamespace()))
         self.assertEqual(calls, [])
+
+    def test_isolated_writer_applies_only_version_bound_options_diff(self):
+        entry = SimpleNamespace(
+            domain="homekit",
+            entry_id="b",
+            data={"name": "Bridge", "port": 21063},
+            options={"filter": {"include_entities": ["light.a"]}},
+            state=SimpleNamespace(value="loaded"),
+        )
+        updates = []
+
+        def update_entry(updated, *, options):
+            updated.options = options
+            updates.append(options)
+
+        hass = SimpleNamespace(
+            config_entries=SimpleNamespace(
+                async_get_entry=lambda entry_id: entry if entry_id == "b" else None,
+                async_update_entry=update_entry,
+            ),
+            async_block_till_done=lambda: asyncio.sleep(0),
+        )
+        diff = OptionsDiff(
+            "b",
+            {"filter": {"include_entities": ["light.a"]}},
+            {"filter": {"include_entities": ["light.a", "light.b"]}},
+            ("filter",),
+            ("light.b",),
+            {"summary": {"blocked": False}},
+        )
+        result = asyncio.run(HomeKitWriter(hass, test_environment=True, apply_enabled=True).async_apply(diff))
+        self.assertTrue(result["applied"])
+        self.assertEqual(result["activation"], "core_update_listener")
+        self.assertEqual(updates[0]["filter"]["include_entities"], ["light.a", "light.b"])
+
+    def test_isolated_writer_blocks_stale_options_diff(self):
+        entry = SimpleNamespace(
+            domain="homekit", entry_id="b", data={},
+            options={"filter": {"include_entities": ["light.changed"]}},
+            state=SimpleNamespace(value="loaded"),
+        )
+        hass = SimpleNamespace(
+            config_entries=SimpleNamespace(async_get_entry=lambda _entry_id: entry),
+            async_block_till_done=lambda: asyncio.sleep(0),
+        )
+        diff = OptionsDiff("b", {"filter": {"include_entities": ["light.a"]}}, {"filter": {"include_entities": ["light.b"]}}, ("filter",), ("light.b",), {"summary": {"blocked": False}})
+        with self.assertRaises(HomeKitWriteBlocked):
+            asyncio.run(HomeKitWriter(hass, test_environment=True, apply_enabled=True).async_apply(diff))
 
     def test_reader_is_read_only_and_redacts_sensitive_values(self):
         entry = SimpleNamespace(

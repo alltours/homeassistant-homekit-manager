@@ -12,6 +12,7 @@ from homeassistant.helpers import area_registry, device_registry, entity_registr
 from custom_components.homekit_manager.homekit_writer import (
     HomeKitWriteDisabled,
     HomeKitWriter,
+    OptionsDiff,
 )
 
 
@@ -61,6 +62,35 @@ async def test_homekit_manager_writer_stays_disabled(hass, enable_custom_integra
     writer = HomeKitWriter(hass)
     with pytest.raises(HomeKitWriteDisabled):
         await writer.async_apply(None)
+
+
+async def test_isolated_core_options_adapter_updates_real_config_entries(hass):
+    """The gated adapter exercises HA's real ConfigEntries update mechanism."""
+    entry = config_entries.ConfigEntry(
+        version=1,
+        minor_version=1,
+        domain="homekit",
+        title="Isolated Test Bridge",
+        data={"name": "Isolated Test Bridge", "port": 21063},
+        options={"filter": {"include_entities": ["light.before"]}},
+        source=config_entries.SOURCE_USER,
+        entry_id="isolated-homekit-entry",
+        unique_id=None,
+        discovery_keys={},
+        subentries_data=None,
+    )
+    await hass.config_entries.async_add(entry)
+    diff = OptionsDiff(
+        entry.entry_id,
+        {"filter": {"include_entities": ["light.before"]}},
+        {"filter": {"include_entities": ["light.before", "light.after"]}},
+        ("filter",),
+        ("light.after",),
+        {"summary": {"blocked": False}},
+    )
+    result = await HomeKitWriter(hass, test_environment=True, apply_enabled=True).async_apply(diff)
+    assert result["applied"] is True
+    assert hass.config_entries.async_get_entry(entry.entry_id).options["filter"]["include_entities"] == ["light.before", "light.after"]
 
 
 async def test_homekit_manager_entry_lifecycle(hass, enable_custom_integrations):

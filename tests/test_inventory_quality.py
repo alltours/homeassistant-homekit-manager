@@ -45,7 +45,7 @@ def test_synthetic_129_vs_121_is_composite_not_assumed_corruption():
     assert result["missing_reference_ids"] == []
 
 
-def test_six_exclusive_availability_states_and_missing_registry_evidence():
+def test_exclusive_availability_and_separate_missing_device_evidence():
     devices = {"d": NS(id="d", name="Device", area_id=None, disabled_by=None)}
     registry = Registry(devices)
     entries = {f"sensor.{name}": entry(f"sensor.{name}", device_id, disabled)
@@ -59,9 +59,19 @@ def test_six_exclusive_availability_states_and_missing_registry_evidence():
     inventory = build_inventory({"entities": entries}, registry, {}, states)
     assert {item.entity_id.split(".")[1]: item.availability_status for item in inventory} == {
         "available": "available", "unavailable": "unavailable", "unknown": "unknown",
-        "no_state": "no_state", "disabled": "disabled", "orphaned": "orphaned"}
+        "no_state": "no_state", "disabled": "disabled", "orphaned": "available"}
+    unresolved = next(item for item in inventory if item.entity_id == "sensor.orphaned")
+    assert unresolved.device_registry_status == "missing"
+    assert unresolved.registry_entry_present is True
+    assert unresolved.state_present is True
+    assert unresolved.available is True
     assert build_inventory({"entities": {"sensor.orphaned": entries["sensor.orphaned"]}},
                            None, {}, {"sensor.orphaned": state("42")})[0].availability_status == "available"
+    no_state = build_inventory({"entities": {"sensor.no_state": entry("sensor.no_state", "gone")}},
+                               registry, {}, {})[0]
+    assert no_state.availability_status == "no_state"
+    assert no_state.device_registry_status == "missing"
+    assert no_state.state_present is False
     devices["d"].disabled_by = "user"
     assert build_inventory({"entities": {"sensor.available": entries["sensor.available"]}},
                            registry, {}, {"sensor.available": state("42")})[0].availability_status == "disabled"

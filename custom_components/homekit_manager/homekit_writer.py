@@ -95,8 +95,30 @@ def _candidate_filter(current: Mapping[str, Any], desired: Mapping[str, str]) ->
     return result
 
 
+def _unlisted_entity_default(config: Mapping[str, Any]) -> bool:
+    """Core 2026.10.4's selection of an entity matching no listed rule.
+
+    Entity-only edits must not switch the default for unobserved entities.
+    Inventory comparison alone cannot detect that future or unloaded entities
+    would suddenly be published after a filter-case transition.
+    """
+    has_include = any(config.get(key) for key in ("include_entities", "include_domains", "include_entity_globs"))
+    has_exclude = any(config.get(key) for key in ("exclude_entities", "exclude_domains", "exclude_entity_globs"))
+    if not has_include:
+        return True
+    if not has_exclude:
+        return False
+    if config.get("include_domains") or config.get("include_entity_globs"):
+        return False
+    if config.get("exclude_domains") or config.get("exclude_entity_globs"):
+        return True
+    return False
+
+
 def _verify_scope(before: Mapping[str, Any], after: Mapping[str, Any], inventory: list[Mapping[str, Any]], desired: Mapping[str, str]) -> None:
     """Ensure non-targeted entities keep the exact effective filter result."""
+    if _unlisted_entity_default(before) != _unlisted_entity_default(after):
+        raise HomeKitWriteBlocked("Filteränderung würde die Standardauswahl unbekannter Entitäten verändern")
     for item in inventory:
         entity_id = item.get("entity_id")
         if not entity_id or entity_id in desired:

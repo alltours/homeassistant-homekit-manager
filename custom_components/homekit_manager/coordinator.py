@@ -275,7 +275,7 @@ class HomeKitManagerCoordinator:
             "unavailable_entities": sum(not item["available"] for item in self.inventory),
             "device_count": len({item["device_id"] for item in self.inventory if item["device_id"]}),
             "device_reconciliation": self.device_reconciliation,
-            "availability_counts": {status: sum(item.get("availability_status") == status for item in self.inventory) for status in ("available", "unavailable", "unknown", "no_state", "disabled", "orphaned")},
+            "availability_counts": {status: sum(item.get("availability_status") == status for item in self.inventory) for status in ("available", "unavailable", "unknown", "no_state", "disabled")},
             "area_count": len({item["area_id"] for item in self.inventory if item["area_id"]}),
             "compatible_entities": compatible,
             "configured_entities": configured if filter_known else None,

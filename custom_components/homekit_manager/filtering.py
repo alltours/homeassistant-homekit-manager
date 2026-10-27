@@ -29,7 +29,13 @@ def evaluate_filter(entity_id: str, entity_category: str | None = None,
                     hidden_by: str | None = None,
                     config: Mapping[str, Any] | None = None,
                     core_filter: Any = None) -> FilterResult:
-    """Mirror HA include/exclude precedence for supported filter keys."""
+    """Mirror Core 2026.10.4's six filter cases and HomeKit registry gate.
+
+    In particular, an entity-only include combined with a domain/glob exclude
+    does *not* imply that all other entities are excluded. Core treats that as
+    its fourth mixed-filter case. The registry gate in HomeKit's
+    ``async_configure_accessories`` runs after the EntityFilter predicate.
+    """
     if config is None:
         return FilterResult(None, "filter_unavailable")
     includes = _list(config, "include_entities")
@@ -39,32 +45,54 @@ def evaluate_filter(entity_id: str, entity_category: str | None = None,
     include_globs = _list(config, "include_entity_globs")
     exclude_globs = _list(config, "exclude_entity_globs")
     domain = entity_id.split(".", 1)[0]
-    if entity_id in includes:
-        result = FilterResult(True, "explicit_include")
-        return _apply_core_result(entity_id, result, entity_category, hidden_by, core_filter)
     has_include = bool(includes or include_domains or include_globs)
     has_exclude = bool(excludes or exclude_domains or exclude_globs)
-    if has_include:
-        if entity_id in excludes:
-            return _apply_core_result(entity_id, FilterResult(False, "explicit_exclude"), entity_category, hidden_by, core_filter)
-        if any(fnmatch.fnmatch(entity_id, p) for p in include_globs):
-            return _apply_core_result(entity_id, FilterResult(True, "glob_include"), entity_category, hidden_by, core_filter)
-        if any(fnmatch.fnmatch(entity_id, p) for p in exclude_globs):
-            return _apply_core_result(entity_id, FilterResult(False, "glob_exclude"), entity_category, hidden_by, core_filter)
+    include_glob = any(fnmatch.fnmatchcase(entity_id, p) for p in include_globs)
+    exclude_glob = any(fnmatch.fnmatchcase(entity_id, p) for p in exclude_globs)
+    if entity_id in includes:
+        result = FilterResult(True, "explicit_include")
+    elif not has_include and not has_exclude:
+        result = FilterResult(True, "default_include")
+    elif has_include and not has_exclude:
         if domain in include_domains:
-            return _apply_core_result(entity_id, FilterResult(True, "domain_include"), entity_category, hidden_by, core_filter)
-        return _apply_core_result(entity_id, FilterResult(False, "not_in_include"), entity_category, hidden_by, core_filter)
-    if has_exclude:
+            result = FilterResult(True, "domain_include")
+        elif include_glob:
+            result = FilterResult(True, "glob_include")
+        else:
+            result = FilterResult(False, "not_in_include")
+    elif not has_include:
         if entity_id in excludes:
-            return _apply_core_result(entity_id, FilterResult(False, "explicit_exclude"), entity_category, hidden_by, core_filter)
-        if any(fnmatch.fnmatch(entity_id, p) for p in exclude_globs):
-            return _apply_core_result(entity_id, FilterResult(False, "glob_exclude"), entity_category, hidden_by, core_filter)
+            result = FilterResult(False, "explicit_exclude")
+        elif domain in exclude_domains:
+            result = FilterResult(False, "domain_exclude")
+        elif exclude_glob:
+            result = FilterResult(False, "glob_exclude")
+        else:
+            result = FilterResult(True, "default_include")
+    elif include_domains or include_globs:
+        if entity_id in excludes:
+            result = FilterResult(False, "explicit_exclude")
+        elif include_glob:
+            result = FilterResult(True, "glob_include")
+        elif exclude_glob:
+            result = FilterResult(False, "glob_exclude")
+        elif domain in include_domains:
+            result = FilterResult(True, "domain_include")
+        else:
+            result = FilterResult(False, "not_in_include")
+    elif exclude_domains or exclude_globs:
         if domain in exclude_domains:
-            return _apply_core_result(entity_id, FilterResult(False, "domain_exclude"), entity_category, hidden_by, core_filter)
-        return _apply_core_result(entity_id, FilterResult(True, "default_include"), entity_category, hidden_by, core_filter)
-    if entity_category is not None or hidden_by is not None:
-        return _apply_core_result(entity_id, FilterResult(False, "default_category_or_hidden_exclude"), entity_category, hidden_by, core_filter)
-    return _apply_core_result(entity_id, FilterResult(True, "default_include"), entity_category, hidden_by, core_filter)
+            result = FilterResult(False, "domain_exclude")
+        elif exclude_glob:
+            result = FilterResult(False, "glob_exclude")
+        elif entity_id in excludes:
+            result = FilterResult(False, "explicit_exclude")
+        else:
+            result = FilterResult(True, "default_include")
+    else:
+        result = FilterResult(False, "not_in_include")
+    return _apply_core_result(entity_id, result, entity_category, hidden_by, core_filter,
+                              entity_id in includes or include_glob)
 
 
 def _apply_core_result(
@@ -73,18 +101,19 @@ def _apply_core_result(
     entity_category: str | None,
     hidden_by: str | None,
     core_filter: Any,
+    explicitly_included: bool,
 ) -> FilterResult:
     """Use the Core's predicate when available, preserving an audit reason."""
-    if core_filter is None:
-        return result
-    try:
-        included = bool(core_filter.get_filter()(entity_id))
-        explicitly_included = bool(core_filter.explicitly_included(entity_id))
-    except (AttributeError, TypeError, ValueError):
-        return result
-    if included and (entity_category is not None or hidden_by is not None) and not explicitly_included:
-        return FilterResult(False, "core_category_or_hidden_exclude")
-    if included == result.configured:
-        return result
-    return FilterResult(included, "core_filter_result")
+    if core_filter is not None:
+        try:
+            included = bool(core_filter.get_filter()(entity_id))
+        except (AttributeError, TypeError, ValueError):
+            included = result.configured
+        if included != result.configured:
+            result = FilterResult(included, "core_filter_result")
+    # Core's explicitly_included() accepts both an exact entity ID and an
+    # include glob. Domain includes alone do not bypass the registry gate.
+    if result.configured and (entity_category is not None or hidden_by is not None) and not explicitly_included:
+        return FilterResult(False, "category_or_hidden_exclude")
+    return result
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — 0.10.0 development (NO-GO)
+
+- Matched the six Core 2026.10.4 filter cases and HomeKit's hidden/category gate against the installed Core implementation.
+- Blocked entity-list edits that would change the default selection of unobserved entities.
+- Separated missing device references from current State availability, and aligned UI status counts with active search and filters.
+- Recorded verified baseline evidence, exact capability limits and remaining release gates in `docs/DEVELOPMENT_0_10_0.md`. Production writing remains disabled.
+
 ## 0.9.24 (2026-10-27)
 
 - Preserved native `SOURCE_USER` and YAML `SOURCE_IMPORT` as separate authoritative sources and retired all YAML↔UI source-migration actions for 0.9.24 and 0.10.0.

@@ -48,6 +48,31 @@ test('search keeps focus, supports areas, all filters work, and pagination reach
   await panel.getByRole('button', {name: 'Nächste Seite'}).click(); await expect(panel.locator('.entity-row')).toHaveCount(21);
 });
 
+test('availability totals follow current hits and missing device is evidence, not orphan proof', async ({ page }) => {
+  await page.goto('/tests/frontend/browser_fixture.html');
+  const panel = page.locator('homekit-manager-panel');
+  await panel.getByRole('tab', { name: 'Geräte', exact: true }).click();
+  await panel.locator('[data-group=entities]').click();
+  await panel.evaluate(element => {
+    Object.assign(element.entities[1], {
+      availability_status: 'no_state', state_present: false,
+      registry_entry_present: true, device_registry_status: 'missing',
+      area_source: 'device', disabled_by: null, hidden_by: null,
+    });
+    element.render();
+  });
+  await expect(panel.locator('.result-count')).toContainText('2 von 2');
+  await expect(panel.locator('p.muted').filter({ hasText: 'Ohne aktuellen State 1' })).toBeVisible();
+  await panel.getByRole('searchbox', { name: 'Entitäten suchen' }).fill('Kitchen');
+  await expect(panel.locator('.result-count')).toContainText('1 von 2');
+  await expect(panel.locator('p.muted').filter({ hasText: 'Ohne aktuellen State 0' })).toBeVisible();
+  await panel.getByRole('searchbox', { name: 'Entitäten suchen' }).fill('Temperature');
+  await panel.locator('.entity-row details.technical summary').click();
+  await expect(panel.locator('.entity-row details.technical')).toContainText('Gerätereferenz');
+  await expect(panel.locator('.entity-row details.technical')).toContainText('missing');
+  await expect(panel.locator('.entity-row details.technical')).not.toContainText('Verwaist');
+});
+
 test('draft workflow validates, saves, downloads and keeps applying disabled', async ({ page }) => {
   await page.goto('/tests/frontend/browser_fixture.html'); const panel = page.locator('homekit-manager-panel');
   await panel.getByRole('tab', { name: 'Geräte', exact: true }).click(); await panel.locator('[data-group=entities]').click();

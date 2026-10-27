@@ -21,7 +21,7 @@ Autoritatives Repository: `/Users/felixalshut/Documents/ChatGPT/homeassistant-ho
 | GitHub-Release 0.9.18 | Keine separat hochgeladenen Assets; öffentliches Quell-ZIP des Tags vorhanden | Nicht mit einer tatsächlich installierten Kopie gleichzusetzen |
 | 0.9.18-Quell-ZIP | 35/35 Dateien stimmen mit Git und Release-Manifest überein, keine zusätzlichen Integrationsdateien | E/baseline-comparison.json |
 | Produktive Installation | HTTP-Endpunkt 192.168.1.51:8123 nicht erreichbar; kein verwendbares Authentisierungstoken in dieser Sitzung | Aktive Version, Hashes, Core-Version und Bridge-Zustand NICHT BESTÄTIGT |
-| Ursprüngliche iPhone-Screenshots | Nutzer meldet separate Zusendung; in diesem Gespräch keine Bildanhänge sichtbar | Kein belastbarer direkter Vorher/Nachher-Abgleich dieser Bilder |
+| Ursprüngliche iPhone-Screenshots | Fünf JPEGs nachgereicht und visuell geprüft, jeweils 589×1280 Pixel | Direktvergleich ergänzt; Bilder belegen weder installierte Version noch aktuelle Backend-/Pairing-Daten |
 | Vorhandene Vergleichsbilder | Acht gespeicherte 0.9.18-Ansichten aus dem kanonischen Repository | Herkunft nicht mit aktueller Produktion gleichzusetzen |
 
 0.9.18 enthielt bereits Verwaltungsübernahme, Rückstellung, Aktivierungs-API, Migrationsplanung und die vier Hauptbereiche. Diese Funktionen wurden selbst im Code untersucht; frühere Abschlussbehauptungen wurden nicht als Testnachweise übernommen. Die unveränderte Python-Baseline bestand mit 70 Tests. Die zusätzliche unversionierte Datei `www/homekit-manager 2.js` und vorhandene Screenshots im kanonischen Checkout wurden nicht verändert.
@@ -81,6 +81,7 @@ Prioritäten: P0 schützt Daten/Pairings; P1 beeinträchtigt wesentliche Funktio
 | HKM-019-09 / P1, OFFEN / Laufzeitabhängigkeit | pip-audit prüfte 112 Pakete der isolierten HA/HomeKit-Laufzeit: 37 Advisory-Treffer für Pillow 12.3.0, keine übersprungenen Pakete | Versionsbetroffenheit bestätigt; Erreichbarkeit der betroffenen Bild-/PDF-Pfade aus Manager nicht bestätigt. Keine eigenmächtige Core-/Produktionsänderung. E/python-advisories.json | Runtime-Update mittel bis hoch; Core-Abhängigkeiten gemeinsam validieren. Risikoentscheidung und erneutes Audit erforderlich |
 | HKM-019-10 / P2 / Beschädigte Metadaten | Migrationszeit ohne Zeitzone konnte beim Vergleich TypeError auslösen; ungültige/zukünftige Zeit ist kein Nachweis | Ungültiger, naiver oder zukünftiger Zeitbezug wird unknown/stale. C/migration_store.py:16 | Niedrig; ausschließlich Manager-Metadaten. Vier Zeitvarianten, Test :235 |
 | HKM-019-11 / P2 / Konfigurationsschutz | Entwurfsdateiname kann zugleich als native HomeKit-YAML-Quelle eingebunden sein; dies darf nicht überschrieben werden | Speichern bei erkanntem manager_include explizit gesperrt. Kein tatsächliches Überschreiben behauptet. C/coordinator.py:510 | Niedrig; absichtliche Schutzsperre. Test :224 prüft, dass keine Datei entsteht |
+| HKM-019-12 / P2 / Mobile Aktionsleiste | Referenzprüfung bei 393 Pixeln zeigt abgeschnittenes „Entwurf speichern“; Textgrenzen-Test scheitert auf dem vorherigen ZIP in beiden Engines | Mobile Buttons dürfen zweizeilig umbrechen und werden auf gleiche Höhe gestreckt. C/www/homekit-manager.js, styles() | Niedrig; reine CSS-Korrektur. screenshot_reference.spec.mjs prüft Textgrenzen, gleiche Höhe und Überdeckungsfreiheit bei 320/393/430/1440 Pixeln |
 
 Zusätzlich wurden Fehler während der Sanierung durch Tests entdeckt und vor Abschluss korrigiert: null als erwartete Dateiversion beim ersten Speichern, veraltetes Prüfmanifest im temporären ZIP-Prüfordner und fehlende Chromium-Dateien nach Werkzeugupdate. Dies sind keine nachträglich behaupteten 0.9.18-Produktfehler. Endgültige Prüfergebnisse stehen in L/M.
 
@@ -132,7 +133,7 @@ Kennzahlen sind ausdrücklich wie folgt definiert:
 | Nicht verfügbar | Kein Zustand oder State unknown/unavailable |
 | Kartenwerte nach Filterung | Nur aktuelle Such-/Filtertreffer; dies wird in der Oberfläche genannt |
 
-Diese Mengen überlappen: „eingeschlossen“, „unterstützt“ und „nicht verfügbar“ sind nicht zu einer Gesamtsumme zu addieren. Ein physisches Gerät mit Entitäten in mehreren Bereichen kann in mehreren Bereichskarten vorkommen, während die globale Gerätezahl eindeutig bleibt. Entity-Seiten sind auf 80 Zeilen begrenzt; Bereichslisten paginieren Gerätegruppen.
+368 konfigurierte Entitäten bedeuten nicht 368 tatsächlich veröffentlichte HomeKit-Accessories. Diese Mengen überlappen: „eingeschlossen“, „unterstützt“ und „nicht verfügbar“ sind nicht zu einer Gesamtsumme zu addieren. Ein physisches Gerät mit Entitäten in mehreren Bereichen kann in mehreren Bereichskarten vorkommen, während die globale Gerätezahl eindeutig bleibt. Entity-Seiten sind auf 80 Zeilen begrenzt; Bereichslisten paginieren Gerätegruppen.
 
 Nachweise: C/inventory.py:58; C/grouping.py; JS:189,190,230; Frontend-Filter- und 5.000-Entitäten-Test.
 
@@ -142,7 +143,7 @@ Jede Änderung zeigt Namen, eigene Entity-ID-Zeile, bisherige/geplante Zuordnung
 
 Zustände werden getrennt beschrieben: lokaler Entwurf, validierter Entwurf/Vorschau, vorbereiteter Diff, laufender Vorgang, historisch bestätigter Vorgang, fehlgeschlagen und unbekannt. 0.9.19 startet keinen produktiven Anwendungsvorgang. Unterbrochene gespeicherte Zustände activating/saved werden nach Wiederanlauf unknown; aus unknown folgt weder Erfolg noch Fehler noch Retry.
 
-**Zur ursprünglichen Unterbrechungsmeldung:** 0.9.18 konnte einen Verbindungsfehler beim Warten auf den Apply-Aufruf als unknown anzeigen. Das beweist weder, dass der Backend-Aufruf vor der Unterbrechung ausgeführt wurde, noch dass er nicht ausgeführt wurde. Der damals flüchtige Status kann nach Prozessverlust nicht rekonstruiert werden. In dieser Sitzung liegen keine produktiven Logs oder persistenten alten Request-Nachweise vor. Read-only lassen sich künftig aktueller Bridge-Zustand, Optionen und vorhandene Manager-Nachweise beobachten; eine Übereinstimmung allein beweist keinen historischen Aktivierungserfolg.
+**Zur ursprünglichen Unterbrechungsmeldung:** Die nachgereichte Aufnahme zeigt unknown und den Satz zur Verbindungsunterbrechung. Im 0.9.18-Referenzcode wird dieser Satz im allgemeinen catch-Pfad bei unbekanntem Ergebnis gesetzt, ohne die Fehlerursache eindeutig als Netzwerkunterbrechung nachzuweisen (www/homekit-manager.js im Basiscommit, Zeile 85). Das beweist weder, dass der Backend-Aufruf vor der Unterbrechung ausgeführt wurde, noch dass er nicht ausgeführt wurde. Der damals flüchtige Status kann nach Prozessverlust nicht rekonstruiert werden. In dieser Sitzung liegen keine produktiven Logs oder persistenten alten Request-Nachweise vor. Read-only lassen sich künftig aktueller Bridge-Zustand, Optionen und vorhandene Manager-Nachweise beobachten; eine Übereinstimmung allein beweist keinen historischen Aktivierungserfolg.
 
 Apply ist sichtbar deaktiviert und backendseitig gesperrt, auch bei neuer Request-ID, aktivierter Verwaltungszuordnung oder direktem WebSocket-Aufruf. Nachweise: C/activation_store.py; C/coordinator.py:267,546; JS:142,155,266; Test :74,94.
 
@@ -156,7 +157,7 @@ Keine funktionsfähige Migration oder produktive Aktivierung wird durch ein sche
 
 Getestete Viewports: 320×740, 430×932, 768×1024 und 1440×900, jeweils Light/Dark in Chromium und WebKit. Vier erreichbare Hauptbereiche, eindeutige aktive Navigation, Tastatur-Pfeile/Home/End, getrennte Entity-IDs und klare Kennzahlen. Browserprüfungen messen Seiten-/Navigationsüberläufe und Kartenränder; keine festgestellten horizontalen Überläufe in den endgültigen Fällen.
 
-64 reguläre Aufnahmen: vier Seiten × vier Viewports × zwei Themes × zwei Engines. Zusätzlich ein nichtleerer validierter Entwurf auf Smartphone und Desktop. Sichtprüfung repräsentativer mobiler und Desktop-Aufnahmen bestätigt die verbesserte Hierarchie; kein Ersatz für einen echten iPhone-/VoiceOver-Test. Die vorhandene 0.9.18-Aufnahme zeigte unter anderem abgeschnittene Navigation und rohe Performance-Daten. Die separat angekündigten ursprünglichen Bilder wurden nicht sichtbar empfangen und konnten nicht verglichen werden.
+64 reguläre Aufnahmen: vier Seiten × vier Viewports × zwei Themes × zwei Engines. Zusätzlich ein nichtleerer validierter Entwurf auf Smartphone und Desktop. Sichtprüfung repräsentativer mobiler und Desktop-Aufnahmen bestätigt die verbesserte Hierarchie; kein Ersatz für einen echten iPhone-/VoiceOver-Test. Die vorhandene 0.9.18-Aufnahme zeigte unter anderem abgeschnittene Navigation und rohe Performance-Daten. Die fünf nachgereichten Originalbilder wurden inzwischen direkt verglichen. Ergebnisse und 32 zusätzliche Dark-Mode-Aufnahmen stehen in docs/HOMEKIT_MANAGER_0_9_19_SCREENSHOT_REVIEW.md und E/original-reference/. Die ursprünglichen Aussagen über fehlende Bilder sind damit erledigt; eine physische iPhone-/VoiceOver-Abnahme bleibt offen.
 
 ## L. Backend-Tests
 
@@ -180,11 +181,11 @@ Nachweise: E/release-tests.xml; E/coverage.json; tests/integration/test_browser_
 
 ## M. Frontend-Tests
 
-JavaScript-Syntaxprüfung und Node-Verhaltenstest bestanden gegen den extrahierten Release. Browser-Abschlussstatus: **32 bestanden, 0 fehlgeschlagen, 0 übersprungen, 0 flaky**. Ausgeführt wurden 30 responsive/funktionale Fälle plus zwei fünfminütige Beobachtungen in Chromium/WebKit.
+JavaScript-Syntaxprüfung und Node-Verhaltenstest bestanden gegen den extrahierten Release. Browser-Abschlussstatus: **40 bestanden, 0 fehlgeschlagen, 0 übersprungen, 0 flaky**. Ausgeführt wurden 38 responsive/funktionale Fälle einschließlich acht neuer Originalreferenzfälle plus zwei fünfminütige Beobachtungen in Chromium/WebKit.
 
-Fälle: alle Hauptseiten, alle Einstellungsbereiche, Navigation/Tastatur, Suchfokus, sieben Filter, Paging, Entwurf/Vorschau/Speichern, Datei-Export, gespeicherter Entwurf, Verwerfen, Mehrfachauswahl, Verwaltungsdialoge, unbekannter Status, sichtbare Transportfehler und begrenztes Rendern von 5.000 Entitäten. Im finalen Lauf benötigte die 80-Zeilen-Darstellung isoliert rund 27 ms in Chromium und 44 ms in WebKit; dies ist keine Produktionslatenz. Die meisten visuellen Fälle verwenden klar bezeichnete Fixtures; sie sind keine produktiven Funktionsnachweise. Die zwei zusätzlichen Browser-/HA-Tests in L verwenden den echten Backend-Transport und tatsächliche isolierte Persistenz.
+Fälle: alle Hauptseiten, alle Einstellungsbereiche, Navigation/Tastatur, Suchfokus, sieben Filter, Paging, Entwurf/Vorschau/Speichern, Datei-Export, gespeicherter Entwurf, Verwerfen, Mehrfachauswahl, Verwaltungsdialoge, unbekannter Status, sichtbare Transportfehler und begrenztes Rendern von 5.000 Entitäten. Die frühere 80-Zeilen-Messung lag isoliert bei rund 27 ms in Chromium und 44 ms in WebKit; diese Werte sind keine Produktionslatenzen. Die meisten visuellen Fälle verwenden klar bezeichnete Fixtures; sie sind keine produktiven Funktionsnachweise. Die zwei zusätzlichen Browser-/HA-Tests in L verwenden den echten Backend-Transport und tatsächliche isolierte Persistenz.
 
-Der frühere fünfminütige Lauf bestand in beiden Engines: je 300 irrelevante hass-Zuweisungen, Renderzähler 3 → 3 und 12 Fixture-Kommandos ohne weitere Abfragen. Der finale Lauf gegen das Release bestätigt dies ebenfalls; E/release-browser.json weist 32 erwartete Erfolge aus, Gesamtdauer 301,7 Sekunden. Eine solche Beobachtung beweist weder mehrtägige Stabilität noch die Abwesenheit von Memory Leaks.
+Der frühere fünfminütige Lauf bestand in beiden Engines: je 300 irrelevante hass-Zuweisungen, Renderzähler 3 → 3 und 12 Fixture-Kommandos ohne weitere Abfragen. Der erneute finale Lauf nach dem Originalvergleich bestätigt dies ebenfalls: E/release-browser.json weist 40 erwartete Erfolge aus, Gesamtdauer 302,2 Sekunden. Eine solche Beobachtung beweist weder mehrtägige Stabilität noch die Abwesenheit von Memory Leaks.
 
 ## N. Sicherheitsprüfung
 
@@ -202,7 +203,7 @@ Keine destruktiven PoCs wurden ausgeführt. Statische Prüfung, Tests und Adviso
 
 Datei: E/homekit-manager-0.9.19.zip. **37 Integrationsdateien plus eingebettetes RELEASE_MANIFEST.json**, feste ZIP-Zeitstempel/Rechte/Reihenfolge. Versionsnummern in Manifest, Python-Konstante und Entwicklungspaket stimmen überein.
 
-SHA-256: `cc3db29ff394ed063e9f67b6483a5d7167829f99da8cb4c4a057766e93e3bb71`.
+SHA-256: `83f4383b7779f6b424eafed6cac156539ef86b0abe236a464e20cb5a05e6fa82`.
 
 Zwei unabhängig erzeugte Builds sind bytegleich. Jede Integrationsdatei ist im Manifest mit SHA-256 und Größe aufgeführt; unbekannte Dateien und Hashabweichungen werden abgewiesen. Tests werden im temporären Prüfordner mit den aus genau diesem ZIP extrahierten Integrationsdateien ausgeführt. Python-Syntax wird lokal kompiliert, JavaScript mit node --check geprüft. Die Quellhistorie bleibt im Git-Branch erhalten; das ZIP wird nicht als neue Entwicklungsbasis verwendet.
 
@@ -218,7 +219,7 @@ Punkte sind begründete technische Einschätzungen des untersuchten Kandidaten, 
 | HomeKit-Sicherheit | 90 | Doppelte Schreibsperre, neutrale unknown-Behandlung, keine nativen Datenoperationen; kein realer Pairing-Vergleich |
 | Backend-Stabilität | 88 | Lifecycle, atomare Snapshots, Fehlersimulation und Persistenztests; kein mehrtägiger Betrieb |
 | Frontend-Funktionalität | 90 | Verhaltens-, Browser- und echte Backend-E2E-Prüfungen; HA-App-Shell produktiv nicht abgenommen |
-| Mobile UX | 88 | Vier Seiten ab 320 Pixeln in zwei Engines; echtes iPhone und Originalbilder fehlen |
+| Mobile UX | 88 | Vier Seiten ab 320 Pixeln in zwei Engines; Originalbilder abgeglichen; physische iPhone-/VoiceOver-Abnahme fehlt |
 | Desktop UX | 88 | Klare Hierarchie und gleiche Arbeitsabläufe; keine moderierte Nutzerstudie |
 | Designkonsistenz | 90 | Gemeinsame Theme-/Komponentenregeln, Light/Dark-Screenshots; beliebige Dritt-Themes nicht getestet |
 | Wartbarkeit | 84 | Bestehende Module erhalten, weniger doppelte Verwaltungslogik, autoritative Git-Basis; große JS-Templates bleiben |
@@ -233,7 +234,7 @@ Arithmetischer Mittelwert: **89,1/100** für diese zehn technischen Kategorien. 
 
 Erfüllt: konsistente UI-/Backend-Verträge, vier überarbeitete Hauptseiten, mobile Layoutverbesserung, nachvollziehbare Entwurfsaktionen, explizite Apply-Sperre, sichere unknown-Behandlung, keine produktiven HomeKit-Eingriffe und reproduzierbares Artefakt.
 
-Vor Freigabe erforderlich: produktiven Installationsstand und Core-/Pillow-Version lesend belegen; Pillow-Treffer durch passende Core-Laufzeitkorrektur oder belastbare dokumentierte Risikobewertung behandeln; relevante Pairing-/Identitäts- und Apple-Home-Abnahme in einer getrennt autorisierten Umgebung durchführen; originale mobile Darstellung bzw. physisches iPhone prüfen. Das ist keine Aufforderung, während dieser Sanierung produktive HomeKit-Dienste neu zu starten.
+Vor Freigabe erforderlich: produktiven Installationsstand und Core-/Pillow-Version lesend belegen; Pillow-Treffer durch passende Core-Laufzeitkorrektur oder belastbare dokumentierte Risikobewertung behandeln; relevante Pairing-/Identitäts- und Apple-Home-Abnahme in einer getrennt autorisierten Umgebung durchführen; ergänzten Originalvergleich berücksichtigen und physisches iPhone prüfen. Das ist keine Aufforderung, während dieser Sanierung produktive HomeKit-Dienste neu zu starten.
 
 Eine spätere Freigabe zum reinen Lesen/Planen kann separat bewertet werden. Die Wiederfreigabe produktiver Anwendungen benötigt einen eigenen geprüften Auftrag; sie ist kein kleiner Schalter in 0.9.19.
 
@@ -255,7 +256,7 @@ Eine spätere Freigabe zum reinen Lesen/Planen kann separat bewertet werden. Die
 | AP1 – Installationsnachweis / HKM-GATE-01 / P1 | Version, Code-Hashes, HA-Version und relevante Metadaten lesend erfassen; Abweichung zum Kandidaten dokumentieren | Vollständige Dateiliste und eindeutige Zuordnung von Backend/Frontend; keine geheimen Inhalte im Bericht | Nur lesend, keine Reloads oder Änderungen |
 | AP2 – Runtime-Sicherheit / HKM-019-09 / P1 | Alle Pillow-Treffer nach erreichbaren Pfaden bewerten; geeigneten korrigierten HA-/Pillow-Verbund isoliert auswählen und erneut prüfen | Keine unbehandelten relevanten HOCH/KRITISCH-Befunde; pip check, Advisory-Abgleich und vollständige Manager-Regression auf tatsächlich freizugebendem Core | Produktivupdate separat genehmigen; keine eigenständige Paketüberschreibung gegen Core-Pins |
 | AP3 – Pairing-/Update-Abnahme / HKM-GATE-01, HKM-019-02 / P1 | Isolierte gepairte Testbridge mit Backup, Identitäts-/Mapping-Vergleich und realem Apple-Home-Client nutzen; Manager-Update und Recovery prüfen | Identität, Schlüssel- und AID/IID-Zuordnungen bleiben erhalten; Verbindung nach kontrolliertem Testneustart; keine automatische Wiederholung unbekannter Vorgänge | Ausschließlich Testbridge; Produktion unverändert |
-| AP4 – Finale mobile Abnahme / HKM-UX-01 / P2 | Ursprüngliche Bilder nachreichen/zuordnen; vier Seiten auf physischem iPhone sowie mit Tastatur/VoiceOver prüfen | Keine abgeschnittenen Aktionen/IDs; Fokus, Statusansagen, Dialogabbruch und Textvergrößerung bedienbar | Zunächst isolierte Oberfläche; keine Apply-Freigabe |
+| AP4 – Finale mobile Abnahme / HKM-UX-01 / P2 | Originalvergleich ist erledigt; vier Seiten auf physischem iPhone sowie mit Tastatur/VoiceOver prüfen | Keine abgeschnittenen Aktionen/IDs; Fokus, Statusansagen, Dialogabbruch und Textvergrößerung bedienbar | Zunächst isolierte Oberfläche; keine Apply-Freigabe |
 | AP5 – Release-Nachweise / HKM-REL-01 / P2 | Branch reviewen, entfernte CI/HACS/hassfest autorisiert ausführen; ZIP und Manifest unverändert zuordnen | Alle erforderlichen Jobs am tatsächlich freizugebenden Commit grün; ZIP-Hash bestätigt; keine Test-Skips im Release-Gate | Veröffentlichung/Deployment separat, kein automatischer Neustart |
 | AP6 – Langzeitprofil / HKM-PERF-01 / P3 | 24-Stunden-Test mit repräsentativen Registry-/State-Ereignissen, Heap/RSS/CPU und Refresh-Latenzen | Vorher definierte Ressourcenbudgets eingehalten, letzter Zustand korrekt, keine wachsenden Listener/Tasks | Nur isoliert; erst bei gemessenem Engpass inkrementelle Berechnung einführen |
 

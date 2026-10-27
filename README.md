@@ -1,5 +1,11 @@
 # HomeKit Manager 0.9.20 release candidate
 
+> Development branch `feature/homekit-manager-0.9.24`: isolated native/YAML
+> adapter work is in progress. It is **not** a 0.9.24 release. See
+> [development status](docs/DEVELOPMENT_0_9_24.md) for tested paths, blockers,
+> Core reload behavior, and the remaining release gates. Production HomeKit
+> application remains server-side disabled.
+
 Home Assistant custom integration for reading existing HomeKit Bridges, inspecting entities and safely planning configuration changes. Continues the 0.9.18 implementation; no new bridge or pairing is created.
 
 ## Features

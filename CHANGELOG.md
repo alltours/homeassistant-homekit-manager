@@ -10,3 +10,9 @@
 - Correct read-only source classification so a YAML-imported Config Entry is not counted as a second native source.
 - Document source-specific adapter architecture, bidirectional conversion limits, pairing identity, migration risks and the decision to keep production writes disabled.
 - Keep the backend apply lock and all native HomeKit state untouched. No source migration, reload or Apple Home pairing test is claimed.
+# Unreleased development toward 0.9.24
+
+- Added isolated, revisions-bound native and narrowly scoped direct-include YAML filter writers with Core 2026.10.4 integration tests. Production HomeKit application remains blocked.
+- Added value-only native/YAML conversion with unknown-field rejection and repeated semantic roundtrip tests. No HAP identity or pairing migration is provided.
+- Preserved mobile navigation within the 393 px viewport after the 0.9.20 GitHub browser CI finding.
+- The integration version remains 0.9.20 until the 0.9.24 definition of done is proven.

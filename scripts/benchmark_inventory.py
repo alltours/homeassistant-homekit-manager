@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reproducible isolated 1,172-entity computation benchmark.
+"""Reproducible isolated inventory computation benchmark.
 
 This measures the common pure computation path, not a live HA coordinator or
 network/browser latency. Use --source-root to compare two checked-out commits.
@@ -21,7 +21,11 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source-root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--rounds", type=int, default=30)
+    parser.add_argument("--entities", type=int, default=1172)
+    parser.add_argument("--devices", type=int, default=129)
     args = parser.parse_args()
+    if args.entities < 1 or args.devices < 1 or args.rounds < 2:
+        parser.error("entities and devices must be positive; rounds must be at least two")
     sys.path.insert(0, str(args.source_root.resolve()))
     from custom_components.homekit_manager.inventory import build_inventory
     from custom_components.homekit_manager.grouping import build_area_views, build_device_views
@@ -29,15 +33,15 @@ def main() -> None:
     from custom_components.homekit_manager.compatibility import classify_entity
     from custom_components.homekit_manager.filtering import build_core_filter, evaluate_filter
 
-    devices = {f"device-{i}": NS(name=f"Device {i}", area_id=f"area-{i % 18}") for i in range(129)}
+    devices = {f"device-{i}": NS(name=f"Device {i}", area_id=f"area-{i % 18}") for i in range(args.devices)}
     areas = {f"area-{i}": NS(name=f"Area {i}") for i in range(18)}
     entities = {}
     states = {}
-    for i in range(1172):
+    for i in range(args.entities):
         domain = ("light", "sensor", "switch", "binary_sensor")[i % 4]
         entity_id = f"{domain}.benchmark_{i:04d}"
         entities[entity_id] = NS(entity_id=entity_id, name=None, original_name=None,
-                                 device_id=f"device-{i % 129}", area_id=None, platform="benchmark",
+                                 device_id=f"device-{i % args.devices}", area_id=None, platform="benchmark",
                                  device_class="temperature" if domain == "sensor" else None,
                                  original_device_class=None, entity_category=None,
                                  disabled_by=None, hidden_by=None, config_entry_id="isolated")

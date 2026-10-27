@@ -1,6 +1,6 @@
 # HomeKit Manager 0.9.24 – Entwicklungsstand und Fortsetzung
 
-Stand: 27.10.2026. Branch `feature/homekit-manager-0.9.24`, abgezweigt vom gepushten 0.9.20-HEAD `c22f21748e8e37c7ef437c7768d47abad6dbbb21`. Manifest, Python-Konstante und Frontend-Paket sind für den 0.9.24-Releasekandidaten konsistent. Dieser Branch ist **noch kein offiziell veröffentlichter oder produktiv freigegebener Release**.
+Stand: 27.10.2026. Entwicklung auf Branch `feature/homekit-manager-0.9.24`, aufgebaut auf dem 0.9.20-HEAD `c22f21748e8e37c7ef437c7768d47abad6dbbb21`. Manifest, Python-Konstante und Frontend-Paket sind für 0.9.24 konsistent. Der Veröffentlichungstatus ergibt sich ausschließlich aus PR, Tag und GitHub-Release; eine produktive Installation oder Write-Freigabe erfolgte nicht.
 
 ## Strategische Entscheidung: Quellen bleiben erhalten
 
@@ -58,10 +58,10 @@ Eine bestehende YAML-Bridge bleibt `SOURCE_IMPORT`, eine bestehende UI-Bridge bl
 4. Der UI-Änderungsablauf kann Plan, Bestätigung und Apply/Verify im isolierten Browser-Test ausführen; der reale produktive Apply bleibt gesperrt. Backupstatus in der UI, vollständige Änderungshistorie, Timeout-/Offline-UX und produktive Upgradefälle sind noch nicht vollständig nachgewiesen. Sie gehören nicht zum produktiv aktivierten 0.9.24-Umfang.
 5. Produktive 129/121-IDs und produktive Performance sind wegen fehlender vollständiger authentifizierter Registry-/Event-Daten nicht verifiziert.
 6. Keine gepairte unabhängige Apple-Home-Testbridge; Pairing-Auswirkungen isolierter Filteränderungen sind nicht unabhängig bestätigt. Wiederholte Quellenmigration ist nach der neuen Produktentscheidung kein Ziel.
-7. Ein zweiter Code-Audit fand und behob die Code-Redaction-Lücke und ein Reconcile-Race. Der endgültige Sicherheits-/Release-Audit, grüne GitHub-CI des endgültigen HEAD und die PR-Abnahme stehen vor einem offiziellen Release aus. Das 0.9.24-ZIP liegt lokal als reproduzierbarer Kandidat vor; es wurde nicht veröffentlicht oder produktiv installiert.
+7. Der zweite Code-Audit fand und behob die Code-Redaction-Lücke und ein Reconcile-Race. Die abschließende Prüfung bestätigte Adminschutz für alle 32 WebSocket-Handler, die unveränderte produktive Apply-Sperre und ein ZIP ohne `.storage`-, Pairing- oder Schlüsseldateien. Der extrahierte Archivinhalt ergab denselben ZIP-Hash. GitHub-CI und PR-Abnahme müssen stets für den exakt veröffentlichten Commit geprüft werden. Eine produktive Installation wurde nicht durchgeführt.
 
 ## Sichere Fortsetzung
 
-Die produktive Default-Sperre unverändert lassen. Für 0.9.24 den lesenden und planenden Umfang, UI, Sicherheitsprüfung, CI und PR-Abnahme abschließen. Isolierte Writer erhalten; spätere produktive Autorisierung, breitere YAML-Bearbeitung und Core-Lifecycle-/Recovery-Prüfungen gesondert für 0.10.0 bewerten. Quellenmigration bleibt für beide Versionen außerhalb des Ziels. Die Versionsdateien sind für den Kandidaten konsistent; die GitHub-Veröffentlichung erfolgt nur bei belegtem GO.
+Die produktive Default-Sperre unverändert lassen. Isolierte Writer erhalten; spätere produktive Autorisierung, breitere YAML-Bearbeitung und Core-Lifecycle-/Recovery-Prüfungen gesondert für 0.10.0 bewerten. Quellenmigration bleibt für beide Versionen außerhalb des Ziels. GitHub-Veröffentlichung und Produktivinstallation sind getrennte Schritte.
 
 Die produktive HomeKit-Bridge, Config Entries, YAML und Pairings wurden in diesem Entwicklungsstand nicht geschrieben oder neu geladen. Die bestehende serverseitige `HomeKitWriteDisabled`-Sperre wurde nicht entfernt.

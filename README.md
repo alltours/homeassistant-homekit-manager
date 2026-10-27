@@ -1,7 +1,7 @@
-# HomeKit Manager 0.9.24 release candidate
+# HomeKit Manager 0.9.24
 
-> Development branch `feature/homekit-manager-0.9.24`. This candidate is not
-> an official GitHub release or a production installation. See
+> Release source for HomeKit Manager 0.9.24. This work did not install the
+> integration in the production Home Assistant environment. See
 > [development status](docs/DEVELOPMENT_0_9_24.md) for tested paths and release
 > gates. Production HomeKit application remains server-side disabled.
 
@@ -42,7 +42,7 @@ The authoritative product repository is `https://github.com/alltours/homeassista
 
 ## Installation and limits
 
-Review the [0.9.24 scope and upgrade notes](docs/HOMEKIT_MANAGER_0_9_24.md) before any installation decision. This repository does not prove the currently installed production version or Apple Home behavior. This candidate must not be installed in production as part of this task. Replacing custom-component files does not itself update a running Home Assistant process.
+Review the [0.9.24 scope and upgrade notes](docs/HOMEKIT_MANAGER_0_9_24.md) before any installation decision. This repository does not prove the currently installed production version or Apple Home behavior. No production installation was performed during this work. Replacing custom-component files does not itself update a running Home Assistant process.
 
 Accessory-mode instances are reported separately and cannot be selected as bridge targets. Cross-source migration and bridge creation/deletion stay blocked. Versions other than Core 2026.10.4 receive unknown compatibility rather than a positive claim. Browser tests cover Chromium and WebKit; physical iPhone and VoiceOver acceptance remains separate.
 

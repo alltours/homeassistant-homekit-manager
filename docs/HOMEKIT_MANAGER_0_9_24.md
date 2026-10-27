@@ -1,6 +1,6 @@
 # HomeKit Manager 0.9.24 – Umfang und Upgrade
 
-## Freigegebener Funktionsumfang des Kandidaten
+## Implementierter und getesteter Umfang
 
 0.9.24 liest vorhandene HomeKit-Config-Entries aus Home Assistant Core 2026.10.4. `SOURCE_USER` bleibt eine nativ konfigurierte Bridge; `SOURCE_IMPORT` bleibt YAML-verwaltet. Der Manager hält Entwürfe und Vorgangsmetadaten, aber keine dritte wirksame HomeKit-Konfiguration. Die vier Seiten HomeKit, Geräte, Änderungen und Einstellungen zeigen Bridge-Auswahl, redigierte Config-Entry-Werte, Inventar, Filterzuordnung, Entwürfe, Vorschau und Diagnosen. Unbekannte tatsächliche HAP-Publikation oder Apple-Home-Sichtbarkeit wird nicht als bestätigt ausgegeben.
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.9.24 — release candidate (2026-10-27)
+## 0.9.24 (2026-10-27)
 
 - Preserved native `SOURCE_USER` and YAML `SOURCE_IMPORT` as separate authoritative sources and retired all YAML↔UI source-migration actions for 0.9.24 and 0.10.0.
 - Added source-bound internal snapshots, a unified Changes workflow and an expandable, redacted Config Entry data/options view.

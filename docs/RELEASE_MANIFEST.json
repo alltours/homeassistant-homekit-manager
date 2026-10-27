@@ -104,8 +104,8 @@
     },
     {
       "path": "homekit_reader.py",
-      "sha256": "9ce837e2168e62283d32b3d6375ad79ffb55a73aeea5a98d6c37b713dc9596a3",
-      "size": 2776
+      "sha256": "46d4ecdef4f1b8e0f4eab5aa83fcb09415029cd1b84885b61753bcf7b278d294",
+      "size": 2826
     },
     {
       "path": "homekit_writer.py",
@@ -124,8 +124,8 @@
     },
     {
       "path": "manifest.json",
-      "sha256": "b5a7f9eddd44af5ffcb6f93d66ba8736fdd640ba56458425ac9d54350d35f24e",
-      "size": 479
+      "sha256": "acc432ddbe5aecc5bbd03ba0a118fcfed41b1ad36faaa7b4467697adcb470793",
+      "size": 516
     },
     {
       "path": "migration.py",

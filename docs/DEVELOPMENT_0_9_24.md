@@ -16,6 +16,7 @@ Stand: 27.10.2026. Branch `feature/homekit-manager-0.9.24`, abgezweigt vom gepus
 - `yaml_adapter.py`: **nur** eindeutiges `homekit: !include datei.yaml` mit einer Bridge oder Bridge-Liste in ruamel-kompatibler Formatierung. Ein importierter Entry muss exakt mit Name und Port passen. Tags, Secrets, Anker, Aliase, Merge-Keys, Packages, Verzeichnis-Includes, Symlinks, unbekannte Filterfelder, Kommentare im zu ersetzenden Filter und nicht exakt roundtrip-fähige Formatierung sind schreibgeschützt. Vor Apply: Core-Schema und Dateihash. Apply: 0600-Backup mit Integritätsprüfung, atomarer Dateiersatz, fsync, Nachverifikation und metadata-only-Journal. Reconcile schreibt nie automatisch erneut. Isolierte Core-Aktivierung ist nur bei ausschließlich importierten HomeKit-Entries zugelassen.
 - `conversion.py`: reversibler **Wert**-Transfer für `name`, `port`, `ip_address`, `advertise_ip`, `filter`, `entity_config`, `mode` und `devices` nach Core-Schema. Ein unbekanntes oder anders gelagertes Feld blockiert die Konvertierung. Ein neuer Config Entry, Quellenwechsel, HAP-Identität und Pairings sind ausdrücklich nicht Teil des Transfers.
 - CSS-Korrektur für die vier Haupttabs bei 393 px. Der GitHub-CI-Fehler der 0.9.20-PR-Browserjobs (`nav.scrollWidth - clientWidth == 8`) ist lokal in Chromium und WebKit behoben; ein GitHub-Lauf dieses neuen Branches steht noch aus.
+- Zweiter Sicherheitsdurchgang: Der lesende Bridge-Serializer gab zuvor `entity_config.code` oder `setup_code` weiter, wenn solche Werte vorhanden waren. Die Redaction deckt diese exakten Codefelder jetzt ab, ohne `video_codec` zu entfernen; ein gezielter Test verhindert die Regression. Hassfest fand außerdem die fehlende HomeKit-`after_dependencies`-Deklaration; das Manifest wurde korrigiert. Beide Korrekturen benötigen einen neuen CI-Lauf.
 
 ## Feldmatrix für den unterstützten Wert-Transfer
 
@@ -47,7 +48,7 @@ Stand: 27.10.2026. Branch `feature/homekit-manager-0.9.24`, abgezweigt vom gepus
 4. UI-Änderungsablauf zeigt derzeit Preview und einen gesperrten Apply, aber keinen vollständigen Backend-gestützten Prepare/Backup/Apply/Verify-Workflow.
 5. Produktive 129/121-IDs und produktive Performance sind wegen fehlender vollständiger authentifizierter Registry-/Event-Daten nicht verifiziert.
 6. Keine gepairte unabhängige Apple-Home-Testbridge; Pairing-Erhalt und wiederholte Quellenmigration nicht getestet.
-7. Zweiter vollständiger Security-Audit, Update-/Upgrade-Testmatrix, GitHub-CI dieses Branches und 0.9.24-Release-Build/Hash stehen aus.
+7. Ein zweiter Code-Audit fand und behob die Code-Redaction-Lücke, ist aber noch kein vollständiges unabhängiges Security-Go. Update-/Upgrade-Testmatrix, grüne GitHub-CI dieses Branches und 0.9.24-Release-Build/Hash stehen aus.
 
 ## Sichere Fortsetzung
 

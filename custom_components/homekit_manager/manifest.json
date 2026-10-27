@@ -5,6 +5,7 @@
     "@alltours"
   ],
   "config_flow": true,
+  "after_dependencies": ["homekit"],
   "dependencies": [
     "frontend",
     "http"

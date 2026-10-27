@@ -437,7 +437,7 @@ async def test_homekit_manager_mode_status_is_conservative(
     status = response["result"]
     assert status["active_mode"] == "unknown"
     assert status["transition"] == "stable"
-    assert all(item["status"] in {"verify_only", "blocked"} for item in status["matrix"].values())
+    assert all(item["status"] in {"not_applicable", "blocked"} for item in status["matrix"].values())
     for direction in (
         "yaml->homekit_bridge", "homekit_bridge->yaml",
         "homekit_bridge->homekit_manager", "homekit_manager->homekit_bridge",
@@ -470,6 +470,43 @@ async def test_homekit_manager_migration_assistant_blocks_cross_source_without_w
     assert response["success"] is True
     assert response["result"]["status"]["state"] == "blocked"
     assert response["result"]["status"]["migration_performed"] is False
+    manager = hass.data["homekit_manager"]["coordinator"]
+    before_status = dict(manager.migration_status)
+    before_modes = dict(manager.desired_modes)
+    await client.send_json_auto_id({"type": "homekit_manager/migration_start", "target": "homekit_manager", "confirmed": True})
+    same_source = await client.receive_json()
+    assert same_source["success"] is True
+    assert same_source["result"]["status"]["state"] == "blocked"
+    await client.send_json_auto_id({"type": "homekit_manager/set_mode", "mode": "yaml"})
+    mode_change = await client.receive_json()
+    assert mode_change["success"] is False
+    assert manager.migration_status == before_status
+    assert manager.desired_modes == before_modes
+
+
+async def test_previous_mode_metadata_cannot_migrate_existing_native_entry(hass, enable_custom_integrations):
+    """Old 0.9.x wishes remain readable but cannot drive a source change."""
+    from custom_components.homekit_manager.mode_store import ModeStore
+    native = MockConfigEntry(
+        domain="homekit", source=config_entries.SOURCE_USER,
+        data={"name": "Existing Native Bridge", "port": 21096},
+        options={"filter": {"include_entities": ["light.before"]}},
+    )
+    native.add_to_hass(hass)
+    await ModeStore(hass).async_save({native.entry_id: "yaml"})
+    before_data, before_options = dict(native.data), dict(native.options)
+    flow = await hass.config_entries.flow.async_init("homekit_manager", context={"source": config_entries.SOURCE_USER})
+    await hass.config_entries.flow.async_configure(flow["flow_id"], {})
+    manager = hass.data["homekit_manager"]["coordinator"]
+    assert manager.mode_status()["active_mode"] == "homekit_bridge"
+    assert manager.mode_status()["desired_mode"] == "yaml"
+    assert manager.mode_status()["transition"] == "blocked"
+    result = await manager.async_start_migration("yaml", confirmed=True)
+    assert result["status"]["state"] == "blocked"
+    assert native.source == config_entries.SOURCE_USER
+    assert dict(native.data) == before_data
+    assert dict(native.options) == before_options
+    assert await ModeStore(hass).async_load() == {native.entry_id: "yaml"}
 
 
 async def test_homekit_manager_devices_and_areas_websocket_round_trip(

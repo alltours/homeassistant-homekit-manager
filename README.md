@@ -1,10 +1,14 @@
-# HomeKit Manager 0.9.20 release candidate
+# HomeKit Manager 0.9.24 release candidate
 
-> Development branch `feature/homekit-manager-0.9.24`: isolated native/YAML
-> adapter work is in progress. It is **not** a 0.9.24 release. See
-> [development status](docs/DEVELOPMENT_0_9_24.md) for tested paths, blockers,
-> Core reload behavior, and the remaining release gates. Production HomeKit
-> application remains server-side disabled.
+> Development branch `feature/homekit-manager-0.9.24`. This candidate is not
+> an official GitHub release or a production installation. See
+> [development status](docs/DEVELOPMENT_0_9_24.md) for tested paths and release
+> gates. Production HomeKit application remains server-side disabled.
+
+Existing bridges keep their original configuration source. YAML ↔ UI source
+migration and Config Entry `source` changes are outside both 0.9.24 and the
+planned 0.10.0. Internal value translation is retained for reading, validation
+and adapter-specific planning; it never changes an existing bridge's source.
 
 Home Assistant custom integration for reading existing HomeKit Bridges, inspecting entities and safely planning configuration changes. Continues the 0.9.18 implementation; no new bridge or pairing is created.
 
@@ -18,7 +22,7 @@ Home Assistant custom integration for reading existing HomeKit Bridges, inspecti
 - Admin-protected WebSocket API, consistent snapshot responses and event-driven updates with event/recompute/CPU counters.
 - Side-effect-free compatibility projection for Home Assistant Core 2026.10.4. Eligibility and filter inclusion do not prove Apple Home publication.
 
-## Safety in 0.9.20
+## Safety in 0.9.24
 
 **Applying HomeKit changes is disabled in the backend and visibly disabled in the panel.** Administrative ownership only stores Manager metadata. It does not enable the writer, migrate native HomeKit configuration, reload a bridge or move pairing data. No production deployment is part of this remediation.
 
@@ -38,7 +42,7 @@ The authoritative product repository is `https://github.com/alltours/homeassista
 
 ## Installation and limits
 
-Review the [0.9.20 architecture and release notes](docs/HOMEKIT_MANAGER_0_9_20.md) before any installation decision. This repository does not prove the currently installed production version or Apple Home behavior. This candidate must not be installed in production as part of this task. Replacing custom-component files does not itself update a running Home Assistant process.
+Review the [0.9.24 scope and upgrade notes](docs/HOMEKIT_MANAGER_0_9_24.md) before any installation decision. This repository does not prove the currently installed production version or Apple Home behavior. This candidate must not be installed in production as part of this task. Replacing custom-component files does not itself update a running Home Assistant process.
 
 Accessory-mode instances are reported separately and cannot be selected as bridge targets. Cross-source migration and bridge creation/deletion stay blocked. Versions other than Core 2026.10.4 receive unknown compatibility rather than a positive claim. Browser tests cover Chromium and WebKit; physical iPhone and VoiceOver acceptance remains separate.
 

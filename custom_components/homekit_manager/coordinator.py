@@ -32,7 +32,7 @@ from .diagnostics import build_diagnostics, diagnostics_summary, group_diagnosti
 from .history import make_history_entry, restore_as_draft
 from .history_store import HistoryStore
 from .config_source import inspect_configuration_sources
-from .migration import build_migration_plan, build_migration_matrix, completed_verification
+from .migration import build_migration_plan, build_migration_matrix
 from .migration_store import MigrationStore
 from .management_store import ManagementStore
 from .activation_store import ActivationStore
@@ -374,12 +374,12 @@ class HomeKitManagerCoordinator:
             "supported_modes": list(MANAGEMENT_MODES),
             "bridge_count": len(self.bridges),
             "bridge_selection_required": len(self.bridges) > 1,
-            "message": "Moduswechsel bleiben gesperrt, solange Bridge-Identität und Pairing-Erhalt nicht nachgewiesen sind.",
+            "message": "Quellenmigration ist weder für 0.9.24 noch für 0.10.0 vorgesehen; bestehende Bridges behalten ihre Quelle.",
             "source_detection": self.configuration_sources,
         }
 
     def migration_plan(self, target: str | None = None) -> dict[str, Any]:
-        """Return a verified-source plan without changing Home Assistant."""
+        """Return a non-executable legacy description without changing Home Assistant."""
         bridge = self.selected_bridge()
         source = self._active_mode(bridge)
         if source not in MANAGEMENT_MODES:
@@ -473,48 +473,17 @@ class HomeKitManagerCoordinator:
             return self.management_status()
 
     async def async_start_migration(self, target: str, confirmed: bool = False) -> dict[str, Any]:
-        """Verify same-source state or explicitly block cross-source migration."""
+        """Legacy endpoint: no migration action is offered in 0.9.24."""
         plan = self.migration_plan(target)
-        if not plan["supported"]:
-            status = {
-                "state": "blocked",
-                "progress": None,
-                "step": None,
-                "message": plan["reason"],
-                "bridge_entry_id": plan.get("bridge_entry_id"),
-                "source": plan["source"],
-                "target": plan["target"],
-                "changed": False,
-                "migration_performed": False,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-                "stale": False,
-            }
-            self.migration_status = status
-            await self.migration_store.async_save(status)
-            return plan | {"status": status}
-        if not confirmed:
-            return plan | {"status": {"state": "awaiting_confirmation", "progress": 0, "message": "Explizite Bestätigung für die schreibfreie Verifikation erforderlich."}}
-        await self.async_refresh()
-        bridge = self.selected_bridge()
-        if plan.get("bridge_entry_id") != (bridge.get("entry_id") if bridge else None):
-            raise ValueError("Bridge-Kontext hat sich während der Verifikation geändert")
-        status = completed_verification(plan, plan.get("bridge_entry_id"))
-        status.update({"source": plan["source"], "target": plan["target"], "stale": False})
-        self.migration_status = status
-        await self.migration_store.async_save(status)
-        return plan | {"status": status}
+        return plan | {"status": {"state": "blocked", "progress": None, "step": None,
+                                  "message": "Quellenmigration ist weder für 0.9.24 noch 0.10.0 vorgesehen.",
+                                  "bridge_entry_id": plan.get("bridge_entry_id"), "source": plan["source"],
+                                  "target": plan["target"], "changed": False,
+                                  "migration_performed": False, "automatic_retry": False}}
 
     async def async_set_mode(self, mode: str) -> dict[str, Any]:
-        """Persist a desired mode; never activate a risky migration."""
-        if mode not in MANAGEMENT_MODES:
-            raise ValueError("Unbekannter Verwaltungsmodus")
-        bridge = self.selected_bridge()
-        entry_id = bridge.get("entry_id") if bridge else None
-        if not entry_id:
-            raise ValueError("Keine eindeutige HomeKit-Bridge gefunden")
-        self.desired_modes[entry_id] = mode
-        await self.mode_store.async_save(self.desired_modes)
-        return self.mode_status()
+        """Deprecated write endpoint; never persist a different source."""
+        raise ValueError("Quellenmigration ist weder für 0.9.24 noch 0.10.0 vorgesehen")
 
     def _yaml_status_payload(self, snapshot, backup_exists=False):
         return {"document": snapshot.document, "schema_version": snapshot.document.get("schema_version"), "file_version": snapshot.file_version, "last_modified": snapshot.last_modified, "exists": snapshot.exists, "valid": snapshot.valid, "error": snapshot.error, "backup_exists": backup_exists, "included": self.configuration_sources.get("manager_include", False), "active_mode": self._active_mode(self.selected_bridge()), "fingerprint": self.fingerprint, "is_applied": False}

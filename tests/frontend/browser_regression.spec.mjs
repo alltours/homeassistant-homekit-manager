@@ -88,6 +88,26 @@ test('isolated operation workflow binds plan, confirms exact request and verifie
   expect(calls).toHaveLength(1);
 });
 
+test('source migration is absent from the 0.9.24 interface', async ({ page }) => {
+  await page.goto('/tests/frontend/browser_fixture.html');
+  const panel = page.locator('homekit-manager-panel');
+  await panel.getByRole('tab', { name: 'Einstellungen', exact: true }).click();
+  await expect(panel.locator('[data-migration-target]')).toHaveCount(0);
+  await expect(panel.locator('[data-migration-start]')).toHaveCount(0);
+  expect(await page.evaluate(() => window.fixtureCommands.includes('homekit_manager/migration_start'))).toBe(false);
+});
+
+test('bridge details expose source-bound configuration values without YAML structure claims', async ({ page }) => {
+  await page.goto('/tests/frontend/browser_fixture.html');
+  const panel = page.locator('homekit-manager-panel');
+  await panel.locator('[data-bridge-expand]').click();
+  await panel.getByText('Konfigurationswerte anzeigen').click();
+  const values = panel.locator('.config-values');
+  await expect(values).toContainText('"port": 21088');
+  await expect(values).toContainText('"include_domains"');
+  await expect(panel.getByText('YAML-Kommentare und Quelldatei gehören nicht zu diesen Werten.')).toBeVisible();
+});
+
 test('whole area and device selection use an explicit draft confirmation', async ({page}) => {
   await page.goto('/tests/frontend/browser_fixture.html'); const panel=page.locator('homekit-manager-panel');
   await panel.getByRole('tab',{name:'Geräte',exact:true}).click(); await panel.locator('[data-selection]').click();

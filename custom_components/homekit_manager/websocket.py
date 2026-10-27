@@ -1,7 +1,7 @@
 """Authenticated WebSocket API for read operations and controlled drafts.
 
 All commands require an administrator connection. HomeKit writes are locked
-in 0.9.20 before any native options or operation state can change.
+in 0.9.24 before any native options or operation state can change.
 """
 from __future__ import annotations
 import probatio

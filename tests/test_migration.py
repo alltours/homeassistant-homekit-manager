@@ -10,13 +10,15 @@ def test_all_storage_directions_are_explicit():
             item = matrix[f"{source}->{target}"]
             assert item["changes_homekit"] is False
             assert item["changes_pairings"] is False
-            assert item["supported"] is (source == target)
+            assert item["supported"] is False
+            assert item["status"] == ("not_applicable" if source == target else "blocked")
 
 
 def test_cross_source_migration_is_blocked_with_core_reason():
     plan = build_migration_plan(MODE_YAML, MODE_HOMEKIT_BRIDGE, "bridge-1")
     assert plan["status"] == "blocked"
-    assert plan["progress_mode"] == "indeterminate"
+    assert plan["progress_mode"] == "not_applicable"
+    assert plan["steps"] == []
     assert "keine stabile öffentliche API" in plan["reason"]
     assert plan["bridge_entry_id"] == "bridge-1"
 

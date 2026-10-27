@@ -33,7 +33,6 @@
         },
       ];
       let savedDocument = { schema_version: 1, bridges: {} };
-      let desiredMode = "homekit_bridge";
       let managementActive = new URLSearchParams(window.location.search).has("activation-error");
       const isolatedWrite = new URLSearchParams(window.location.search).has("isolated-write");
       let operationState = "validated";
@@ -54,14 +53,14 @@
                 unavailable_entities: 1,
                 compatible_entities: 1,
                 configured_entities: 1,
-                integration_version: "0.9.20", core_version: "2026.10.4", last_updated: "2026-10-27T08:00:00Z", refresh_duration_ms: 3.2, refresh_count: 1, unavailable_entities: 1, accessories: 1, write_policy: { enabled: false }, operation_policy: { enabled: isolatedWrite, reason: isolatedWrite ? "Nur isolierte Testinstanz" : "HomeKit-Schreibpfad gesperrt" },
+                integration_version: "0.9.24", core_version: "2026.10.4", last_updated: "2026-10-27T08:00:00Z", refresh_duration_ms: 3.2, refresh_count: 1, unavailable_entities: 1, accessories: 1, write_policy: { enabled: false }, operation_policy: { enabled: isolatedWrite, reason: isolatedWrite ? "Nur isolierte Testinstanz" : "HomeKit-Schreibpfad gesperrt" },
                 fingerprint: "fixture-fingerprint",
               },
               entities,
             };
           }
           if (message.type === "homekit_manager/bridges") {
-            return { bridges: [{ entry_id: "fixture-bridge", title: "Fixture Bridge", source: "user", state: "loaded", mode: "bridge", filter: { include_domains: ["light"] } }] };
+            return { bridges: [{ entry_id: "fixture-bridge", title: "Fixture Bridge", source: "user", state: "loaded", mode: "bridge", filter: { include_domains: ["light"] }, data: { name: "Fixture Bridge", port: 21088 }, options: { mode: "bridge", filter: { include_domains: ["light"] } } }] };
           }
           if (message.type === "homekit_manager/history") {
             return { entries: [], count: 0 };
@@ -73,18 +72,17 @@
             return { exists: Object.keys(savedDocument.bridges || {}).length > 0, valid: true, document: savedDocument, file_version: "fixture-version", fingerprint: "fixture-fingerprint", is_applied: false };
           }
           if (message.type === "homekit_manager/mode_status") {
-            return { active_mode: "homekit_bridge", desired_mode: desiredMode, transition: "stable", matrix: {} };
+            return { active_mode: "homekit_bridge", desired_mode: "homekit_bridge", transition: "stable", matrix: {} };
           }
           if (message.type === "homekit_manager/set_mode") {
-            desiredMode = message.mode;
-            return { active_mode: "homekit_bridge", desired_mode: desiredMode, transition: "prepared", matrix: {} };
+            throw new Error("Quellenmigration ist nicht vorgesehen");
           }
           if (message.type === "homekit_manager/activation_status") {
             return { state: "unknown", entry_id: "fixture-bridge", has_operation: new URLSearchParams(window.location.search).has("activation-error"), message: "Kein bestätigter Aktivierungsnachweis", observations: { bridge_state: "loaded" } };
           }
           if (message.type === "homekit_manager/migration_plan") {
-            const target = message.target || desiredMode;
-            return { source: "homekit_bridge", target, supported: target === "homekit_bridge", status: target === "homekit_bridge" ? "verify_only" : "blocked", reason: target === "homekit_bridge" ? "Quelle wird read-only verifiziert" : "Migration ist aus Sicherheitsgründen gesperrt", steps: [{ key: "validate", label: "Konfiguration prüfen", progress: 16 }] };
+            const target = message.target || "homekit_bridge";
+            return { source: "homekit_bridge", target, supported: false, status: target === "homekit_bridge" ? "not_applicable" : "blocked", reason: "Quellenmigration ist nicht vorgesehen", steps: [] };
           }
           if (message.type === "homekit_manager/migration_status") {
             return { state: "unknown", stale: true };
@@ -137,7 +135,7 @@
             return { exists: true, valid: true, document: savedDocument, file_version: "fixture-version-2", fingerprint: "fixture-fingerprint-2", is_applied: false };
           }
           if (message.type === "homekit_manager/apply_options_diff") {
-            throw new Error("HomeKit-Schreibpfad in 0.9.20 gesperrt");
+            throw new Error("HomeKit-Schreibpfad in 0.9.24 gesperrt");
           }
           if (message.type === "homekit_manager/operation_plan") {
             if (message.entry_id !== "fixture-bridge" || message.expected_fingerprint !== "fixture-fingerprint") throw new Error("Bridge oder Revision geändert");

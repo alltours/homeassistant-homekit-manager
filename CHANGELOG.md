@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.24 — release candidate (2026-10-27)
+
+- Preserved native `SOURCE_USER` and YAML `SOURCE_IMPORT` as separate authoritative sources and retired all YAML↔UI source-migration actions for 0.9.24 and 0.10.0.
+- Added source-bound internal snapshots, a unified Changes workflow and an expandable, redacted Config Entry data/options view.
+- Added isolated, revisions-bound native and narrowly scoped direct-include YAML filter writers with real Core 2026.10.4 and authenticated WebSocket integration tests. Production HomeKit application remains blocked.
+- Persisted operation metadata for duplicate request rejection and read-only reconciliation; added YAML metadata journal, verified backup/restore tests and concurrent-apply reconciliation protection.
+- Added internal native/YAML value projections with unknown-field rejection and semantic roundtrip tests. No HAP identity or pairing migration is provided.
+- Redacted lock and alarm code fields from bridge data returned to the UI.
+- Added dependency, tracked-file and mobile browser CI checks.
+
 ## 0.9.20 — local release candidate (2026-10-27)
 
 - Separate entity-referenced device IDs from native enumerable devices, synthetic composite IDs and missing references. Expose reconciliation evidence without forcing the native UI count.
@@ -10,13 +20,3 @@
 - Correct read-only source classification so a YAML-imported Config Entry is not counted as a second native source.
 - Document source-specific adapter architecture, bidirectional conversion limits, pairing identity, migration risks and the decision to keep production writes disabled.
 - Keep the backend apply lock and all native HomeKit state untouched. No source migration, reload or Apple Home pairing test is claimed.
-# Unreleased development toward 0.9.24
-
-- Added isolated, revisions-bound native and narrowly scoped direct-include YAML filter writers with Core 2026.10.4 integration tests. Production HomeKit application remains blocked.
-- Persisted native filter-operation metadata for duplicate request rejection and read-only outcome reconciliation; added YAML metadata journal and verified backup/restore tests.
-- Added an isolated common operation state machine with plan/revision binding, explicit confirmation, durable status and no automatic retry after an uncertain outcome. Admin WebSocket and UI plan/status/apply controls now use it, while the normal coordinator denies every Apply request server-side. Read-only reconciliation waits for an in-flight Apply to finish.
-- Exercised both native and YAML operation paths through the authenticated Home Assistant WebSocket in isolation; the YAML case verifies a real backup, Core reload and imported Entry options.
-- Added value-only native/YAML conversion with unknown-field rejection and repeated semantic roundtrip tests. No HAP identity or pairing migration is provided.
-- Redacted lock and alarm code fields from bridge data returned to the UI.
-- Allowed mobile navigation labels to wrap after the 0.9.20 and development-branch Linux browser CI findings.
-- The integration version remains 0.9.20 until the 0.9.24 definition of done is proven.

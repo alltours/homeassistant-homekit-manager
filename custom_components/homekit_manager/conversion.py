@@ -60,7 +60,7 @@ def native_to_yaml(data: Mapping[str, Any], options: Mapping[str, Any], *, core_
 
 
 def yaml_to_native(bridge: Mapping[str, Any], *, core_version: str) -> ConvertedValues:
-    """Project YAML values to a *new* native entry's data/options shape."""
+    """Project YAML values to an internal native data/options shape; do not create an entry."""
     value = deepcopy(dict(bridge))
     _check(value, core_version)
     data = {key: value[key] for key in value if key in _DATA}

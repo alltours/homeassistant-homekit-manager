@@ -1,9 +1,9 @@
-"""Conservative storage-mode migration planning.
+"""Legacy source-migration descriptions; every action is disabled.
 
 Home Assistant does not expose a stable public API for a custom integration to
 move an existing HomeKit bridge between YAML, SOURCE_IMPORT and SOURCE_USER.
-This module therefore models the supported read-only verification path and
-returns explicit blockers for every cross-source migration.
+This module retains compatibility for old status clients while 0.9.24 and
+0.10.0 exclude source migration entirely.
 """
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ MODE_LABELS = {
 }
 
 CORE_CONTRACT_BLOCKER = (
+    "Quellenmigration ist weder für 0.9.24 noch 0.10.0 vorgesehen. "
     "Home Assistant Core 2026.10.4 bietet keine stabile öffentliche API für "
     "einen externen Wechsel zwischen YAML/SOURCE_IMPORT, SOURCE_USER und einer "
     "Custom-Integration-Draft-Schicht. Ein automatischer Wechsel könnte "
@@ -27,7 +28,7 @@ CORE_CONTRACT_BLOCKER = (
 
 
 def build_migration_matrix() -> dict[str, dict[str, Any]]:
-    """Return all nine source/target combinations, including six directions."""
+    """Return legacy directions with no executable target."""
     matrix: dict[str, dict[str, Any]] = {}
     for source in MANAGEMENT_MODES:
         for target in MANAGEMENT_MODES:
@@ -37,11 +38,11 @@ def build_migration_matrix() -> dict[str, dict[str, Any]]:
                 "target": target,
                 "source_label": MODE_LABELS[source],
                 "target_label": MODE_LABELS[target],
-                "supported": same,
-                "status": "verify_only" if same else "blocked",
+                "supported": False,
+                "status": "not_applicable" if same else "blocked",
                 "reason": (
-                    "Kein Speicherwechsel erforderlich; der aktuelle Backendzustand "
-                    "wird erneut gelesen und verifiziert."
+                    "Kein Quellenwechsel erforderlich; der aktuelle Backendzustand "
+                    "kann ohne Migrationsaktion gelesen werden."
                     if same else CORE_CONTRACT_BLOCKER
                 ),
                 "changes_homekit": False,
@@ -55,20 +56,12 @@ def build_migration_plan(source: str, target: str, bridge_id: str | None) -> dic
     if source not in MANAGEMENT_MODES or target not in MANAGEMENT_MODES:
         raise ValueError("Unbekannter Konfigurationsmodus")
     item = build_migration_matrix()[f"{source}->{target}"]
-    steps = [
-        {"key": "validate", "label": "Konfiguration prüfen", "progress": 16},
-        {"key": "prepare", "label": "Änderungen vorbereiten", "progress": 33},
-        {"key": "create", "label": "Zielkonfiguration erstellen", "progress": 50},
-        {"key": "activate", "label": "Konfiguration aktivieren", "progress": 66},
-        {"key": "verify", "label": "Bridge überprüfen", "progress": 83},
-        {"key": "complete", "label": "Migration abschließen", "progress": 100},
-    ]
     return {
         **item,
         "bridge_entry_id": bridge_id,
-        "steps": steps,
-        "progress_mode": "deterministic" if item["supported"] else "indeterminate",
-        "requires_confirmation": bool(item["supported"]),
+        "steps": [],
+        "progress_mode": "not_applicable",
+        "requires_confirmation": False,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 

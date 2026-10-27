@@ -1,11 +1,11 @@
 {
   "domain": "homekit_manager",
   "name": "HomeKit Manager",
+  "after_dependencies": ["homekit"],
   "codeowners": [
     "@alltours"
   ],
   "config_flow": true,
-  "after_dependencies": ["homekit"],
   "dependencies": [
     "frontend",
     "http"

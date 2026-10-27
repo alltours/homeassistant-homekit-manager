@@ -124,7 +124,7 @@
     },
     {
       "path": "manifest.json",
-      "sha256": "acc432ddbe5aecc5bbd03ba0a118fcfed41b1ad36faaa7b4467697adcb470793",
+      "sha256": "af608a92cb7ef5a2bbf85c9f23dc5a0d37012af222aa4774fee4788ee4ac2ffc",
       "size": 516
     },
     {
@@ -144,8 +144,8 @@
     },
     {
       "path": "native_adapter.py",
-      "sha256": "060ab6fc80f9225a4708035c3c480e1a4e70b13f3efc01d98c82d5603d4489b5",
-      "size": 4566
+      "sha256": "da89dde15e34750d73628759775398d7944e7b037e218568e9994b99e20d662b",
+      "size": 7430
     },
     {
       "path": "panel.py",
@@ -199,8 +199,8 @@
     },
     {
       "path": "www/homekit-manager.js",
-      "sha256": "c992529074b94db4707182a122d07ae7baaf0ef16ccfb084239fb1c535c7fbad",
-      "size": 71670
+      "sha256": "fd07883d715c50f8533fa95d474d59463e4e61bbc615e21a4b56b034c8bb3fe8",
+      "size": 71712
     },
     {
       "path": "yaml_adapter.py",

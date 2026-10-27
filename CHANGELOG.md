@@ -13,6 +13,8 @@
 # Unreleased development toward 0.9.24
 
 - Added isolated, revisions-bound native and narrowly scoped direct-include YAML filter writers with Core 2026.10.4 integration tests. Production HomeKit application remains blocked.
+- Persisted native filter-operation metadata for duplicate request rejection and read-only outcome reconciliation; added YAML metadata journal and verified backup/restore tests.
 - Added value-only native/YAML conversion with unknown-field rejection and repeated semantic roundtrip tests. No HAP identity or pairing migration is provided.
-- Preserved mobile navigation within the 393 px viewport after the 0.9.20 GitHub browser CI finding.
+- Redacted lock and alarm code fields from bridge data returned to the UI.
+- Allowed mobile navigation labels to wrap after the 0.9.20 and development-branch Linux browser CI findings.
 - The integration version remains 0.9.20 until the 0.9.24 definition of done is proven.

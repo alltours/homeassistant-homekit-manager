@@ -2,7 +2,7 @@
 import pytest
 from homeassistant import config_entries
 
-from custom_components.homekit_manager.homekit_writer import HomeKitWriter, OptionsDiff, HomeKitWriteDisabled
+from custom_components.homekit_manager.homekit_writer import HomeKitWriter, OptionsDiff, HomeKitWriteBlocked, HomeKitWriteDisabled
 from custom_components.homekit_manager.native_adapter import NativeHomeKitAdapter
 
 
@@ -62,7 +62,13 @@ async def test_native_adapter_plans_and_recovers_on_loaded_core_entry(hass, monk
     ]
     plan = adapter.plan_filter(bridge, document, inventory)
     assert adapter.reconcile(plan) == "not_applied"
-    assert (await adapter.apply(plan))["verification"] == "verified_options"
+    result = await adapter.apply(plan)
+    assert result["verification"] == "verified_options"
     assert adapter.reconcile(plan) == "verified_options"
+    reopened = NativeHomeKitAdapter(hass, isolated_test_authority=True)
+    assert await reopened.reconcile_operation(plan.operation_id) == "verified_options"
+    with pytest.raises(HomeKitWriteBlocked, match="Operation-ID"):
+        await reopened.apply(plan)
     assert await adapter.recover(plan) == "verified_options_restore"
     assert adapter.reconcile(plan) == "not_applied"
+    assert await reopened.reconcile_operation(plan.operation_id) == "not_applied"

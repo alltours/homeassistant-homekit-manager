@@ -55,9 +55,10 @@ jobs:
           npx playwright install --with-deps chromium webkit
       - name: Python syntax
         run: python -m compileall -q custom_components tests
-      - name: Static read-only safety checks
+      - name: Static production write-boundary checks
         run: |
-          ! grep -R "apply_enabled[[:space:]]*=[[:space:]]*True" -n custom_components
+          grep -F "raise HomeKitWriteDisabled(WRITE_LOCK_REASON)" custom_components/homekit_manager/coordinator.py
+          grep -F "if self.allow_production or not (self.test_environment and self.apply_enabled):" custom_components/homekit_manager/homekit_writer.py
           grep -R "HomeKitWriteDisabled" -n custom_components/homekit_manager/homekit_writer.py
           grep -R "SOURCE_USER\|allow_production\|async_update_entry" -n custom_components/homekit_manager/homekit_writer.py
           ! grep -R "async_reload\|\.storage\|pairing" -n custom_components/homekit_manager/homekit_writer.py

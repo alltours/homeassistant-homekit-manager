@@ -17,6 +17,7 @@ Stand: 27.10.2026. Branch `feature/homekit-manager-0.9.24`, abgezweigt vom gepus
 - `conversion.py`: reversibler **Wert**-Transfer für `name`, `port`, `ip_address`, `advertise_ip`, `filter`, `entity_config`, `mode` und `devices` nach Core-Schema. Ein unbekanntes oder anders gelagertes Feld blockiert die Konvertierung. Ein neuer Config Entry, Quellenwechsel, HAP-Identität und Pairings sind ausdrücklich nicht Teil des Transfers.
 - CSS-Korrektur für die vier Haupttabs bei 393 px. Der GitHub-CI-Fehler der 0.9.20-PR-Browserjobs (`nav.scrollWidth - clientWidth == 8`) ist lokal in Chromium und WebKit behoben; ein GitHub-Lauf dieses neuen Branches steht noch aus.
 - Zweiter Sicherheitsdurchgang: Der lesende Bridge-Serializer gab zuvor `entity_config.code` oder `setup_code` weiter, wenn solche Werte vorhanden waren. Die Redaction deckt diese exakten Codefelder jetzt ab, ohne `video_codec` zu entfernen; ein gezielter Test verhindert die Regression. Hassfest fand außerdem die fehlende HomeKit-`after_dependencies`-Deklaration; das Manifest wurde korrigiert. Beide Korrekturen benötigen einen neuen CI-Lauf.
+- Die alte CI-Textsuche verbot jede isolierte `apply_enabled=True`-Verwendung und hätte damit den ausdrücklich geforderten Test-Writer zurückgewiesen. Der Check prüft nun die unveränderte Coordinator-Sperre und die getrennte Writer-Gate-Bedingung; die tatsächliche WebSocket-/Admin-Sperre wird zusätzlich durch HA-Integrationstests ausgeführt.
 
 ## Feldmatrix für den unterstützten Wert-Transfer
 

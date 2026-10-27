@@ -11,8 +11,8 @@
     {"path":"compatibility.py","sha256":"1911293db98a99128725d63211f65fce3c91a4f567a3d929b661d9731901f115"},
     {"path":"config_flow.py","sha256":"dc5808229a66b28d83d29b6ec8a9410a7c326526966f9cd8a53e813e96039d26"},
     {"path":"config_source.py","sha256":"28289ba9c9f4ef3ec9e19c97e27be2daff7e0a59223f0c08bc747307f3b5b550"},
-    {"path":"const.py","sha256":"3e663298bc6717b0ef9d92f7df8cc6e45282e900ab76fce74249409301572477"},
-    {"path":"coordinator.py","sha256":"636b19f9d17356eac0edf993ed9824c9ba2c21e13f916a390e35f0812108fbbd"},
+    {"path":"const.py","sha256":"bf5bd4ae21f283bcd610e0483fa4ce4b569dfde46f94d304787509461b786536"},
+    {"path":"coordinator.py","sha256":"de577a2caf83bb1fe51f4a94d5222a26c269ffd44762ee44636516313b90317e"},
     {"path":"device_config.py","sha256":"8e769bc44c9a2403a3b587f99a0f9df06d4c2bb13e57b3c3c32b753c1075bf26"},
     {"path":"diagnostics.py","sha256":"d97424c6eda0c92f02046eebf20299b2032e21e8317a99244aaf39392bf1b52c"},
     {"path":"draft.py","sha256":"5c28f0a25b70f082ee471bcf3975121537dae69d0d3a50d6b4375a2898287783"},
@@ -37,8 +37,8 @@
     {"path":"strings.json","sha256":"9d0b96eb535d446b5630f6f9215b8fc08d950726924e096e6e104f7abe9c8f6e"},
     {"path":"translations/de.json","sha256":"dd9511c4a293d702013162c9268c78c9c59dfb37ec0036bb2d2ac0c9034651da"},
     {"path":"translations/en.json","sha256":"93ac0e28518a94d5a07cd4e98e393ee78019a47ce0cac64b14a90ba2383bc5f2"},
-    {"path":"websocket.py","sha256":"26037e097e04b912b20e09562981f348caa73efd5b327ea0e4220d9fdaf150ca"},
-    {"path":"www/homekit-manager.js","sha256":"4662bd969bf2e701dc41ba1b664014547934ff4b9c8ee1d2a6bfc917aaf5c8af"},
+    {"path":"websocket.py","sha256":"3dd50a90c97ead3217fcb525d8965e89abda3014bcf9a14298cdfb339c08bd43"},
+    {"path":"www/homekit-manager.js","sha256":"6d623aa4854455dc02fb331f6a22105fb3e5298a1471224bef848ef47fe9439c"},
     {"path":"yaml_store.py","sha256":"ed21ccda913837a2d91c3c49da89f78bc17bb470efe9dea461cc129905f1f980"}
   ]
 }

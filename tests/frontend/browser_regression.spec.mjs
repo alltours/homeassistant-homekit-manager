@@ -21,6 +21,7 @@ for (const [name, width, height] of viewports) {
       await expect(panel.locator("text=Fixture Bridge")).toBeVisible();
       await expect(panel.locator(".storage-card.active small")).toContainText("Aktive Konfigurationsquelle");
       await expect(panel.getByRole("heading", { name: "Verwaltungsoberfläche" })).toBeVisible();
+      await page.evaluate(() => { window.confirm = () => true; });
       await panel.locator("[data-management-enable]").click();
       await expect(panel.locator("text=HomeKit Manager verwaltet diese Bridge jetzt.")).toBeVisible();
       await panel.locator("[data-bridge-expand]").click();
@@ -142,4 +143,14 @@ test("storage cards distinguish verified source from management surface", async 
   await expect(panel.locator(".storage-card.active small")).toContainText("Aktive Konfigurationsquelle");
   await expect(panel.getByRole("heading", { name: "Verwaltungsoberfläche" })).toBeVisible();
   await expect(panel.locator("text=YAML- und SOURCE_IMPORT-Migrationen bleiben gesperrt.")).toBeVisible();
+});
+
+test("management can be disabled without changing the native source", async ({ page }) => {
+  await page.goto("/tests/frontend/browser_fixture.html");
+  const panel = page.locator("homekit-manager-panel");
+  await page.evaluate(() => { window.confirm = () => true; });
+  await panel.locator("[data-management-enable]").click();
+  await panel.locator("[data-management-disable]").click();
+  await expect(panel.locator("text=Die Verwaltung wurde auf Home Assistant zurückgestellt.")).toBeVisible();
+  await expect(panel.locator("text=Änderungen anwenden: Gesperrt")).toBeVisible();
 });

@@ -15,7 +15,7 @@ from .const import (
     DEVICES_COMMAND, AREAS_COMMAND, DIAGNOSTICS_COMMAND, DEVICE_PREVIEW_COMMAND, RULES_PREVIEW_COMMAND, HISTORY_COMMAND, HISTORY_RESTORE_COMMAND, PERFORMANCE_COMMAND,
     ACTIVATION_STATUS_COMMAND,
     MIGRATION_PLAN_COMMAND, MIGRATION_START_COMMAND, MIGRATION_STATUS_COMMAND,
-    MANAGEMENT_STATUS_COMMAND, MANAGEMENT_ENABLE_COMMAND,
+    MANAGEMENT_STATUS_COMMAND, MANAGEMENT_ENABLE_COMMAND, MANAGEMENT_DISABLE_COMMAND,
 )
 from .homekit_writer import HomeKitWriteError
 from .yaml_store import YamlStoreError, YamlValidationError, YamlVersionConflict
@@ -206,6 +206,14 @@ async def websocket_management_enable(hass, connection, msg):
     connection.send_result(msg["id"], await coordinator.async_enable_management(bool(msg.get("confirmed", False))))
 
 
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required("type"): MANAGEMENT_DISABLE_COMMAND, probatio.Optional("confirmed"): bool})
+@websocket_api.async_response
+async def websocket_management_disable(hass, connection, msg):
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    connection.send_result(msg["id"], await coordinator.async_disable_management(bool(msg.get("confirmed", False))))
+
+
 def _document(msg):
     return msg.get("document") or msg.get("draft")
 
@@ -339,6 +347,6 @@ def async_register_websocket_commands(hass, coordinator) -> None:
     """Register authenticated inventory, draft, and guarded apply commands."""
     websocket_api.async_register_command(hass, websocket_inventory)
     websocket_api.async_register_command(hass, websocket_bridges)
-    for handler in (websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_activation_status, websocket_mode_status, websocket_set_mode, websocket_migration_plan, websocket_migration_status, websocket_migration_start, websocket_management_status, websocket_management_enable, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_apply_options_diff, websocket_prepare_options_diff, websocket_reconcile, websocket_export):
+    for handler in (websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_activation_status, websocket_mode_status, websocket_set_mode, websocket_migration_plan, websocket_migration_status, websocket_migration_start, websocket_management_status, websocket_management_enable, websocket_management_disable, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_apply_options_diff, websocket_prepare_options_diff, websocket_reconcile, websocket_export):
         websocket_api.async_register_command(hass, handler)
 

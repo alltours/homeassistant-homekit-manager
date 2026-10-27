@@ -63,6 +63,16 @@ Eine YAML-Quelle (`SOURCE_IMPORT`) kann mit dieser Verwaltungsschaltung nicht
 aktiviert werden, weil der Core dafür keinen gleichwertigen sicheren externen
 Ownership-/Optionsvertrag bereitstellt.
 
+Die Verwaltungsumschaltung ist außerdem von der Schreibberechtigung getrennt.
+Bei aktiver HomeKit-Manager-Verwaltung meldet das Backend den Optionspfad als
+`available`, sofern Bridge, Quelle, Core-Version und Writer-Gates gültig sind.
+Bei Home-Assistant-Verwaltung bleibt der Optionspfad `locked`. Die grüne
+Verwaltungsanzeige allein schaltet keine HomeKit-Schreiboperation frei.
+
+Die Rückstellung auf Home Assistant speichert ausschließlich den Verwaltungsstatus
+für die betreffende Entry-ID. Entwürfe, Historie und native HomeKit-Optionen bleiben
+unverändert.
+
 ## UI-Änderungen
 
 - aktive Speicherart als grüne Karte mit Häkchen;

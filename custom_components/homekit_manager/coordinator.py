@@ -330,18 +330,25 @@ class HomeKitManagerCoordinator:
         state = status.get("state", "not_enabled")
         if status.get("source") not in (None, source):
             state = "unknown"
+        if bridge.get("state") != "loaded" and state == "active":
+            state = "unknown"
+        active = state == "active" and source == "home_assistant"
+        management_surface = "homekit_manager" if active else "home_assistant"
+        write_status = "available" if active else "locked" if bridge.get("state") == "loaded" else "unknown"
         return {
             "entry_id": entry_id,
             "bridge_title": bridge.get("title"),
             "configuration_source": source,
             "configuration_source_label": "Home Assistant" if source == "home_assistant" else "YAML" if source == "yaml" else "Unbekannt",
-            "management_surface": "homekit_manager",
-            "management_surface_label": "HomeKit Manager",
+            "management_surface": management_surface,
+            "management_surface_label": "HomeKit Manager" if management_surface == "homekit_manager" else "Home Assistant",
             "state": state,
-            "active": state == "active" and source == "home_assistant",
+            "active": active,
+            "write_status": write_status,
+            "write_status_label": {"available": "Verfügbar", "locked": "Gesperrt", "unknown": "Status unbekannt"}[write_status],
             "bridge_state": bridge.get("state"),
             "supported": bridge.get("source") == "user" and bridge.get("state") == "loaded",
-            "message": status.get("message") or ("HomeKit Manager verwaltet diese Bridge jetzt." if state == "active" else "HomeKit Manager kann diese bestehende Bridge nach Bestätigung verwalten."),
+            "message": status.get("message") or ("HomeKit Manager verwaltet diese Bridge jetzt." if active else "Die Verwaltung liegt bei Home Assistant. HomeKit Manager kann für diese Bridge aktiviert werden."),
             "step": status.get("step"),
             "request_id": status.get("request_id"),
             "updated_at": status.get("updated_at"),
@@ -370,6 +377,33 @@ class HomeKitManagerCoordinator:
             status.update({"state": "unknown", "step": "verify", "message": "Bridge-Verifikation nach der Prüfung nicht eindeutig."})
         else:
             status.update({"state": "active", "step": "complete", "message": "HomeKit Manager verwaltet diese Bridge jetzt."})
+        self.management_statuses[entry_id] = status.copy()
+        await self.management_store.async_save(self.management_statuses)
+        return self.management_status()
+
+    async def async_disable_management(self, confirmed: bool = False) -> dict[str, Any]:
+        """Return ownership to Home Assistant without changing native options."""
+        bridge = self.selected_bridge()
+        status = self.management_status()
+        if bridge is None or not status["supported"]:
+            status["state"] = "blocked"
+            status["message"] = "Nur eine geladene SOURCE_USER-Bridge kann zurückgestellt werden."
+            return status
+        if not confirmed:
+            status["state"] = "awaiting_confirmation"
+            status["message"] = "Bestätigung erforderlich: Die Verwaltungsoberfläche wird auf Home Assistant zurückgestellt. Entwürfe bleiben erhalten."
+            return status
+        request_id = uuid4().hex
+        entry_id = bridge["entry_id"]
+        status.update({"state": "verifying", "step": "validate", "request_id": request_id, "message": "Bridge verifiziert; Verwaltungsstatus wird auf Home Assistant zurückgestellt."})
+        self.management_statuses[entry_id] = status.copy()
+        await self.management_store.async_save(self.management_statuses)
+        await self.async_refresh()
+        verified = self.selected_bridge()
+        if verified is None or verified.get("entry_id") != entry_id or verified.get("state") != "loaded":
+            status.update({"state": "unknown", "step": "verify", "message": "Bridge-Verifikation nach der Rückstellung nicht eindeutig."})
+        else:
+            status.update({"state": "inactive", "step": "complete", "message": "Die Verwaltung wurde auf Home Assistant zurückgestellt."})
         self.management_statuses[entry_id] = status.copy()
         await self.management_store.async_save(self.management_statuses)
         return self.management_status()

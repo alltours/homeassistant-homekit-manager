@@ -1,7 +1,7 @@
 """Authenticated WebSocket API for read operations and controlled drafts.
 
 All commands require an administrator connection. HomeKit writes are locked
-in 0.9.19 before any native options or operation state can change.
+in 0.9.24 before any native options or operation state can change.
 """
 from __future__ import annotations
 import probatio
@@ -13,6 +13,7 @@ from .const import (
     MODE_STATUS_COMMAND, SET_MODE_COMMAND,
     DEVICES_COMMAND, AREAS_COMMAND, DIAGNOSTICS_COMMAND, DEVICE_PREVIEW_COMMAND, RULES_PREVIEW_COMMAND, HISTORY_COMMAND, HISTORY_RESTORE_COMMAND, PERFORMANCE_COMMAND,
     ACTIVATION_STATUS_COMMAND,
+    OPERATION_PLAN_COMMAND, OPERATION_APPLY_COMMAND, OPERATION_STATUS_COMMAND, OPERATION_RECONCILE_COMMAND,
     MIGRATION_PLAN_COMMAND, MIGRATION_START_COMMAND, MIGRATION_STATUS_COMMAND,
     MANAGEMENT_STATUS_COMMAND, MANAGEMENT_ENABLE_COMMAND, MANAGEMENT_DISABLE_COMMAND,
 )
@@ -146,7 +147,7 @@ async def websocket_history_restore(hass, connection, msg):
 @websocket_api.async_response
 async def websocket_performance(hass, connection, msg):
     coordinator = hass.data["homekit_manager"]["coordinator"]
-    connection.send_result(msg["id"], summarize_inventory(coordinator.inventory) | {"last_updated": coordinator.last_updated, "refresh_duration_ms": coordinator.refresh_duration_ms, "refresh_count": coordinator.refresh_count, "snapshot_stale": bool(coordinator.last_error)} )
+    connection.send_result(msg["id"], summarize_inventory(coordinator.inventory) | {"last_updated": coordinator.last_updated, "refresh_duration_ms": coordinator.refresh_duration_ms, "refresh_cpu_ms": coordinator.refresh_cpu_ms, "refresh_phases_ms": dict(coordinator.refresh_phases_ms), "refresh_count": coordinator.refresh_count, "refresh_requests": coordinator.refresh_requests, "events_seen": coordinator.events_seen, "events_ignored": coordinator.events_ignored, "events_by_type": dict(coordinator.events_by_type), "snapshot_stale": bool(coordinator.last_error)} )
 
 
 @websocket_api.require_admin
@@ -321,6 +322,67 @@ async def websocket_apply_options_diff(hass, connection, msg):
 
 
 @websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required("type"): OPERATION_PLAN_COMMAND,
+                                  probatio.Required("document"): dict,
+                                  probatio.Required("entry_id"): str,
+                                  probatio.Required("expected_fingerprint"): str})
+@websocket_api.async_response
+async def websocket_operation_plan(hass, connection, msg):
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    try:
+        result = await coordinator.async_plan_operation(msg["document"], msg["expected_fingerprint"], msg["entry_id"])
+    except (YamlValidationError, HomeKitWriteError, ValueError, OSError) as err:
+        connection.send_error(msg["id"], "plan_blocked", str(err))
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required("type"): OPERATION_APPLY_COMMAND,
+                                  probatio.Required("operation_id"): str,
+                                  probatio.Required("entry_id"): str,
+                                  probatio.Required("source_revision"): str,
+                                  probatio.Required("expected_fingerprint"): str,
+                                  probatio.Required("confirmed_operation_id"): str})
+@websocket_api.async_response
+async def websocket_operation_apply(hass, connection, msg):
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    try:
+        result = await coordinator.async_apply_operation(msg["operation_id"], msg["entry_id"],
+                                                         msg["source_revision"], msg["expected_fingerprint"],
+                                                         msg["confirmed_operation_id"])
+    except (HomeKitWriteError, ValueError, OSError) as err:
+        connection.send_error(msg["id"], "write_blocked", str(err))
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required("type"): OPERATION_STATUS_COMMAND,
+                                  probatio.Required("operation_id"): str})
+@websocket_api.async_response
+async def websocket_operation_status(hass, connection, msg):
+    result = await hass.data["homekit_manager"]["coordinator"].operation_service.status(msg["operation_id"])
+    if result is None:
+        connection.send_error(msg["id"], "not_found", "Operation-ID ist nicht bekannt")
+    else:
+        connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required("type"): OPERATION_RECONCILE_COMMAND,
+                                  probatio.Required("operation_id"): str})
+@websocket_api.async_response
+async def websocket_operation_reconcile(hass, connection, msg):
+    try:
+        result = await hass.data["homekit_manager"]["coordinator"].operation_service.reconcile(msg["operation_id"])
+    except (HomeKitWriteError, ValueError, OSError) as err:
+        connection.send_error(msg["id"], "reconcile_blocked", str(err))
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
 @websocket_api.websocket_command({
     probatio.Required("type"): ACTIVATION_STATUS_COMMAND,
     probatio.Optional("entry_id"): str,
@@ -368,7 +430,7 @@ async def websocket_export(hass, connection, msg):
     except (YamlValidationError, ValueError) as err:
         connection.send_error(msg["id"], "invalid_format", str(err))
 
-REGISTERED_HANDLERS = (websocket_inventory, websocket_bridges, websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_activation_status, websocket_mode_status, websocket_set_mode, websocket_migration_plan, websocket_migration_status, websocket_migration_start, websocket_management_status, websocket_management_enable, websocket_management_disable, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_apply_options_diff, websocket_prepare_options_diff, websocket_reconcile, websocket_export)
+REGISTERED_HANDLERS = (websocket_inventory, websocket_bridges, websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_activation_status, websocket_mode_status, websocket_set_mode, websocket_migration_plan, websocket_migration_status, websocket_migration_start, websocket_management_status, websocket_management_enable, websocket_management_disable, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_apply_options_diff, websocket_operation_plan, websocket_operation_apply, websocket_operation_status, websocket_operation_reconcile, websocket_prepare_options_diff, websocket_reconcile, websocket_export)
 
 
 def async_register_websocket_commands(hass, coordinator) -> None:

@@ -29,7 +29,7 @@ _SENSITIVE_KEYS = ("password", "token", "secret", "pin", "key", "pairing")
 
 def _is_sensitive(key: Any) -> bool:
     lowered = str(key).casefold()
-    return any(word in lowered for word in _SENSITIVE_KEYS)
+    return any(word in lowered for word in _SENSITIVE_KEYS) or lowered == "code" or lowered.endswith("_code")
 
 
 def _redact(value: Any) -> Any:

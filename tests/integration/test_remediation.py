@@ -48,6 +48,17 @@ async def test_bridge_and_accessory_entries_are_separate(hass, enable_custom_int
         await manager.async_select_bridge("accessory-one")
 
 
+async def test_yaml_import_entry_is_not_counted_as_a_second_native_source(hass, tmp_path, enable_custom_integrations):
+    (tmp_path / "configuration.yaml").write_text("homekit:\n  - name: Test YAML Bridge\n    port: 21066\n")
+    MockConfigEntry(domain="homekit", entry_id="yaml-one", source="import",
+                    data={"name": "Test YAML Bridge", "port": 21066, "mode": "bridge"},
+                    options={"filter": {}}).add_to_hass(hass)
+    manager = await setup_manager(hass)
+    assert manager.configuration_sources["active_mode"] == "yaml"
+    assert manager.configuration_sources["mixed"] is False
+    assert manager.bridges[0]["source"] == "import"
+
+
 async def test_failed_refresh_preserves_complete_snapshot(hass, enable_custom_integrations, monkeypatch):
     manager = await setup_manager(hass)
     before = (manager.inventory, manager.bridges, manager.devices, manager.areas, manager.fingerprint, manager.last_updated)
@@ -58,6 +69,27 @@ async def test_failed_refresh_preserves_complete_snapshot(hass, enable_custom_in
     after = (manager.inventory, manager.bridges, manager.devices, manager.areas, manager.fingerprint, manager.last_updated)
     assert all(left is right for left, right in zip(before, after))
     assert manager.overview()["snapshot_stale"] is True
+
+
+async def test_identical_state_events_do_not_recompute_and_burst_is_coalesced(hass, enable_custom_integrations):
+    manager = await setup_manager(hass)
+    before = manager.refresh_count
+    old = Mock(state="on", attributes={"x": 1})
+    for _ in range(100):
+        manager._event_received(Mock(event_type="state_changed", data={"old_state": old, "new_state": old}))
+    assert manager.events_seen == 100
+    assert manager.events_ignored == 100
+    assert manager.refresh_count == before
+    assert manager._refresh_task is None
+    for index in range(25):
+        manager._event_received(Mock(event_type="state_changed", data={"old_state": old,
+                                   "new_state": Mock(state="on", attributes={"x": index + 2})}))
+    await asyncio.sleep(1.35)
+    assert manager.refresh_count == before + 1
+    assert manager.events_seen == 125
+    assert manager.refresh_cpu_ms is not None
+    assert set(manager.refresh_phases_ms) == {"registry_inventory", "filter_compatibility", "grouping", "source_io", "diagnostics_fingerprint"}
+    assert manager.overview()["refresh_requests"] >= manager.refresh_count
 
 
 async def test_unload_reload_removes_and_restores_commands(hass, enable_custom_integrations):
@@ -102,6 +134,13 @@ async def test_apply_http_transport_is_locked_and_native_options_unchanged(hass,
         response = await client.receive_json()
         assert response["success"] is False
         assert response["error"]["code"] == "write_blocked"
+    await client.send_json_auto_id({"type": "homekit_manager/operation_apply", "operation_id": "forged",
+                                    "entry_id": native.entry_id, "source_revision": "forged",
+                                    "expected_fingerprint": manager.fingerprint or "forged",
+                                    "confirmed_operation_id": "forged"})
+    response = await client.receive_json()
+    assert response["success"] is False
+    assert response["error"]["code"] == "write_blocked"
     assert dict(native.options) == before
     assert manager.overview()["write_policy"]["enabled"] is False
 
@@ -113,7 +152,7 @@ async def test_all_api_commands_reject_non_administrators(hass, enable_custom_in
     client = await hass_ws_client(access_token=hass.auth.async_create_access_token(refresh))
     from custom_components.homekit_manager.websocket import REGISTERED_HANDLERS
     document = {"schema_version": 1, "bridges": {}}
-    arguments = {"select_bridge": {"entry_id": "b"}, "device_preview": {"entity_id": "light.one"}, "rules_preview": {"rules": []}, "history_restore": {"index": 0}, "set_mode": {"mode": "homekit_bridge"}, "migration_start": {"target": "homekit_bridge"}, "management_enable": {}, "management_disable": {}}
+    arguments = {"select_bridge": {"entry_id": "b"}, "device_preview": {"entity_id": "light.one"}, "rules_preview": {"rules": []}, "history_restore": {"index": 0}, "set_mode": {"mode": "homekit_bridge"}, "migration_start": {"target": "homekit_bridge"}, "management_enable": {}, "management_disable": {}, "operation_plan": {"document": document, "entry_id": "b", "expected_fingerprint": "x"}, "operation_apply": {"operation_id": "x", "entry_id": "b", "source_revision": "x", "expected_fingerprint": "x", "confirmed_operation_id": "x"}, "operation_status": {"operation_id": "x"}, "operation_reconcile": {"operation_id": "x"}}
     for handler in REGISTERED_HANDLERS:
         command = handler._ws_command
         name = command.split("/")[1]

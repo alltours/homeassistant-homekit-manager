@@ -1,8 +1,6 @@
 """Event-driven read-only coordinator."""
 from __future__ import annotations
 import asyncio
-import hashlib
-import json
 import logging
 import time
 from pathlib import Path
@@ -13,9 +11,10 @@ from homeassistant.core import callback
 from .compatibility import classify_entity
 from .homekit_reader import read_homekit_entries
 from .inventory import build_inventory
+from .device_reconciliation import reconcile_devices
 from .change_planner import plan_changes
 from .fingerprint import build_fingerprint
-from .homekit_writer import HomeKitWriter, OptionsDiff, build_options_diff, HomeKitWriteBlocked, HomeKitActivationUnknown
+from .homekit_writer import build_options_diff, HomeKitWriteBlocked, HomeKitWriter as HomeKitWriter
 from .reconcile import reconcile_desired_state
 from .exporter import export_desired_state
 from .yaml_store import (
@@ -33,12 +32,13 @@ from .diagnostics import build_diagnostics, diagnostics_summary, group_diagnosti
 from .history import make_history_entry, restore_as_draft
 from .history_store import HistoryStore
 from .config_source import inspect_configuration_sources
-from .migration import build_migration_plan, build_migration_matrix, completed_verification
+from .migration import build_migration_plan, build_migration_matrix
 from .migration_store import MigrationStore
 from .management_store import ManagementStore
 from .activation_store import ActivationStore
 from .safety import WRITE_LOCK_REASON, write_policy
 from .homekit_writer import HomeKitWriteDisabled
+from .operations import HomeKitOperationService
 from .const import INTEGRATION_VERSION, SUPPORTED_CORE_VERSION
 from homeassistant.const import __version__ as CORE_VERSION
 
@@ -51,6 +51,7 @@ class HomeKitManagerCoordinator:
         self.inventory: list[dict[str, Any]] = []
         self.bridges: list[dict[str, Any]] = []
         self.devices: list[dict[str, Any]] = []
+        self.device_reconciliation: dict[str, Any] = {}
         self.areas: list[dict[str, Any]] = []
         self.diagnostic_findings: list[dict[str, Any]] = []
         self.history_entries: list[dict[str, Any]] = []
@@ -65,6 +66,9 @@ class HomeKitManagerCoordinator:
         self.migration_store = MigrationStore(hass)
         self.management_store = ManagementStore(hass)
         self.activation_store = ActivationStore(hass)
+        # No production configuration path grants write authority in this
+        # release. Tests may inject an isolated service after setup.
+        self.operation_service = HomeKitOperationService(hass)
         self.management_statuses: dict[str, dict[str, Any]] = {}
         self.migration_status: dict[str, Any] = {
             "state": "unknown",
@@ -94,6 +98,12 @@ class HomeKitManagerCoordinator:
         self.last_updated = None
         self.refresh_count = 0
         self.refresh_duration_ms = None
+        self.refresh_cpu_ms = None
+        self.refresh_phases_ms: dict[str, float] = {}
+        self.events_seen = 0
+        self.events_ignored = 0
+        self.events_by_type: dict[str, int] = {}
+        self.refresh_requests = 0
         self._last_refresh_monotonic = 0.0
         self._management_lock = asyncio.Lock()
         self._subscribe_events()
@@ -145,13 +155,22 @@ class HomeKitManagerCoordinator:
         return {"selected_bridge_id": self.selected_bridge_id, "overview": self.overview()}
 
     def _subscribe_events(self) -> None:
-        for event_type in ("state_changed", "entity_registry_updated", "device_registry_updated", "area_registry_updated", "homekit_state_change"):
+        for event_type in ("state_changed", "entity_registry_updated", "device_registry_updated", "area_registry_updated"):
             self._unsubscribers.append(self.hass.bus.async_listen(event_type, self._event_received))
 
     @callback
-    def _event_received(self, _event) -> None:
+    def _event_received(self, event) -> None:
         if self._stopping:
             return
+        kind = getattr(event, "event_type", "unknown")
+        self.events_seen += 1
+        self.events_by_type[kind] = self.events_by_type.get(kind, 0) + 1
+        if kind == "state_changed":
+            data = getattr(event, "data", {}) or {}
+            old, new = data.get("old_state"), data.get("new_state")
+            if old is not None and new is not None and old.state == new.state and old.attributes == new.attributes:
+                self.events_ignored += 1
+                return
         self._refresh_pending = True
         if not self._refresh_task or self._refresh_task.done():
             self._refresh_task = self.hass.async_create_task(self._async_debounced_refresh())
@@ -166,10 +185,22 @@ class HomeKitManagerCoordinator:
     async def async_refresh(self, selected_entry_id: str | None = None) -> None:
         """Build a complete snapshot locally, then publish it atomically."""
         async with self._refresh_lock:
+            self.refresh_requests += 1
             started = time.perf_counter()
+            cpu_started = time.process_time()
+            phase_started = started
+            phases: dict[str, float] = {}
+            def mark_phase(name: str) -> None:
+                nonlocal phase_started
+                now = time.perf_counter()
+                phases[name] = round((now - phase_started) * 1000, 2)
+                phase_started = now
             try:
                 from homeassistant.helpers import area_registry, device_registry, entity_registry
-                records = build_inventory(entity_registry.async_get(self.hass), device_registry.async_get(self.hass), area_registry.async_get(self.hass), {state.entity_id: state for state in self.hass.states.async_all()})
+                devices_registry = device_registry.async_get(self.hass)
+                records = build_inventory(entity_registry.async_get(self.hass), devices_registry, area_registry.async_get(self.hass), {state.entity_id: state for state in self.hass.states.async_all()})
+                device_reconciliation = reconcile_devices((vars(record) for record in records), devices_registry)
+                mark_phase("registry_inventory")
                 entries = read_homekit_entries(self.hass)
                 bridges = [entry for entry in entries if entry.mode == "bridge"]
                 bridge_ids = {bridge.entry_id for bridge in bridges}
@@ -192,9 +223,11 @@ class HomeKitManagerCoordinator:
                     configured = item["homekit"]["configured_by_filter"]
                     item["homekit"]["current_status"] = "included" if configured is True else "excluded" if configured is False else "unknown"
                     inventory.append(item)
+                mark_phase("filter_compatibility")
                 bridge_data = [entry.as_dict() | {"selected": entry.entry_id == selected_id} for entry in bridges]
                 devices = build_device_views(inventory)
                 areas = build_area_views(inventory)
+                mark_phase("grouping")
                 snapshot = await self.hass.async_add_executor_job(self.yaml_store.load)
                 def read_sources():
                     configuration = self._config_dir / "configuration.yaml"
@@ -202,13 +235,16 @@ class HomeKitManagerCoordinator:
                         text = configuration.read_text(encoding="utf-8")
                     except OSError:
                         text = ""
-                    return inspect_configuration_sources(text, config_dir=self._config_dir, manager_file_exists=snapshot.exists, bridge_count=len(bridges))
+                    return inspect_configuration_sources(text, config_dir=self._config_dir, manager_file_exists=snapshot.exists, bridge_count=sum(entry.source == "user" for entry in bridges))
                 sources = await self.hass.async_add_executor_job(read_sources)
+                mark_phase("source_io")
                 findings = build_diagnostics(inventory, bridge_data, {"valid": snapshot.valid, "error": snapshot.error})
                 fingerprint = build_fingerprint(bridge_data, inventory, snapshot.document)
+                mark_phase("diagnostics_fingerprint")
                 # No await beyond this point: readers see one consistent snapshot.
                 self.inventory, self.bridges = inventory, bridge_data
                 self.devices, self.areas = devices, areas
+                self.device_reconciliation = device_reconciliation
                 self.accessories = [entry.as_dict() for entry in entries if entry.mode == "accessory"]
                 self.other_homekit_entries = [entry.as_dict() for entry in entries if entry.mode not in {"accessory", "bridge"}]
                 self.selected_bridge_id = selected_id
@@ -218,6 +254,8 @@ class HomeKitManagerCoordinator:
                 self.last_updated = datetime.now(timezone.utc).isoformat()
                 self.refresh_count += 1
                 self.refresh_duration_ms = round((time.perf_counter() - started) * 1000, 2)
+                self.refresh_cpu_ms = round((time.process_time() - cpu_started) * 1000, 2)
+                self.refresh_phases_ms = phases
                 self._last_refresh_monotonic = time.monotonic()
                 self.hass.bus.async_fire("homekit_manager_updated", {"revision": self.refresh_count})
             except Exception as err:
@@ -232,10 +270,12 @@ class HomeKitManagerCoordinator:
         filter_known = bool(self.bridges) and unknown == 0
         return {
             "total_entities": len(self.inventory),
-            "active_entities": sum(item["disabled_by"] is None for item in self.inventory),
-            "disabled_entities": sum(item["disabled_by"] is not None for item in self.inventory),
+            "active_entities": sum(item.get("availability_status") != "disabled" for item in self.inventory),
+            "disabled_entities": sum(item.get("availability_status") == "disabled" for item in self.inventory),
             "unavailable_entities": sum(not item["available"] for item in self.inventory),
             "device_count": len({item["device_id"] for item in self.inventory if item["device_id"]}),
+            "device_reconciliation": self.device_reconciliation,
+            "availability_counts": {status: sum(item.get("availability_status") == status for item in self.inventory) for status in ("available", "unavailable", "unknown", "no_state", "disabled", "orphaned")},
             "area_count": len({item["area_id"] for item in self.inventory if item["area_id"]}),
             "compatible_entities": compatible,
             "configured_entities": configured if filter_known else None,
@@ -255,8 +295,17 @@ class HomeKitManagerCoordinator:
             "core_version": CORE_VERSION,
             "accessories": len(self.accessories),
             "write_policy": write_policy(),
+            "operation_policy": {"enabled": self.operation_service._isolated_write_authority,
+                                 "reason": "Nur isolierte Testinstanz" if self.operation_service._isolated_write_authority else WRITE_LOCK_REASON,
+                                 "automatic_retry": False},
             "refresh_count": self.refresh_count,
             "refresh_duration_ms": self.refresh_duration_ms,
+            "refresh_cpu_ms": self.refresh_cpu_ms,
+            "refresh_phases_ms": dict(self.refresh_phases_ms),
+            "events_seen": self.events_seen,
+            "events_ignored": self.events_ignored,
+            "events_by_type": dict(self.events_by_type),
+            "refresh_requests": self.refresh_requests,
             "diagnostics": diagnostics_summary(self.diagnostic_findings),
         }
 
@@ -325,12 +374,12 @@ class HomeKitManagerCoordinator:
             "supported_modes": list(MANAGEMENT_MODES),
             "bridge_count": len(self.bridges),
             "bridge_selection_required": len(self.bridges) > 1,
-            "message": "Moduswechsel bleiben gesperrt, solange Bridge-Identität und Pairing-Erhalt nicht nachgewiesen sind.",
+            "message": "Quellenmigration ist weder für 0.9.24 noch für 0.10.0 vorgesehen; bestehende Bridges behalten ihre Quelle.",
             "source_detection": self.configuration_sources,
         }
 
     def migration_plan(self, target: str | None = None) -> dict[str, Any]:
-        """Return a verified-source plan without changing Home Assistant."""
+        """Return a non-executable legacy description without changing Home Assistant."""
         bridge = self.selected_bridge()
         source = self._active_mode(bridge)
         if source not in MANAGEMENT_MODES:
@@ -380,7 +429,7 @@ class HomeKitManagerCoordinator:
             "write_status": write_status,
             "write_status_label": {"available": "Verfügbar", "locked": "Gesperrt", "unknown": "Status unbekannt"}[write_status],
             "bridge_state": bridge.get("state"),
-            "supported": bridge.get("source") == "user" and bridge.get("state") == "loaded" and bridge.get("mode", "bridge") == "bridge" and not self.last_error and CORE_VERSION == SUPPORTED_CORE_VERSION and not (self.activation_statuses.get(entry_id, {}).get("state") in {"unknown", "activating", "saved"}),
+            "supported": bridge.get("source") == "user" and bridge.get("state") == "loaded" and bridge.get("mode", "bridge") == "bridge" and not self.last_error and CORE_VERSION == SUPPORTED_CORE_VERSION and self.activation_statuses.get(entry_id, {}).get("state") not in {"unknown", "activating", "saved"},
             "message": status.get("message") or ("HomeKit Manager verwaltet diese Bridge jetzt." if active else "Die Verwaltung liegt bei Home Assistant. HomeKit Manager kann für diese Bridge aktiviert werden."),
             "step": status.get("step"),
             "request_id": status.get("request_id"),
@@ -424,48 +473,17 @@ class HomeKitManagerCoordinator:
             return self.management_status()
 
     async def async_start_migration(self, target: str, confirmed: bool = False) -> dict[str, Any]:
-        """Verify same-source state or explicitly block cross-source migration."""
+        """Legacy endpoint: no migration action is offered in 0.9.24."""
         plan = self.migration_plan(target)
-        if not plan["supported"]:
-            status = {
-                "state": "blocked",
-                "progress": None,
-                "step": None,
-                "message": plan["reason"],
-                "bridge_entry_id": plan.get("bridge_entry_id"),
-                "source": plan["source"],
-                "target": plan["target"],
-                "changed": False,
-                "migration_performed": False,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-                "stale": False,
-            }
-            self.migration_status = status
-            await self.migration_store.async_save(status)
-            return plan | {"status": status}
-        if not confirmed:
-            return plan | {"status": {"state": "awaiting_confirmation", "progress": 0, "message": "Explizite Bestätigung für die schreibfreie Verifikation erforderlich."}}
-        await self.async_refresh()
-        bridge = self.selected_bridge()
-        if plan.get("bridge_entry_id") != (bridge.get("entry_id") if bridge else None):
-            raise ValueError("Bridge-Kontext hat sich während der Verifikation geändert")
-        status = completed_verification(plan, plan.get("bridge_entry_id"))
-        status.update({"source": plan["source"], "target": plan["target"], "stale": False})
-        self.migration_status = status
-        await self.migration_store.async_save(status)
-        return plan | {"status": status}
+        return plan | {"status": {"state": "blocked", "progress": None, "step": None,
+                                  "message": "Quellenmigration ist weder für 0.9.24 noch 0.10.0 vorgesehen.",
+                                  "bridge_entry_id": plan.get("bridge_entry_id"), "source": plan["source"],
+                                  "target": plan["target"], "changed": False,
+                                  "migration_performed": False, "automatic_retry": False}}
 
     async def async_set_mode(self, mode: str) -> dict[str, Any]:
-        """Persist a desired mode; never activate a risky migration."""
-        if mode not in MANAGEMENT_MODES:
-            raise ValueError("Unbekannter Verwaltungsmodus")
-        bridge = self.selected_bridge()
-        entry_id = bridge.get("entry_id") if bridge else None
-        if not entry_id:
-            raise ValueError("Keine eindeutige HomeKit-Bridge gefunden")
-        self.desired_modes[entry_id] = mode
-        await self.mode_store.async_save(self.desired_modes)
-        return self.mode_status()
+        """Deprecated write endpoint; never persist a different source."""
+        raise ValueError("Quellenmigration ist weder für 0.9.24 noch 0.10.0 vorgesehen")
 
     def _yaml_status_payload(self, snapshot, backup_exists=False):
         return {"document": snapshot.document, "schema_version": snapshot.document.get("schema_version"), "file_version": snapshot.file_version, "last_modified": snapshot.last_modified, "exists": snapshot.exists, "valid": snapshot.valid, "error": snapshot.error, "backup_exists": backup_exists, "included": self.configuration_sources.get("manager_include", False), "active_mode": self._active_mode(self.selected_bridge()), "fingerprint": self.fingerprint, "is_applied": False}
@@ -546,6 +564,29 @@ class HomeKitManagerCoordinator:
     async def async_apply_options_diff(self, document: Any, expected_fingerprint: str | None, request_id: str | None = None) -> dict[str, Any]:
         """Hard lock before validation, status mutation or native entry access."""
         raise HomeKitWriteDisabled(WRITE_LOCK_REASON)
+
+    async def async_plan_operation(self, document: Any, expected_fingerprint: str | None, entry_id: str) -> dict[str, Any]:
+        if not expected_fingerprint or expected_fingerprint != self.fingerprint or self.last_error:
+            raise ValueError("Inventar-Fingerprint ist veraltet oder unbekannt")
+        bridge = self.selected_bridge()
+        if bridge is None or bridge.get("entry_id") != entry_id:
+            raise ValueError("Ziel-Bridge stimmt nicht mit der Auswahl überein")
+        validated = self.validate_draft(document)
+        return await self.operation_service.plan_filter(entry_id=entry_id, bridge=bridge,
+                                                        document=validated["document"], inventory=self.inventory)
+
+    async def async_apply_operation(self, operation_id: str, entry_id: str, source_revision: str,
+                                    expected_fingerprint: str, confirmed_operation_id: str) -> dict[str, Any]:
+        # The production service is constructed without authority. Keep a
+        # second explicit boundary before any plan/status lookup or mutation.
+        if not self.operation_service._isolated_write_authority:
+            raise HomeKitWriteDisabled(WRITE_LOCK_REASON)
+        bridge = self.selected_bridge()
+        if self.last_error or not bridge or bridge.get("entry_id") != entry_id or self.fingerprint != expected_fingerprint:
+            raise HomeKitWriteBlocked("Bridge-Kontext oder Inventar-Fingerprint wurde geändert")
+        return await self.operation_service.apply(operation_id, entry_id=entry_id,
+                                                  expected_revision=source_revision,
+                                                  confirmed_operation_id=confirmed_operation_id, admin=True)
 
     def reconcile(self, document: Any, baseline_fingerprint: str | None = None) -> dict[str, Any]:
         validated = self.validate_draft(document)

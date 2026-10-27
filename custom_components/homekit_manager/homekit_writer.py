@@ -1,6 +1,6 @@
-"""Read-only diff preparation and an explicitly isolated Core test adapter.
+"""Diff preparation and an explicitly isolated native Core options adapter.
 
-The coordinator rejects production writes in 0.9.19. This module rejects
+The coordinator rejects production writes in 0.9.24. This module rejects
 allow_production=True independently. Only an explicitly enabled test fixture
 can exercise ConfigEntry options; it cannot establish Apple Home compatibility.
 """
@@ -22,7 +22,7 @@ class HomeKitWriteError(Exception):
 
 
 class HomeKitWriteDisabled(HomeKitWriteError):
-    """Applying HomeKit changes is disabled in release 0.9.19."""
+    """Production HomeKit application is disabled."""
 
 
 class HomeKitWriteBlocked(HomeKitWriteError):
@@ -74,6 +74,8 @@ def _entry_options(bridge: Mapping[str, Any]) -> dict[str, Any]:
 
 def _candidate_filter(current: Mapping[str, Any], desired: Mapping[str, str]) -> dict[str, Any]:
     """Apply only explicit entity overrides while preserving every other rule."""
+    if set(current) - set(_FILTER_LIST_KEYS):
+        raise HomeKitWriteBlocked("Unbekannte Filterfelder dürfen nicht geschrieben werden")
     result = {key: copy.deepcopy(value) for key, value in current.items()}
     for key in _FILTER_LIST_KEYS:
         result.setdefault(key, [])
@@ -137,7 +139,7 @@ class HomeKitWriter:
     """Disabled for production; explicit isolated tests can exercise Core options.
 
     The retained allow_production argument deliberately rejects former callers.
-    No coordinator endpoint enables this test adapter in 0.9.19.
+    No normal coordinator endpoint enables this test adapter in 0.9.24.
     """
 
     def __init__(self, hass: Any, *, test_environment: bool = False, apply_enabled: bool = False, allow_production: bool = False):
@@ -152,6 +154,8 @@ class HomeKitWriter:
             raise HomeKitWriteDisabled(WRITE_LOCK_REASON)
         if not isinstance(diff, OptionsDiff):
             raise HomeKitWriteBlocked("Ungültiger Options-Diff")
+        if not diff.changed_keys:
+            raise HomeKitWriteBlocked("Options-Diff enthält keine Änderung")
         from homeassistant.const import __version__
         from homeassistant.config_entries import SOURCE_USER
         if __version__ != SUPPORTED_CORE_VERSION:
@@ -189,6 +193,15 @@ class HomeKitWriter:
                     raise HomeKitActivationUnknown(
                         "Aktivierung wurde nicht innerhalb des Zeitlimits bestätigt"
                     ) from err
+            # Check Core's persisted entry view after its update listener has
+            # run.  A successful call alone does not prove the intended value.
+            observed = self.hass.config_entries.async_get_entry(diff.entry_id)
+            if observed is None or dict(observed.data) != current_data:
+                raise HomeKitActivationUnknown("Entry-Identität oder data wurden während Apply verändert")
+            for key in diff.changed_keys:
+                if dict(observed.options).get(key) != diff.after.get(key):
+                    raise HomeKitActivationUnknown("Gespeicherte HomeKit-Optionen weichen vom Plan ab")
+            entry = observed
         state = getattr(getattr(entry, "state", None), "value", getattr(entry, "state", None))
         if state != "loaded":
             reason = getattr(entry, "reason", None)

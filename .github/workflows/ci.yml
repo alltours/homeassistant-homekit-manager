@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   quality:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       PYTHONPATH: .
     steps:
@@ -30,6 +30,8 @@ jobs:
           node-version: '22'
       - name: Install Python test dependencies
         run: python -m pip install -r tests/integration/requirements-ha-2026.10.4.txt
+      - name: Check installed Python dependency consistency
+        run: python -m pip check
       - name: Validate JSON and integration structure
         run: |
           python - <<'PY'
@@ -44,20 +46,45 @@ jobs:
           if missing:
               raise SystemExit(f'Missing integration files: {missing}')
           PY
+      - name: Reject tracked credentials and HomeKit persistence
+        run: |
+          python - <<'PY'
+          import re
+          import subprocess
+          from pathlib import Path
+          tracked = subprocess.check_output(['git', 'ls-files', '-z']).decode().split('\0')
+          forbidden = re.compile(r'(^|/)(\.storage|secrets?\.yaml|\.env[^/]*)(/|$)|homekit\.(state|aids|iids)(/|$)|\.(pem|p12|key)$', re.I)
+          offenders = [name for name in tracked if name and forbidden.search(name)]
+          if offenders:
+              raise SystemExit(f'Forbidden tracked paths: {offenders}')
+          for name in tracked:
+              if name and Path(name).is_symlink():
+                  raise SystemExit(f'Symlink in tracked files: {name}')
+              if name and Path(name).is_file():
+                  if b'-----BEGIN ' + b'PRIVATE KEY-----' in Path(name).read_bytes():
+                      raise SystemExit(f'Private key content in tracked file: {name}')
+          PY
       - name: Build and verify reproducible release
         run: |
           python scripts/build_release.py --output /tmp/hkm-release-one
           python scripts/build_release.py --output /tmp/hkm-release-two
-          cmp /tmp/hkm-release-one/homekit-manager-0.9.19.zip /tmp/hkm-release-two/homekit-manager-0.9.19.zip
+          cmp /tmp/hkm-release-one/*.zip /tmp/hkm-release-two/*.zip
       - name: Install pinned browser dependencies for real backend E2E
         run: |
           npm ci
           npx playwright install --with-deps chromium webkit
+      - name: Audit frontend dependencies
+        run: npm audit --audit-level=high
       - name: Python syntax
         run: python -m compileall -q custom_components tests
-      - name: Static read-only safety checks
+      - name: Lint source adapters and operation boundary
         run: |
-          ! grep -R "apply_enabled[[:space:]]*=[[:space:]]*True" -n custom_components
+          python -m pip install ruff==0.17.3
+          ruff check custom_components/homekit_manager/{conversion.py,native_adapter.py,source_model.py,yaml_adapter.py,operations.py,homekit_reader.py,homekit_writer.py,coordinator.py,websocket.py,migration.py,safety.py} tests/{test_conversion_0924.py,test_source_model_0924.py,test_yaml_adapter.py,test_reader_redaction_0924.py,test_migration.py} tests/integration/{test_native_0924.py,test_yaml_core_0924.py,test_operation_service_0924.py,test_operation_websocket_0924.py} --select E,F,B,S --ignore E501,S101
+      - name: Static production write-boundary checks
+        run: |
+          grep -F "raise HomeKitWriteDisabled(WRITE_LOCK_REASON)" custom_components/homekit_manager/coordinator.py
+          grep -F "if self.allow_production or not (self.test_environment and self.apply_enabled):" custom_components/homekit_manager/homekit_writer.py
           grep -R "HomeKitWriteDisabled" -n custom_components/homekit_manager/homekit_writer.py
           grep -R "SOURCE_USER\|allow_production\|async_update_entry" -n custom_components/homekit_manager/homekit_writer.py
           ! grep -R "async_reload\|\.storage\|pairing" -n custom_components/homekit_manager/homekit_writer.py
@@ -69,7 +96,7 @@ jobs:
           node tests/frontend/test_panel.mjs
 
   browser:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -81,6 +108,6 @@ jobs:
         run: npx playwright install --with-deps chromium webkit
       - name: Responsive browser regression
         run: |
-          npx playwright test -c tests/frontend/playwright.config.mjs tests/frontend/browser_regression.spec.mjs tests/frontend/screenshot_reference.spec.mjs --project=chromium
-          npx playwright test -c tests/frontend/playwright.config.mjs tests/frontend/browser_regression.spec.mjs tests/frontend/screenshot_reference.spec.mjs --project=webkit
+          npx playwright test -c tests/frontend/playwright.config.mjs tests/frontend/browser_regression.spec.mjs tests/frontend/screenshot_reference.spec.mjs --project=chromium --workers=1
+          npx playwright test -c tests/frontend/playwright.config.mjs tests/frontend/browser_regression.spec.mjs tests/frontend/screenshot_reference.spec.mjs --project=webkit --workers=1
 

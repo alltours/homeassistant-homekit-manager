@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 class FakeHTMLElement { attachShadow() { return this.shadowRoot = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [] }; } }
 const registry = new Map();
-vm.runInNewContext(fs.readFileSync(new URL('../../custom_components/homekit_manager/www/homekit-manager.js', import.meta.url), 'utf8'), { HTMLElement: FakeHTMLElement, customElements: { define: (key, value) => registry.set(key, value), get: key => registry.get(key) }, console, navigator: {}, window: {} });
+vm.runInNewContext(fs.readFileSync(new URL('../../custom_components/homekit_manager/www/homekit-manager.js', import.meta.url), 'utf8'), { HTMLElement: FakeHTMLElement, customElements: { define: (key, value) => registry.set(key, value), get: key => registry.get(key) }, console, navigator: {}, window: {}, queueMicrotask });
 const Panel = registry.get('homekit-manager-panel');
 const panel = new Panel();
 assert.match(panel.shadowRoot.innerHTML, /HomeKit Manager/);
@@ -21,6 +21,9 @@ panel.bridges = [panel.bridge];
 panel.query = 'kitchen area'; assert.deepEqual(panel.filtered.map(item => item.entity_id), ['light.kitchen']);
 panel.query = ''; panel.filters.integration = 'demo'; assert.equal(panel.filtered.length, 1); panel.filters.integration = '';
 panel.filters.device = 'Meter'; assert.equal(panel.filtered[0].entity_id, 'sensor.temperature'); panel.filters.device = '';
+panel.entities[1].availability_status = 'unknown'; panel.filters.availability = 'unknown';
+assert.equal(panel.filtered[0].entity_id, 'sensor.temperature'); panel.filters.availability = '';
+assert.equal(panel.statusLabel('orphaned'), 'Verwaist');
 panel.setDraft('light.kitchen', 'excluded');
 assert.equal(panel.desiredDocument().bridges['bridge-one'].entities['light.kitchen'], 'exclude');
 panel.setDraft('light.kitchen', 'included'); assert.equal(panel.draft.size, 0);
@@ -33,4 +36,17 @@ for (const view of ['home', 'devices', 'changes', 'settings']) { panel.view = vi
 for (const section of ['general', 'configuration', 'diagnostics', 'rules', 'history', 'performance']) { panel.settingsView = section; panel.view = 'settings'; panel.render(); assert.match(panel.shadowRoot.innerHTML, /Einstellungsbereiche/); }
 const before = panel.renderCount; panel.hass = { callWS: async () => ({}) }; assert.equal(panel.renderCount, before, 'unrelated hass setters do not rebuild the UI');
 assert.equal(panel.escape('<script>'), '&lt;script&gt;');
+let resolveFirst, updateReads = 0;
+const context = [{ bridges: [] }, { devices: [] }, { areas: [] }, { findings: [] }, { entries: [] }, {}, {}, {}, {}, {}, {}];
+panel._hass = { callWS: async () => {
+  updateReads++;
+  return updateReads === 1 ? new Promise(resolve => { resolveFirst = resolve; }) : { entities: [], overview: { refresh_count: 2 }, context };
+} };
+const first = panel.refresh(false);
+panel.onInventoryUpdated({ data: { revision: 2 } });
+resolveFirst({ entities: [], overview: { refresh_count: 1 }, context });
+await first;
+await new Promise(resolve => setTimeout(resolve, 0));
+assert.equal(updateReads, 2, 'an event arriving during a read must be fetched after the stale response');
+assert.equal(panel.overview.refresh_count, 2);
 console.log('frontend panel behavior: ok');

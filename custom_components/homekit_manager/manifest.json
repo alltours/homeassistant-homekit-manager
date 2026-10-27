@@ -1,6 +1,7 @@
 {
   "domain": "homekit_manager",
   "name": "HomeKit Manager",
+  "after_dependencies": ["homekit"],
   "codeowners": [
     "@alltours"
   ],
@@ -13,6 +14,6 @@
   "integration_type": "hub",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/alltours/homeassistant-homekit-manager/issues",
-  "requirements": [],
-  "version": "0.9.19"
+  "requirements": ["ruamel.yaml==0.18.17"],
+  "version": "0.9.24"
 }

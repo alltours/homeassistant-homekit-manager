@@ -1,6 +1,6 @@
 {
-  "integration_version": "0.9.19",
-  "file_count": 37,
+  "integration_version": "0.9.24",
+  "file_count": 43,
   "files": [
     {
       "path": "__init__.py",
@@ -39,13 +39,18 @@
     },
     {
       "path": "const.py",
-      "sha256": "b212fae588f5e430360e500002abf21932b1076c9abae9ede72a2df4966a19d4",
-      "size": 2204
+      "sha256": "d4d1e83c59ee66ce0e4cbe7ab849d3a2f04b3d83b4028a63545b08de9559cc2c",
+      "size": 2428
+    },
+    {
+      "path": "conversion.py",
+      "sha256": "346103376ee903a77560edcc502a80a5ca4889b1f83c4403bc83bb9a3d36d38e",
+      "size": 3086
     },
     {
       "path": "coordinator.py",
-      "sha256": "6c3f1f9adcb8f66effb512cef2e0fafa31a02e46aec676dfbae1cf4bdcf0e763",
-      "size": 35739
+      "sha256": "08e23f28f39e8ec3a804d281977a9570ed1f1bf4683f9b2bd06de335790e5878",
+      "size": 39159
     },
     {
       "path": "device_config.py",
@@ -53,9 +58,14 @@
       "size": 1547
     },
     {
+      "path": "device_reconciliation.py",
+      "sha256": "4c90142d9903465426960c348ab227d4e7a4a3515e3cb1bb714df838c5cbba0e",
+      "size": 2076
+    },
+    {
       "path": "diagnostics.py",
-      "sha256": "d97424c6eda0c92f02046eebf20299b2032e21e8317a99244aaf39392bf1b52c",
-      "size": 5828
+      "sha256": "69b81730a62a7369e447ddcf6a89eec39db680d537bd959aaf3f75a5237ed84f",
+      "size": 6298
     },
     {
       "path": "draft.py",
@@ -94,18 +104,18 @@
     },
     {
       "path": "homekit_reader.py",
-      "sha256": "9ce837e2168e62283d32b3d6375ad79ffb55a73aeea5a98d6c37b713dc9596a3",
-      "size": 2776
+      "sha256": "46d4ecdef4f1b8e0f4eab5aa83fcb09415029cd1b84885b61753bcf7b278d294",
+      "size": 2826
     },
     {
       "path": "homekit_writer.py",
-      "sha256": "223ff6fa71685039615390b7752d619d5f1267037d31e5e14a6f1ae3c3ef78ef",
-      "size": 9212
+      "sha256": "46c84bf1073a6abd3cee82e4efd8df42336efbea13c8a68782222439c502b928",
+      "size": 10128
     },
     {
       "path": "inventory.py",
-      "sha256": "00765005d0054d430a6e7b2a32647862700c2683ed35b37a61352f80c2fcbedb",
-      "size": 4563
+      "sha256": "19ec29787aec8c5917a723c26a0ae34898eede414038d1412b971ef0a6bfcad7",
+      "size": 6745
     },
     {
       "path": "management_store.py",
@@ -114,13 +124,13 @@
     },
     {
       "path": "manifest.json",
-      "sha256": "bc548e536a9c41c81e7cce50f22416a7cd1250363e2478c31f0d845079219c40",
-      "size": 457
+      "sha256": "dafd7a1031d53b1aed7b4b61e091f8b7aa08d61f69d4c7e32f1440aae67f48f1",
+      "size": 516
     },
     {
       "path": "migration.py",
-      "sha256": "7942034ad92405a7e66fef7b109b72ac0610cae58b7cbf0094edf3efe2528d87",
-      "size": 3676
+      "sha256": "807c652802cff28dde7a4683b9a14648f3458cdc12d01e920d09b48be9b471d4",
+      "size": 3174
     },
     {
       "path": "migration_store.py",
@@ -131,6 +141,16 @@
       "path": "mode_store.py",
       "sha256": "494ae0551b843bda88b5e39b5fa6341413c375db792678fd3a468598374c9515",
       "size": 1472
+    },
+    {
+      "path": "native_adapter.py",
+      "sha256": "da89dde15e34750d73628759775398d7944e7b037e218568e9994b99e20d662b",
+      "size": 7430
+    },
+    {
+      "path": "operations.py",
+      "sha256": "522d9355a9eeccc63b066ef727658e8e885b0dddafb5c9203660f2cb5a657234",
+      "size": 11515
     },
     {
       "path": "panel.py",
@@ -154,8 +174,13 @@
     },
     {
       "path": "safety.py",
-      "sha256": "e194f913fecd10a5fbd8a7ffc1c257ce45aef999bdf3fcf1d352a397bfa14b3b",
+      "sha256": "da4cdf28ff167687fd6c627f25b67f06e5494587b1ce373767c6cf254e504e8d",
       "size": 509
+    },
+    {
+      "path": "source_model.py",
+      "sha256": "f97513e9ed613de591ab3131c0975568ef29e07d8ca4214ef6c45a623017d024",
+      "size": 3654
     },
     {
       "path": "strings.json",
@@ -174,13 +199,18 @@
     },
     {
       "path": "websocket.py",
-      "sha256": "fd2b24d29b262dd596a0641fe1e86b4f401a53a0e08ae5e650edae9d1baf8b2a",
-      "size": 19062
+      "sha256": "0069b16cfe9da17d1870b150a1bb5b486d3daead50b3dc595a3d972b5e75a995",
+      "size": 22722
     },
     {
       "path": "www/homekit-manager.js",
-      "sha256": "981db37ef3540bc53abbdacb0d2cc6bdd05584d45689ec0f1cee1e8c58fb76f8",
-      "size": 69543
+      "sha256": "311bedc22de9224d5b1b6ec1cc11c6e6475f92b6e180f8aeda586fa975d3b98a",
+      "size": 74198
+    },
+    {
+      "path": "yaml_adapter.py",
+      "sha256": "e48b074963d56a9308d34c47e8ee24f1555675b588008de6edf22108186b2bf7",
+      "size": 20110
     },
     {
       "path": "yaml_store.py",

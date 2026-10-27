@@ -68,6 +68,46 @@ test('draft workflow validates, saves, downloads and keeps applying disabled', a
   expect(await page.evaluate(() => window.fixtureCommands.includes('homekit_manager/apply_options_diff'))).toBe(false);
 });
 
+test('isolated operation workflow binds plan, confirms exact request and verifies outcome', async ({ page }) => {
+  await page.goto('/tests/frontend/browser_fixture.html?isolated-write');
+  const panel = page.locator('homekit-manager-panel');
+  await panel.getByRole('tab', { name: 'Geräte', exact: true }).click();
+  await panel.locator('[data-group=entities]').click();
+  await panel.locator('[data-entity-toggle]').first().click();
+  await panel.getByRole('tab', { name: 'Änderungen', exact: true }).click();
+  await expect(panel.locator('[data-apply]')).toBeDisabled();
+  await panel.locator('[data-operation-plan]').click();
+  await expect(panel.locator('.operation-card')).toContainText('fixture-operation-1');
+  await expect(panel.locator('[data-apply]')).toBeEnabled();
+  await panel.locator('[data-apply]').click();
+  await expect(panel.locator('dialog')).toContainText('fixture-operation-1');
+  await panel.getByRole('button', { name: 'Genau diese Änderung anwenden' }).click();
+  await expect(panel.locator('.status-line')).toContainText('Backend verifiziert');
+  await expect(panel.locator('[data-apply]')).toBeDisabled();
+  const calls = await page.evaluate(() => window.fixtureCommands.filter(name => name === 'homekit_manager/operation_apply'));
+  expect(calls).toHaveLength(1);
+});
+
+test('source migration is absent from the 0.9.24 interface', async ({ page }) => {
+  await page.goto('/tests/frontend/browser_fixture.html');
+  const panel = page.locator('homekit-manager-panel');
+  await panel.getByRole('tab', { name: 'Einstellungen', exact: true }).click();
+  await expect(panel.locator('[data-migration-target]')).toHaveCount(0);
+  await expect(panel.locator('[data-migration-start]')).toHaveCount(0);
+  expect(await page.evaluate(() => window.fixtureCommands.includes('homekit_manager/migration_start'))).toBe(false);
+});
+
+test('bridge details expose source-bound configuration values without YAML structure claims', async ({ page }) => {
+  await page.goto('/tests/frontend/browser_fixture.html');
+  const panel = page.locator('homekit-manager-panel');
+  await panel.locator('[data-bridge-expand]').click();
+  await panel.getByText('Konfigurationswerte anzeigen').click();
+  const values = panel.locator('.config-values');
+  await expect(values).toContainText('"port": 21088');
+  await expect(values).toContainText('"include_domains"');
+  await expect(panel.getByText('YAML-Kommentare und Quelldatei gehören nicht zu diesen Werten.')).toBeVisible();
+});
+
 test('whole area and device selection use an explicit draft confirmation', async ({page}) => {
   await page.goto('/tests/frontend/browser_fixture.html'); const panel=page.locator('homekit-manager-panel');
   await panel.getByRole('tab',{name:'Geräte',exact:true}).click(); await panel.locator('[data-selection]').click();

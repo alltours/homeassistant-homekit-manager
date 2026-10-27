@@ -154,7 +154,7 @@ Keine funktionsfähige Migration oder produktive Aktivierung wird durch ein sche
 
 ## K. Mobile Optimierung
 
-Getestete Viewports: 320×740, 430×932, 768×1024 und 1440×1000, jeweils Light/Dark in Chromium und WebKit. Vier erreichbare Hauptbereiche, eindeutige aktive Navigation, Tastatur-Pfeile/Home/End, getrennte Entity-IDs und klare Kennzahlen. Browserprüfungen messen Seiten-/Navigationsüberläufe und Kartenränder; keine festgestellten horizontalen Überläufe in den endgültigen Fällen.
+Getestete Viewports: 320×740, 430×932, 768×1024 und 1440×900, jeweils Light/Dark in Chromium und WebKit. Vier erreichbare Hauptbereiche, eindeutige aktive Navigation, Tastatur-Pfeile/Home/End, getrennte Entity-IDs und klare Kennzahlen. Browserprüfungen messen Seiten-/Navigationsüberläufe und Kartenränder; keine festgestellten horizontalen Überläufe in den endgültigen Fällen.
 
 64 reguläre Aufnahmen: vier Seiten × vier Viewports × zwei Themes × zwei Engines. Zusätzlich ein nichtleerer validierter Entwurf auf Smartphone und Desktop. Sichtprüfung repräsentativer mobiler und Desktop-Aufnahmen bestätigt die verbesserte Hierarchie; kein Ersatz für einen echten iPhone-/VoiceOver-Test. Die vorhandene 0.9.18-Aufnahme zeigte unter anderem abgeschnittene Navigation und rohe Performance-Daten. Die separat angekündigten ursprünglichen Bilder wurden nicht sichtbar empfangen und konnten nicht verglichen werden.
 

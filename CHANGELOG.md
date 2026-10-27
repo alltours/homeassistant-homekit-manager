@@ -14,6 +14,7 @@
 
 - Added isolated, revisions-bound native and narrowly scoped direct-include YAML filter writers with Core 2026.10.4 integration tests. Production HomeKit application remains blocked.
 - Persisted native filter-operation metadata for duplicate request rejection and read-only outcome reconciliation; added YAML metadata journal and verified backup/restore tests.
+- Added an isolated common operation state machine with plan/revision binding, explicit confirmation, durable status and no automatic retry after an uncertain outcome. It remains disconnected from the production apply endpoint.
 - Added value-only native/YAML conversion with unknown-field rejection and repeated semantic roundtrip tests. No HAP identity or pairing migration is provided.
 - Redacted lock and alarm code fields from bridge data returned to the UI.
 - Allowed mobile navigation labels to wrap after the 0.9.20 and development-branch Linux browser CI findings.

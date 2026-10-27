@@ -1,6 +1,6 @@
 {
   "integration_version": "0.9.20",
-  "file_count": 42,
+  "file_count": 43,
   "files": [
     {
       "path": "__init__.py",
@@ -148,6 +148,11 @@
       "size": 7430
     },
     {
+      "path": "operations.py",
+      "sha256": "94d60efeff592a3fc4902c0edf0b02e3a9205d7150aa2f952914a4137371d8e2",
+      "size": 11039
+    },
+    {
       "path": "panel.py",
       "sha256": "4ca23ab5fdb00de260a3f9cb5499f21d623980c3fdd213134ffe127c60f9a757",
       "size": 1161
@@ -204,8 +209,8 @@
     },
     {
       "path": "yaml_adapter.py",
-      "sha256": "52093fa0d36ce62a937956a6dfb1d21c905e06a5a4f374f232dc5455f21d6d3c",
-      "size": 19804
+      "sha256": "e48b074963d56a9308d34c47e8ee24f1555675b588008de6edf22108186b2bf7",
+      "size": 20110
     },
     {
       "path": "yaml_store.py",

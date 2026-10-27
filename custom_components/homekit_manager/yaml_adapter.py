@@ -180,6 +180,11 @@ class YamlHomeKitAdapter:
             return "not_applied"
         return "unknown_outcome"
 
+    def current_revision(self) -> tuple[str, str]:
+        """Read proven source name and bytes without modifying a file."""
+        path = self._source_path()
+        return path.name, _digest(_read_regular(path))
+
     async def async_apply_with_core(self, hass: Any, entry: Any, plan: YamlFilterPlan, *, isolated_authority: bool = False, timeout: float = 30.0) -> YamlApplyResult:
         """Apply and verify in isolation using Core's actual YAML reload.
 
@@ -210,12 +215,12 @@ class YamlHomeKitAdapter:
                 raise YamlAdapterBlocked("Importierter HomeKit-Entry ist nach Reload nicht geladen")
             observed_filter = observed.options.get("filter")
             if not isinstance(observed_filter, Mapping) or any(
-                observed_filter.get(key) != value for key, value in plan.after_filter.items()
+                observed_filter.get(key, []) != value for key, value in plan.after_filter.items()
             ):
                 raise YamlAdapterBlocked("Core-Optionen stimmen nicht mit dem YAML-Plan überein")
-            self._record(plan, "verified_core")
+            await hass.async_add_executor_job(lambda: self._record(plan, "verified_core"))
         except Exception as err:
-            self._record(plan, "unknown_outcome")
+            await hass.async_add_executor_job(lambda: self._record(plan, "unknown_outcome"))
             raise YamlActivationUnknown("YAML-Datei gespeichert; Core-Aktivierung ungeklärt. Kein automatischer Retry.") from err
         return YamlApplyResult(result.operation_id, "verified_core", result.backup_path, result.source_revision, result.target_revision)
 

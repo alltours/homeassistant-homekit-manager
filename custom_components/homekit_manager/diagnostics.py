@@ -86,3 +86,26 @@ def diagnostics_summary(findings: Iterable[Mapping[str, Any]]) -> dict[str, int]
         summary[severity] = summary.get(severity, 0) + 1
         summary["total"] += 1
     return summary
+
+
+def group_diagnostics(findings: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Group identical diagnostics while retaining affected entity details."""
+    groups: dict[tuple[Any, ...], dict[str, Any]] = {}
+    for finding in findings:
+        key = tuple(finding.get(name) for name in ("code", "severity", "title", "detail", "recommendation"))
+        group = groups.setdefault(key, {
+            "code": finding.get("code"),
+            "severity": finding.get("severity", "info"),
+            "title": finding.get("title", "Diagnose"),
+            "detail": finding.get("detail", ""),
+            "recommendation": finding.get("recommendation", ""),
+            "count": 0,
+            "entity_ids": [],
+            "details": [],
+        })
+        group["count"] += 1
+        entity_id = finding.get("entity_id")
+        if entity_id and entity_id not in group["entity_ids"]:
+            group["entity_ids"].append(entity_id)
+        group["details"].append(dict(finding))
+    return sorted(groups.values(), key=lambda item: (item["severity"], item["code"], item["title"]))

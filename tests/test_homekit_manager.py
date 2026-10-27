@@ -20,7 +20,7 @@ from custom_components.homekit_manager.reconcile import reconcile_desired_state
 from custom_components.homekit_manager.exporter import export_desired_state
 from custom_components.homekit_manager.homekit_reader import read_homekit_entries
 from custom_components.homekit_manager.grouping import build_area_views, build_device_views
-from custom_components.homekit_manager.diagnostics import build_diagnostics, diagnostics_summary
+from custom_components.homekit_manager.diagnostics import build_diagnostics, diagnostics_summary, group_diagnostics
 from custom_components.homekit_manager.device_config import build_preview
 from custom_components.homekit_manager.rules import evaluate_rules
 from custom_components.homekit_manager.history import compare_history, make_history_entry, restore_as_draft
@@ -68,6 +68,13 @@ class HomeKitManagerTests(unittest.TestCase):
         self.assertEqual(findings, build_diagnostics(inventory, bridges, {"valid": False, "error": "bad yaml"}))
         self.assertEqual(diagnostics_summary(findings)["critical"], 2)
         self.assertTrue(any(item["code"] == "stale_filter_reference" for item in findings))
+
+    def test_diagnostics_group_identical_findings_without_losing_entities(self):
+        findings = [{"code": "unsupported_entity", "severity": "critical", "title": "Nicht unterstützt", "detail": "x", "recommendation": "y", "entity_id": "light.a"}, {"code": "unsupported_entity", "severity": "critical", "title": "Nicht unterstützt", "detail": "x", "recommendation": "y", "entity_id": "light.b"}]
+        grouped = group_diagnostics(findings)
+        self.assertEqual(len(grouped), 1)
+        self.assertEqual(grouped[0]["count"], 2)
+        self.assertEqual(grouped[0]["entity_ids"], ["light.a", "light.b"])
 
     def test_device_preview_is_explicitly_simulated(self):
         result = build_preview({"entity_id": "light.a", "name": "Lamp", "domain": "light", "state": "on", "attributes": {}, "compatibility": {"expected_type": "Lightbulb"}})

@@ -135,6 +135,12 @@ async def test_homekit_manager_websocket_registration(hass, enable_custom_integr
         "homekit_manager/select_bridge",
         "homekit_manager/mode_status",
         "homekit_manager/set_mode",
+        "homekit_manager/migration_plan",
+        "homekit_manager/migration_status",
+        "homekit_manager/migration_start",
+        "homekit_manager/management_status",
+        "homekit_manager/management_enable",
+        "homekit_manager/management_disable",
         "homekit_manager/devices",
         "homekit_manager/areas",
         "homekit_manager/diagnostics",
@@ -240,6 +246,65 @@ async def test_homekit_manager_inventory_websocket_round_trip(
     assert response["success"] is True
     assert "overview" in response["result"]
     assert "entities" in response["result"]
+
+
+async def test_management_surface_status_is_read_only_and_requires_loaded_bridge(
+    hass, enable_custom_integrations, hass_ws_client
+):
+    """Management activation never changes a source and blocks without a bridge."""
+    result = await hass.config_entries.flow.async_init(
+        "homekit_manager", context={"source": config_entries.SOURCE_USER}
+    )
+    await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    client = await hass_ws_client()
+    await client.send_json_auto_id({"type": "homekit_manager/management_status"})
+    status = await client.receive_json()
+    assert status["success"] is True
+    assert status["result"]["management_surface"] == "homekit_manager"
+    assert status["result"]["state"] == "unknown"
+    await client.send_json_auto_id({"type": "homekit_manager/management_enable", "confirmed": True})
+    blocked = await client.receive_json()
+    assert blocked["success"] is True
+    assert blocked["result"]["state"] == "blocked"
+    assert "SOURCE_USER" in blocked["result"]["message"]
+    await client.send_json_auto_id({"type": "homekit_manager/management_disable", "confirmed": True})
+    blocked_disable = await client.receive_json()
+    assert blocked_disable["success"] is True
+    assert blocked_disable["result"]["state"] == "blocked"
+
+
+async def test_management_surface_verifies_existing_source_user_bridge_without_migration(
+    hass, enable_custom_integrations, monkeypatch
+):
+    """Activation records ownership metadata while leaving the native bridge intact."""
+    result = await hass.config_entries.flow.async_init(
+        "homekit_manager", context={"source": config_entries.SOURCE_USER}
+    )
+    await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    manager = hass.data["homekit_manager"]["coordinator"]
+    bridge = {
+        "entry_id": "source-user-bridge",
+        "title": "Existing Bridge",
+        "source": config_entries.SOURCE_USER,
+        "state": "loaded",
+    }
+    manager.bridges = [bridge]
+    manager.selected_bridge_id = bridge["entry_id"]
+    monkeypatch.setattr(manager, "async_refresh", lambda: __import__("asyncio").sleep(0))
+    status = await manager.async_enable_management(confirmed=True)
+    assert status["active"] is True
+    assert status["configuration_source"] == "home_assistant"
+    assert status["management_surface"] == "homekit_manager"
+    assert status["message"] == "HomeKit Manager verwaltet diese Bridge jetzt."
+    assert status["write_status"] == "available"
+    status = await manager.async_disable_management(confirmed=True)
+    assert status["active"] is False
+    assert status["management_surface"] == "home_assistant"
+    assert status["write_status"] == "locked"
+    assert status["message"] == "Die Verwaltung wurde auf Home Assistant zurückgestellt."
+    status = await manager.async_enable_management(confirmed=True)
+    assert status["active"] is True
+    assert hass.config_entries.async_entries("homekit") == []
 
 
 async def test_homekit_manager_draft_save_reload_and_conflict(
@@ -396,13 +461,39 @@ async def test_homekit_manager_mode_status_is_conservative(
     status = response["result"]
     assert status["active_mode"] in {"yaml", "homekit_bridge", "homekit_manager"}
     assert status["transition"] == "stable"
-    assert all(item["status"] in {"safe", "manual_required"} for item in status["matrix"].values())
+    assert all(item["status"] in {"verify_only", "blocked"} for item in status["matrix"].values())
     for direction in (
         "yaml->homekit_bridge", "homekit_bridge->yaml",
         "homekit_bridge->homekit_manager", "homekit_manager->homekit_bridge",
         "yaml->homekit_manager", "homekit_manager->yaml",
     ):
-        assert status["matrix"][direction]["status"] == "manual_required"
+        assert status["matrix"][direction]["status"] == "blocked"
+
+
+async def test_homekit_manager_migration_assistant_blocks_cross_source_without_writes(
+    hass, enable_custom_integrations, hass_ws_client
+):
+    result = await hass.config_entries.flow.async_init(
+        "homekit_manager", context={"source": config_entries.SOURCE_USER}
+    )
+    await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    client = await hass_ws_client()
+    await client.send_json_auto_id({"type": "homekit_manager/mode_status"})
+    mode_response = await client.receive_json()
+    active = mode_response["result"]["active_mode"]
+    target = "yaml" if active != "yaml" else "homekit_bridge"
+    await client.send_json_auto_id({"type": "homekit_manager/migration_plan", "target": target})
+    response = await client.receive_json()
+    assert response["success"] is True
+    plan = response["result"]
+    assert plan["supported"] is False
+    assert plan["status"]["state"] in {"unknown", "blocked"}
+    assert plan["changes_homekit"] is False
+    await client.send_json_auto_id({"type": "homekit_manager/migration_start", "target": target, "confirmed": True})
+    response = await client.receive_json()
+    assert response["success"] is True
+    assert response["result"]["status"]["state"] == "blocked"
+    assert response["result"]["status"]["migration_performed"] is False
 
 
 async def test_homekit_manager_devices_and_areas_websocket_round_trip(

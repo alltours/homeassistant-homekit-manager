@@ -17,10 +17,13 @@ for (const [name, width, height] of viewports) {
       await page.goto("/tests/frontend/browser_fixture.html");
       const panel = page.locator("homekit-manager-panel");
       await expect(panel).toBeVisible();
-      await expect(panel.locator("text=Konfigurationsmethode")).toBeVisible();
+      await expect(panel.getByRole("heading", { name: "Konfigurationsquelle" })).toBeVisible();
       await expect(panel.locator("text=Fixture Bridge")).toBeVisible();
-      await panel.locator('[data-mode="yaml"]').click();
-      await expect(panel.locator('[data-mode="yaml"] small')).toHaveText("Vorgemerkt");
+      await expect(panel.locator(".storage-card.active small")).toContainText("Aktive Konfigurationsquelle");
+      await expect(panel.getByRole("heading", { name: "Verwaltungsoberfläche" })).toBeVisible();
+      await page.evaluate(() => { window.confirm = () => true; });
+      await panel.locator("[data-management-enable]").click();
+      await expect(panel.locator("text=HomeKit Manager verwaltet diese Bridge jetzt.")).toBeVisible();
       await panel.locator("[data-bridge-expand]").click();
       await expect(panel.getByText("Modus: bridge", { exact: true })).toBeVisible();
       await panel.locator("[data-bridge-expand]").click();
@@ -30,6 +33,7 @@ for (const [name, width, height] of viewports) {
       const input = panel.locator("[data-query]");
       await input.fill("Kitchen");
       await expect(input).toHaveValue("Kitchen");
+      await panel.locator(".filters summary").click();
       await panel.locator("[data-filter=status]").selectOption("included");
       await panel.locator("[data-reset-filters]").click();
       await panel.locator("[data-group=entities]").click();
@@ -37,6 +41,7 @@ for (const [name, width, height] of viewports) {
       await panel.getByRole("tab", { name: "Änderungen" }).click();
       await expect(panel.locator("text=Nur geplante Änderungen")).toBeVisible();
       await expect(panel.locator("text=Entwurf speichern")).toBeVisible();
+      await panel.locator("[data-action-menu]").click();
       await panel.locator("[data-preview]").click();
       await panel.locator("[data-save]").click();
       await expect(panel.locator("text=Entwurf gespeichert")).toBeVisible();
@@ -129,4 +134,23 @@ test("sticky change actions remain visible inside a Home Assistant-like scroll c
   });
   expect(geometry.footerHeight).toBeGreaterThan(0);
   expect(geometry.footerBottom).toBeLessThanOrEqual(geometry.wrapperBottom + 1);
+});
+
+test("storage cards distinguish verified source from management surface", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/tests/frontend/browser_fixture.html");
+  const panel = page.locator("homekit-manager-panel");
+  await expect(panel.locator(".storage-card.active small")).toContainText("Aktive Konfigurationsquelle");
+  await expect(panel.getByRole("heading", { name: "Verwaltungsoberfläche" })).toBeVisible();
+  await expect(panel.locator("text=YAML- und SOURCE_IMPORT-Migrationen bleiben gesperrt.")).toBeVisible();
+});
+
+test("management can be disabled without changing the native source", async ({ page }) => {
+  await page.goto("/tests/frontend/browser_fixture.html");
+  const panel = page.locator("homekit-manager-panel");
+  await page.evaluate(() => { window.confirm = () => true; });
+  await panel.locator("[data-management-enable]").click();
+  await panel.locator("[data-management-disable]").click();
+  await expect(panel.locator("text=Die Verwaltung wurde auf Home Assistant zurückgestellt.")).toBeVisible();
+  await expect(panel.locator("text=Änderungen anwenden: Gesperrt")).toBeVisible();
 });

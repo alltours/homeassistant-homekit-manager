@@ -281,3 +281,18 @@ synthetische 1.000-/2.500-/5.000-Entitätenmessungen sowie eine
 fünfminütige Stabilitätsbeobachtung. Der Branch ist gepusht; Merge, Tag, Release und
 produktive Installation sind ausdrücklich ausstehend.
 
+## Phase 0.9.18 – UI-Wiederherstellung und sichere Speicherverwaltung
+
+Die 0.9.18-Entwicklung stellt die Speicherarten Standard, YAML und HomeKit Manager
+als verifizierten Istzustand, gewünschte Quelle und gesperrten Wechsel dar. Der neue
+Migrationsassistent liest den aktuellen Backendzustand erneut ein und persistiert nur
+redigierte Assistentenmetadaten. Alle sechs Cross-Source-Richtungen bleiben blockiert,
+weil Home Assistant Core 2026.10.4 keinen stabilen öffentlichen Vertrag für eine
+solche Migration mit garantiertem Bridge- und Pairing-Erhalt anbietet. Es werden weder
+`.storage`-Dateien noch Pairingdaten oder fremde Config Entries bearbeitet.
+
+Die Oberfläche erhält grüne Aktiv-Markierungen, kompakte mobile Aktionen, ein
+aufklappbares Filterpanel, kompakte Bereichsübersichten und gruppierte Diagnosen.
+Produktive Installation, Merge, Tag und Release sind in dieser Entwicklungsphase
+nicht enthalten.
+

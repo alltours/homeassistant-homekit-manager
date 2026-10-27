@@ -1,4 +1,4 @@
-# HomeKit Manager 0.9.17
+# HomeKit Manager 0.9.18
 
 Home Assistant custom integration for HomeKit Bridge inventory management, safe configuration planning and a version-bound controlled apply path.
 
@@ -17,7 +17,7 @@ Home Assistant custom integration for HomeKit Bridge inventory management, safe 
 
 The integration does not manipulate pairings, accessory identifiers or `.storage` data. The apply path is restricted in the backend to an administrator, Core 2026.10.4, a uniquely selected `SOURCE_USER` HomeKit entry, a fresh validated diff and a successfully loaded entry after activation. YAML-imported entries, migrations and bridge creation/deletion remain blocked.
 
-Version 0.9.17 is developed as a stabilization line; no GitHub release or productive installation is implied by this branch.
+Version 0.9.18 restores the mobile-first storage-management UI and adds a conservative, persisted migration assistant. Cross-source migrations remain explicitly blocked because Core 2026.10.4 provides no stable public contract that guarantees bridge identity and pairing preservation.
 
 ## License
 
@@ -52,6 +52,7 @@ See [the 0.9.8 implementation notes](docs/HOMEKIT_MANAGER_0_9_8.md).
 See [the 0.9.9 implementation notes](docs/HOMEKIT_MANAGER_0_9_9.md).
 See [the 0.9.11 stabilization notes](docs/HOMEKIT_MANAGER_0_9_11.md).
 See [the 0.9.17 stabilization notes](docs/HOMEKIT_MANAGER_0_9_17.md).
+See [the 0.9.18 storage and UI notes](docs/HOMEKIT_MANAGER_0_9_18.md).
 
 ## HACS status
 

@@ -11,7 +11,7 @@ assert.ok(Panel);
 const panel = new Panel();
 assert.match(panel.shadowRoot.innerHTML, /HomeKit Manager/);
 assert.match(panel.shadowRoot.innerHTML, /HomeKit/);
-assert.match(panel.shadowRoot.innerHTML, /Konfigurationsmethode/);
+assert.match(panel.shadowRoot.innerHTML, /Konfigurationsquelle/);
 assert.match(panel.shadowRoot.innerHTML, /Bridges/);
 assert.match(panel.shadowRoot.innerHTML, /Geräte/);
 assert.match(panel.shadowRoot.innerHTML, /Änderungen/);
@@ -20,7 +20,7 @@ assert.match(panel.shadowRoot.innerHTML, /Einstellungen/);
 let calls = 0;
 panel.hass = { callWS: async ({ type }) => { calls += 1; if (type === "homekit_manager/inventory") throw new Error("WebSocket nicht erreichbar"); throw new Error(`unexpected command: ${type}`); } };
 await new Promise((resolve) => setTimeout(resolve, 0));
-assert.equal(calls, 11);
+assert.equal(calls, 12);
 assert.match(panel.shadowRoot.innerHTML, /WebSocket nicht erreichbar/);
 
 panel.entities = [
@@ -79,8 +79,8 @@ assert.equal(panel.renderCount, before, "irrelevant Home Assistant state updates
 
 const successful = new Panel();
 let successCalls = 0;
-successful.hass = { callWS: async ({ type }) => { successCalls += 1; if (type === "homekit_manager/inventory") return { entities: [], overview: {} }; if (type === "homekit_manager/bridges") return { bridges: [] }; if (type === "homekit_manager/devices") return { devices: [] }; if (type === "homekit_manager/areas") return { areas: [] }; if (type === "homekit_manager/diagnostics") return { findings: [], grouped_findings: [], summary: {} }; if (type === "homekit_manager/history") return { entries: [] }; if (type === "homekit_manager/yaml_status") return { valid: true, exists: false }; if (type === "homekit_manager/mode_status") return { active_mode: "homekit_bridge", desired_mode: "homekit_bridge", transition: "stable" }; if (type === "homekit_manager/activation_status") return { state: "unknown" }; if (type === "homekit_manager/migration_plan") return { source: "homekit_bridge", target: "homekit_bridge", supported: true, reason: "verify", steps: [] }; if (type === "homekit_manager/migration_status") return { state: "unknown", stale: true }; throw new Error(`unexpected command: ${type}`); } };
+successful.hass = { callWS: async ({ type }) => { successCalls += 1; if (type === "homekit_manager/inventory") return { entities: [], overview: {} }; if (type === "homekit_manager/bridges") return { bridges: [] }; if (type === "homekit_manager/devices") return { devices: [] }; if (type === "homekit_manager/areas") return { areas: [] }; if (type === "homekit_manager/diagnostics") return { findings: [], grouped_findings: [], summary: {} }; if (type === "homekit_manager/history") return { entries: [] }; if (type === "homekit_manager/yaml_status") return { valid: true, exists: false }; if (type === "homekit_manager/mode_status") return { active_mode: "homekit_bridge", desired_mode: "homekit_bridge", transition: "stable" }; if (type === "homekit_manager/activation_status") return { state: "unknown" }; if (type === "homekit_manager/migration_plan") return { source: "homekit_bridge", target: "homekit_bridge", supported: true, reason: "verify", steps: [] }; if (type === "homekit_manager/migration_status") return { state: "unknown", stale: true }; if (type === "homekit_manager/management_status") return { state: "not_enabled", configuration_source: "unknown", management_surface: "homekit_manager", supported: false, active: false }; throw new Error(`unexpected command: ${type}`); } };
 await new Promise((resolve) => setTimeout(resolve, 0));
-assert.equal(successCalls, 11);
+assert.equal(successCalls, 12);
 assert.doesNotMatch(successful.shadowRoot.innerHTML, /Verbindung nicht möglich/);
 console.log("frontend panel behavior: ok");

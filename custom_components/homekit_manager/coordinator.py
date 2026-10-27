@@ -33,6 +33,7 @@ from .history_store import HistoryStore
 from .config_source import inspect_configuration_sources
 from .migration import build_migration_plan, build_migration_matrix, completed_verification
 from .migration_store import MigrationStore
+from .management_store import ManagementStore
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -55,6 +56,8 @@ class HomeKitManagerCoordinator:
         self.yaml_store = YamlStore(yaml_path)
         self.mode_store = ModeStore(hass)
         self.migration_store = MigrationStore(hass)
+        self.management_store = ManagementStore(hass)
+        self.management_statuses: dict[str, dict[str, Any]] = {}
         self.migration_status: dict[str, Any] = {
             "state": "unknown",
             "message": "Noch kein verifizierter Speicherwechselstatus vorhanden.",
@@ -86,6 +89,7 @@ class HomeKitManagerCoordinator:
         stored_migration = await self.migration_store.async_load()
         if stored_migration:
             self.migration_status = stored_migration
+        self.management_statuses = await self.management_store.async_load()
         config_path = getattr(getattr(self.hass, "config", None), "path", None)
         if callable(config_path):
             configuration_file = config_path("configuration.yaml")
@@ -309,6 +313,66 @@ class HomeKitManagerCoordinator:
     def migration_status_snapshot(self) -> dict[str, Any]:
         """Return persisted status; stale status is never treated as active."""
         return dict(self.migration_status)
+
+    def management_status(self) -> dict[str, Any]:
+        """Describe native source and explicit Manager ownership separately."""
+        bridge = self.selected_bridge()
+        if bridge is None:
+            return {
+                "state": "unknown",
+                "configuration_source": "unknown",
+                "management_surface": "homekit_manager",
+                "message": "Keine eindeutig ausgewählte HomeKit-Bridge vorhanden.",
+            }
+        entry_id = bridge["entry_id"]
+        source = "home_assistant" if bridge.get("source") == "user" else "yaml" if bridge.get("source") == "import" else "unknown"
+        status = self.management_statuses.get(entry_id, {})
+        state = status.get("state", "not_enabled")
+        if status.get("source") not in (None, source):
+            state = "unknown"
+        return {
+            "entry_id": entry_id,
+            "bridge_title": bridge.get("title"),
+            "configuration_source": source,
+            "configuration_source_label": "Home Assistant" if source == "home_assistant" else "YAML" if source == "yaml" else "Unbekannt",
+            "management_surface": "homekit_manager",
+            "management_surface_label": "HomeKit Manager",
+            "state": state,
+            "active": state == "active" and source == "home_assistant",
+            "bridge_state": bridge.get("state"),
+            "supported": bridge.get("source") == "user" and bridge.get("state") == "loaded",
+            "message": status.get("message") or ("HomeKit Manager verwaltet diese Bridge jetzt." if state == "active" else "HomeKit Manager kann diese bestehende Bridge nach Bestätigung verwalten."),
+            "step": status.get("step"),
+            "request_id": status.get("request_id"),
+            "updated_at": status.get("updated_at"),
+        }
+
+    async def async_enable_management(self, confirmed: bool = False) -> dict[str, Any]:
+        """Enable the management surface after live, read-only prerequisites."""
+        bridge = self.selected_bridge()
+        status = self.management_status()
+        if bridge is None or not status["supported"]:
+            status["state"] = "blocked"
+            status["message"] = "Nur eine geladene SOURCE_USER-Bridge kann durch HomeKit Manager verwaltet werden."
+            return status
+        if not confirmed:
+            status["state"] = "awaiting_confirmation"
+            status["message"] = "Bestätigung erforderlich: HomeKit Manager verwaltet danach diese bestehende Bridge; die native Quelle bleibt Home Assistant."
+            return status
+        request_id = uuid4().hex
+        entry_id = bridge["entry_id"]
+        status.update({"state": "verifying", "step": "validate", "request_id": request_id, "message": "Voraussetzungen geprüft; Bridge wird erneut verifiziert."})
+        self.management_statuses[entry_id] = status.copy()
+        await self.management_store.async_save(self.management_statuses)
+        await self.async_refresh()
+        verified = self.selected_bridge()
+        if verified is None or verified.get("entry_id") != entry_id or verified.get("state") != "loaded":
+            status.update({"state": "unknown", "step": "verify", "message": "Bridge-Verifikation nach der Prüfung nicht eindeutig."})
+        else:
+            status.update({"state": "active", "step": "complete", "message": "HomeKit Manager verwaltet diese Bridge jetzt."})
+        self.management_statuses[entry_id] = status.copy()
+        await self.management_store.async_save(self.management_statuses)
+        return self.management_status()
 
     async def async_start_migration(self, target: str, confirmed: bool = False) -> dict[str, Any]:
         """Verify same-source state or explicitly block cross-source migration."""

@@ -17,10 +17,12 @@ for (const [name, width, height] of viewports) {
       await page.goto("/tests/frontend/browser_fixture.html");
       const panel = page.locator("homekit-manager-panel");
       await expect(panel).toBeVisible();
-      await expect(panel.locator("text=Konfigurationsmethode")).toBeVisible();
+      await expect(panel.getByRole("heading", { name: "Konfigurationsquelle" })).toBeVisible();
       await expect(panel.locator("text=Fixture Bridge")).toBeVisible();
-      await panel.locator('[data-mode="yaml"]').click();
-      await expect(panel.locator('[data-mode="yaml"] small')).toHaveText("Vorgemerkt");
+      await expect(panel.locator(".storage-card.active small")).toContainText("Aktive Konfigurationsquelle");
+      await expect(panel.getByRole("heading", { name: "Verwaltungsoberfläche" })).toBeVisible();
+      await panel.locator("[data-management-enable]").click();
+      await expect(panel.locator("text=HomeKit Manager verwaltet diese Bridge jetzt.")).toBeVisible();
       await panel.locator("[data-bridge-expand]").click();
       await expect(panel.getByText("Modus: bridge", { exact: true })).toBeVisible();
       await panel.locator("[data-bridge-expand]").click();
@@ -133,14 +135,11 @@ test("sticky change actions remain visible inside a Home Assistant-like scroll c
   expect(geometry.footerBottom).toBeLessThanOrEqual(geometry.wrapperBottom + 1);
 });
 
-test("storage cards distinguish verified source from blocked migration", async ({ page }) => {
+test("storage cards distinguish verified source from management surface", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/tests/frontend/browser_fixture.html");
   const panel = page.locator("homekit-manager-panel");
-  await expect(panel.locator(".storage-card.active small")).toHaveText("Aktiv");
-  await panel.locator('[data-mode="yaml"]').click();
-  await expect(panel.locator('[data-mode="yaml"] small')).toHaveText("Vorgemerkt");
-  await panel.locator('[data-migration-target]').selectOption("yaml");
-  await expect(panel.locator(".migration-panel .warning")).toContainText("gesperrt");
-  await expect(panel.locator('[data-migration-start]')).toBeDisabled();
+  await expect(panel.locator(".storage-card.active small")).toContainText("Aktive Konfigurationsquelle");
+  await expect(panel.getByRole("heading", { name: "Verwaltungsoberfläche" })).toBeVisible();
+  await expect(panel.locator("text=YAML- und SOURCE_IMPORT-Migrationen bleiben gesperrt.")).toBeVisible();
 });

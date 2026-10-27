@@ -5,13 +5,40 @@
 0.9.18 verbessert die Darstellung des verifizierten Konfigurationszustands und stellt
 eine sichere, geführte Prüfung eines möglichen Speicherwechsels bereit.
 
-## Speicherarten
+## Tatsächliche Speicherarchitektur
 
-| Anzeige | Technische Bedeutung | Status |
+HomeKit Manager trennt drei zuvor vermischte Begriffe:
+
+1. **Konfigurationsquelle**: Home Assistant `SOURCE_USER`/Config Entry oder YAML
+   (`SOURCE_IMPORT`). Das ist der Ort, aus dem Home Assistant die Bridge nativ
+   lädt.
+2. **Verwaltungsoberfläche**: Home Assistant selbst oder HomeKit Manager. Die
+   Auswahl der Verwaltungsoberfläche verschiebt keine native Konfigurationsquelle.
+3. **Entwurfsspeicher**: die getrennte, versionierte Manager-Persistenz für
+   Entwürfe, Historie und Verwaltungsmetadaten. Sie enthält keine Pairingdaten,
+   Tokens oder HomeKit-Geheimnisse.
+
+Core 2026.10.4 verwaltet die native `SOURCE_USER`-Bridge über den Config-Entry-
+und Options-Lifecycle. HomeKit Manager verwendet für zulässige Optionsänderungen
+denselben geprüften Config-Entry-Optionspfad; die ausdrückliche Verwaltungsschaltung
+verifiziert eine geladene `SOURCE_USER`-Bridge und persistiert nur, dass diese
+Verwaltungsoberfläche für die konkrete Entry-ID aktiviert wurde. Es findet dabei
+keine Migration und keine neue Bridge statt.
+
+## Anzeige der Quelle und Verwaltung
+
+| Kategorie | Auswahl | Bedeutung |
 |---|---|---|
-| Standard | native HomeKit-Config-Entry, typischerweise `SOURCE_USER` | lesbar; Änderungen nur über den bestehenden, separat gesicherten Optionspfad |
-| YAML | direkte YAML-/`SOURCE_IMPORT`-Konfiguration | lesbar; automatische Migration gesperrt |
-| HomeKit Manager | Manager-Drafts und gewünschte Verwaltungsquelle | Draft-/Historien-Metadaten persistent; keine automatische Bridge-Aktivierung |
+| Kategorie | Auswahl | Bedeutung |
+|---|---|---|
+| Konfigurationsquelle | Home Assistant | geladene native `SOURCE_USER`-Config-Entry |
+| Konfigurationsquelle | YAML | YAML-/`SOURCE_IMPORT`-Quelle |
+| Verwaltungsoberfläche | Home Assistant | native Home-Assistant-Verwaltung |
+| Verwaltungsoberfläche | HomeKit Manager | verifizierte Verwaltung einer vorhandenen geladenen `SOURCE_USER`-Bridge |
+| Entwurfsspeicher | HomeKit Manager | Entwürfe, Historie und Verwaltungsstatus; nicht die native Bridge-Konfiguration |
+
+Die UI markiert ausschließlich den vom Backend verifizierten Zustand grün. Ein
+vorgemerkter oder unbekannter Zustand bleibt davon getrennt.
 
 Grün und „Aktiv“ wird ausschließlich für die vom Backend erkannte und stabile Quelle
 angezeigt. „Vorgemerkt“ ist kein aktiver Zustand.
@@ -25,10 +52,16 @@ keine stabile öffentliche Migrations-API bereit, die Bridge-Identität, Pairing
 Reload-Lifecycle und Fehlerrollback zugleich garantiert. Der Assistent erklärt den
 Blocker und schreibt keine HomeKit-Konfiguration.
 
-Eine Auswahl derselben Quelle ist keine Migration. Sie kann nach expliziter Bestätigung
-read-only erneut verifiziert werden. Das Ergebnis wird mit Zeitstempel gespeichert;
-alte Statusdaten werden nach 15 Minuten als unbekannt markiert und nicht automatisch
-wiederholt.
+Eine Auswahl derselben Quelle ist keine Migration. Die Verwaltungsschaltung kann
+nach expliziter Bestätigung eine geladene `SOURCE_USER`-Bridge erneut verifizieren
+und den Verwaltungsstatus für genau diese Entry-ID speichern. Das Ergebnis wird
+mit Zeitstempel und Request-ID gespeichert; alte Statusdaten werden nach 15 Minuten
+als unbekannt markiert und nicht automatisch wiederholt. Optionsänderungen bleiben
+zusätzlich durch Fingerprint-, Core-Version-, Admin- und Writer-Gates geschützt.
+
+Eine YAML-Quelle (`SOURCE_IMPORT`) kann mit dieser Verwaltungsschaltung nicht
+aktiviert werden, weil der Core dafür keinen gleichwertigen sicheren externen
+Ownership-/Optionsvertrag bereitstellt.
 
 ## UI-Änderungen
 

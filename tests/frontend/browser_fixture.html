@@ -33,6 +33,7 @@
       ];
       let savedDocument = { schema_version: 1, bridges: {} };
       let desiredMode = "homekit_bridge";
+      let managementActive = false;
       const hass = {
         states: { "light.kitchen": {}, "sensor.temperature": {} },
         callWS: async (message) => {
@@ -81,6 +82,13 @@
           }
           if (message.type === "homekit_manager/migration_status") {
             return { state: "unknown", stale: true };
+          }
+          if (message.type === "homekit_manager/management_status") {
+            return { state: managementActive ? "active" : "not_enabled", configuration_source: "home_assistant", configuration_source_label: "Home Assistant", management_surface: "homekit_manager", management_surface_label: "HomeKit Manager", supported: true, active: managementActive, bridge_title: "Fixture Bridge", message: managementActive ? "HomeKit Manager verwaltet diese Bridge jetzt." : "HomeKit Manager kann diese bestehende Bridge nach Bestätigung verwalten." };
+          }
+          if (message.type === "homekit_manager/management_enable") {
+            managementActive = true;
+            return { state: "active", configuration_source: "home_assistant", configuration_source_label: "Home Assistant", management_surface: "homekit_manager", management_surface_label: "HomeKit Manager", supported: true, active: true, bridge_title: "Fixture Bridge", message: "HomeKit Manager verwaltet diese Bridge jetzt." };
           }
           if (message.type === "homekit_manager/devices") {
             return { devices: [{ device_id: "fixture-device", name: "Kitchen device", area_name: "Kitchen", entity_count: 1, compatible_count: 1, configured_count: 1, unavailable_count: 0, integrations: ["demo"] }] };

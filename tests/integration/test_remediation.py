@@ -134,6 +134,13 @@ async def test_apply_http_transport_is_locked_and_native_options_unchanged(hass,
         response = await client.receive_json()
         assert response["success"] is False
         assert response["error"]["code"] == "write_blocked"
+    await client.send_json_auto_id({"type": "homekit_manager/operation_apply", "operation_id": "forged",
+                                    "entry_id": native.entry_id, "source_revision": "forged",
+                                    "expected_fingerprint": manager.fingerprint or "forged",
+                                    "confirmed_operation_id": "forged"})
+    response = await client.receive_json()
+    assert response["success"] is False
+    assert response["error"]["code"] == "write_blocked"
     assert dict(native.options) == before
     assert manager.overview()["write_policy"]["enabled"] is False
 
@@ -145,7 +152,7 @@ async def test_all_api_commands_reject_non_administrators(hass, enable_custom_in
     client = await hass_ws_client(access_token=hass.auth.async_create_access_token(refresh))
     from custom_components.homekit_manager.websocket import REGISTERED_HANDLERS
     document = {"schema_version": 1, "bridges": {}}
-    arguments = {"select_bridge": {"entry_id": "b"}, "device_preview": {"entity_id": "light.one"}, "rules_preview": {"rules": []}, "history_restore": {"index": 0}, "set_mode": {"mode": "homekit_bridge"}, "migration_start": {"target": "homekit_bridge"}, "management_enable": {}, "management_disable": {}}
+    arguments = {"select_bridge": {"entry_id": "b"}, "device_preview": {"entity_id": "light.one"}, "rules_preview": {"rules": []}, "history_restore": {"index": 0}, "set_mode": {"mode": "homekit_bridge"}, "migration_start": {"target": "homekit_bridge"}, "management_enable": {}, "management_disable": {}, "operation_plan": {"document": document, "entry_id": "b", "expected_fingerprint": "x"}, "operation_apply": {"operation_id": "x", "entry_id": "b", "source_revision": "x", "expected_fingerprint": "x", "confirmed_operation_id": "x"}, "operation_status": {"operation_id": "x"}, "operation_reconcile": {"operation_id": "x"}}
     for handler in REGISTERED_HANDLERS:
         command = handler._ws_command
         name = command.split("/")[1]

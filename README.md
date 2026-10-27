@@ -34,7 +34,7 @@ Run `pytest -q`, `npm run test:frontend` and `npm run test:browser`. The Python 
 
 Build with `python scripts/build_release.py --output .release`. After intentional source changes update the checked release file list with `--update-manifest`. The builder rejects unknown files and version/hash mismatches, uses fixed ZIP metadata and verifies every archived source byte. Repeat the build and compare the ZIP bytes. Before release, extract the ZIP into a temporary validation directory with the repository tests/tooling and run all checks there.
 
-The authoritative product repository is `https://github.com/alltours/homeassistant-homekit-manager`; local canonical location: `/Users/felixalshut/Documents/ChatGPT/homeassistant-homekit-manager`. Older copied sources and historical reports describe historical releases only. This work is on branch `feature/homekit-manager-0.9.20`.
+The authoritative product repository is `https://github.com/alltours/homeassistant-homekit-manager`; local canonical location: `/Users/felixalshut/Documents/ChatGPT/homeassistant-homekit-manager`. Older copied sources and historical reports describe historical releases only. Current development is on branch `feature/homekit-manager-0.9.24`.
 
 ## Installation and limits
 

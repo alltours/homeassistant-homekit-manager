@@ -5,7 +5,7 @@ from custom_components.homekit_manager.source_model import native_source, yaml_s
 
 
 def entry(source):
-    return SimpleNamespace(entry_id="b", source=source, data={"name": "Bridge", "port": 21064}, options={"mode": "bridge", "filter": {"include_entities": ["light.one"]}})
+    return SimpleNamespace(entry_id="b", source=source, data={"name": "Bridge", "port": 21094}, options={"mode": "bridge", "filter": {"include_entities": ["light.one"]}})
 
 
 def test_native_model_is_immutable_and_source_bound():

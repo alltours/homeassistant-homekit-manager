@@ -1,8 +1,6 @@
 """Event-driven read-only coordinator."""
 from __future__ import annotations
 import asyncio
-import hashlib
-import json
 import logging
 import time
 from pathlib import Path
@@ -16,7 +14,7 @@ from .inventory import build_inventory
 from .device_reconciliation import reconcile_devices
 from .change_planner import plan_changes
 from .fingerprint import build_fingerprint
-from .homekit_writer import HomeKitWriter, OptionsDiff, build_options_diff, HomeKitWriteBlocked, HomeKitActivationUnknown
+from .homekit_writer import build_options_diff, HomeKitWriteBlocked, HomeKitWriter as HomeKitWriter
 from .reconcile import reconcile_desired_state
 from .exporter import export_desired_state
 from .yaml_store import (
@@ -40,6 +38,7 @@ from .management_store import ManagementStore
 from .activation_store import ActivationStore
 from .safety import WRITE_LOCK_REASON, write_policy
 from .homekit_writer import HomeKitWriteDisabled
+from .operations import HomeKitOperationService
 from .const import INTEGRATION_VERSION, SUPPORTED_CORE_VERSION
 from homeassistant.const import __version__ as CORE_VERSION
 
@@ -67,6 +66,9 @@ class HomeKitManagerCoordinator:
         self.migration_store = MigrationStore(hass)
         self.management_store = ManagementStore(hass)
         self.activation_store = ActivationStore(hass)
+        # No production configuration path grants write authority in this
+        # release. Tests may inject an isolated service after setup.
+        self.operation_service = HomeKitOperationService(hass)
         self.management_statuses: dict[str, dict[str, Any]] = {}
         self.migration_status: dict[str, Any] = {
             "state": "unknown",
@@ -293,6 +295,9 @@ class HomeKitManagerCoordinator:
             "core_version": CORE_VERSION,
             "accessories": len(self.accessories),
             "write_policy": write_policy(),
+            "operation_policy": {"enabled": self.operation_service._isolated_write_authority,
+                                 "reason": "Nur isolierte Testinstanz" if self.operation_service._isolated_write_authority else WRITE_LOCK_REASON,
+                                 "automatic_retry": False},
             "refresh_count": self.refresh_count,
             "refresh_duration_ms": self.refresh_duration_ms,
             "refresh_cpu_ms": self.refresh_cpu_ms,
@@ -424,7 +429,7 @@ class HomeKitManagerCoordinator:
             "write_status": write_status,
             "write_status_label": {"available": "Verfügbar", "locked": "Gesperrt", "unknown": "Status unbekannt"}[write_status],
             "bridge_state": bridge.get("state"),
-            "supported": bridge.get("source") == "user" and bridge.get("state") == "loaded" and bridge.get("mode", "bridge") == "bridge" and not self.last_error and CORE_VERSION == SUPPORTED_CORE_VERSION and not (self.activation_statuses.get(entry_id, {}).get("state") in {"unknown", "activating", "saved"}),
+            "supported": bridge.get("source") == "user" and bridge.get("state") == "loaded" and bridge.get("mode", "bridge") == "bridge" and not self.last_error and CORE_VERSION == SUPPORTED_CORE_VERSION and self.activation_statuses.get(entry_id, {}).get("state") not in {"unknown", "activating", "saved"},
             "message": status.get("message") or ("HomeKit Manager verwaltet diese Bridge jetzt." if active else "Die Verwaltung liegt bei Home Assistant. HomeKit Manager kann für diese Bridge aktiviert werden."),
             "step": status.get("step"),
             "request_id": status.get("request_id"),
@@ -590,6 +595,29 @@ class HomeKitManagerCoordinator:
     async def async_apply_options_diff(self, document: Any, expected_fingerprint: str | None, request_id: str | None = None) -> dict[str, Any]:
         """Hard lock before validation, status mutation or native entry access."""
         raise HomeKitWriteDisabled(WRITE_LOCK_REASON)
+
+    async def async_plan_operation(self, document: Any, expected_fingerprint: str | None, entry_id: str) -> dict[str, Any]:
+        if not expected_fingerprint or expected_fingerprint != self.fingerprint or self.last_error:
+            raise ValueError("Inventar-Fingerprint ist veraltet oder unbekannt")
+        bridge = self.selected_bridge()
+        if bridge is None or bridge.get("entry_id") != entry_id:
+            raise ValueError("Ziel-Bridge stimmt nicht mit der Auswahl überein")
+        validated = self.validate_draft(document)
+        return await self.operation_service.plan_filter(entry_id=entry_id, bridge=bridge,
+                                                        document=validated["document"], inventory=self.inventory)
+
+    async def async_apply_operation(self, operation_id: str, entry_id: str, source_revision: str,
+                                    expected_fingerprint: str, confirmed_operation_id: str) -> dict[str, Any]:
+        # The production service is constructed without authority. Keep a
+        # second explicit boundary before any plan/status lookup or mutation.
+        if not self.operation_service._isolated_write_authority:
+            raise HomeKitWriteDisabled(WRITE_LOCK_REASON)
+        bridge = self.selected_bridge()
+        if self.last_error or not bridge or bridge.get("entry_id") != entry_id or self.fingerprint != expected_fingerprint:
+            raise HomeKitWriteBlocked("Bridge-Kontext oder Inventar-Fingerprint wurde geändert")
+        return await self.operation_service.apply(operation_id, entry_id=entry_id,
+                                                  expected_revision=source_revision,
+                                                  confirmed_operation_id=confirmed_operation_id, admin=True)
 
     def reconcile(self, document: Any, baseline_fingerprint: str | None = None) -> dict[str, Any]:
         validated = self.validate_draft(document)

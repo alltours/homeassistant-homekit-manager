@@ -362,7 +362,7 @@ async def test_homekit_manager_apply_uses_authenticated_websocket(
         minor_version=1,
         domain="homekit",
         title="Authenticated WebSocket Bridge",
-        data={"name": "Authenticated WebSocket Bridge", "port": 21064},
+        data={"name": "Authenticated WebSocket Bridge", "port": 21095},
         options={"filter": {"include_entities": []}},
         source=config_entries.SOURCE_USER,
         entry_id="authenticated-ws-bridge",

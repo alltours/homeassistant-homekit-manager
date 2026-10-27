@@ -12,13 +12,13 @@ Datum: 27.10.2026. Statuswörter in diesem Bericht: **BESTÄTIGT** = direkt im Q
 
 Repository: `/Users/felixalshut/Documents/ChatGPT/homeassistant-homekit-manager`, Origin `https://github.com/alltours/homeassistant-homekit-manager.git`. Verifiziertes Start-HEAD `4a4e734` auf dem vorhandenen 0.9.19-Worktree; neuer Entwicklungs-Worktree im kanonischen Repository unter `.worktrees/feature-homekit-manager-0.9.20`. Nicht versionierte Kopien im Homeassistant-Arbeitsordner wurden nicht als Produktbasis verwendet. Der kanonische Hauptcheckout hatte eigene unversionierte Dateien und blieb unangetastet. Kein Merge auf `main`, kein Tag und keine Veröffentlichung.
 
-Vom Nutzer berichteter Produktionsstand: Home Assistant Core 2026.10.4, HomeKit Manager 0.9.19, eine native `source=user`-Bridge im Bridge-Modus auf Port 21064. Diese Angaben waren eine Ausgangsinformation, keine erneute Bestätigung über eine authentifizierte Registry-API.
+Vom Nutzer berichteter Produktionsstand: Home Assistant Core 2026.10.4, HomeKit Manager 0.9.19, eine native `source=user`-Bridge im Bridge-Modus. Der konkrete produktive Port wird im öffentlichen Bericht nicht wiedergegeben. Diese Angaben waren eine Ausgangsinformation, keine erneute Bestätigung über eine authentifizierte Registry-API.
 
 ## 3. Tatsächlich untersuchte Produktivumgebung
 
-**BESTÄTIGT:** `http://192.168.1.136:8123/api/` antwortete lesend mit HTTP 401; der Server war erreichbar, verlangte aber Authentisierung. Der autorisierte Home-Assistant-Live-Context lieferte einen begrenzten Überblick von Namen und States, darunter `unavailable`, jedoch keine vollständigen Entity-/Device-Registry-IDs, HomeKit-Config-Entry-Metadaten oder Event-Zähler. In der verfügbaren Browser-Sitzung war kein authentifiziertes Home-Assistant-Tab vorhanden. Es wurden keine Zugangsdaten gesucht oder umgangen.
+**BESTÄTIGT:** Der produktive Home-Assistant-API-Endpunkt antwortete lesend mit HTTP 401; der Server war erreichbar, verlangte aber Authentisierung. Die interne Adresse wird im öffentlichen Bericht nicht wiedergegeben. Der autorisierte Home-Assistant-Live-Context lieferte einen begrenzten Überblick von Namen und States, darunter `unavailable`, jedoch keine vollständigen Entity-/Device-Registry-IDs, HomeKit-Config-Entry-Metadaten oder Event-Zähler. In der verfügbaren Browser-Sitzung war kein authentifiziertes Home-Assistant-Tab vorhanden. Es wurden keine Zugangsdaten gesucht oder umgangen.
 
-**NICHT BESTÄTIGT:** Die aktuelle Installation der Version 0.9.19, der Core-Build, die eine Bridge, Port 21064 und die berichteten Produktionszahlen wurden nicht über authentifizierte API-Daten unabhängig verifiziert. **BESTÄTIGT:** Keine produktive HomeKit-Option, Config Entry, `.storage`-Datei, YAML-Datei oder Bridge wurde verändert oder neu geladen; kein produktiver Dienst wurde neu gestartet.
+**NICHT BESTÄTIGT:** Die aktuelle Installation der Version 0.9.19, der Core-Build, die eine Bridge, deren Port und die berichteten Produktionszahlen wurden nicht über authentifizierte API-Daten unabhängig verifiziert. **BESTÄTIGT:** Keine produktive HomeKit-Option, Config Entry, `.storage`-Datei, YAML-Datei oder Bridge wurde verändert oder neu geladen; kein produktiver Dienst wurde neu gestartet.
 
 ## 4. Inventar-Befunde und 5. Ursache der Gerätedifferenz
 

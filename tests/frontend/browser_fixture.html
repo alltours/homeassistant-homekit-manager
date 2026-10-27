@@ -35,6 +35,8 @@
       let savedDocument = { schema_version: 1, bridges: {} };
       let desiredMode = "homekit_bridge";
       let managementActive = new URLSearchParams(window.location.search).has("activation-error");
+      const isolatedWrite = new URLSearchParams(window.location.search).has("isolated-write");
+      let operationState = "validated";
       window.fixtureCommands = [];
       const hass = {
         states: { "light.kitchen": {}, "sensor.temperature": {} },
@@ -52,7 +54,7 @@
                 unavailable_entities: 1,
                 compatible_entities: 1,
                 configured_entities: 1,
-                integration_version: "0.9.20", core_version: "2026.10.4", last_updated: "2026-10-27T08:00:00Z", refresh_duration_ms: 3.2, refresh_count: 1, unavailable_entities: 1, accessories: 1, write_policy: { enabled: false },
+                integration_version: "0.9.20", core_version: "2026.10.4", last_updated: "2026-10-27T08:00:00Z", refresh_duration_ms: 3.2, refresh_count: 1, unavailable_entities: 1, accessories: 1, write_policy: { enabled: false }, operation_policy: { enabled: isolatedWrite, reason: isolatedWrite ? "Nur isolierte Testinstanz" : "HomeKit-Schreibpfad gesperrt" },
                 fingerprint: "fixture-fingerprint",
               },
               entities,
@@ -136,6 +138,20 @@
           }
           if (message.type === "homekit_manager/apply_options_diff") {
             throw new Error("HomeKit-Schreibpfad in 0.9.20 gesperrt");
+          }
+          if (message.type === "homekit_manager/operation_plan") {
+            if (message.entry_id !== "fixture-bridge" || message.expected_fingerprint !== "fixture-fingerprint") throw new Error("Bridge oder Revision geändert");
+            operationState = "validated";
+            return { operation_id: "fixture-operation-1", entry_id: message.entry_id, source: "user", source_revision: "fixture-source-revision", changed_entities: ["light.kitchen"], state: operationState, apply_enabled: isolatedWrite };
+          }
+          if (message.type === "homekit_manager/operation_apply") {
+            if (!isolatedWrite || message.operation_id !== "fixture-operation-1" || message.confirmed_operation_id !== message.operation_id || operationState !== "validated") throw new Error("Operation blockiert");
+            operationState = "verified";
+            entities[0].homekit.configured_by_filter = false; entities[0].homekit.current_status = "excluded";
+            return { operation_id: message.operation_id, entry_id: message.entry_id, state: operationState, pairing_verified: false };
+          }
+          if (message.type === "homekit_manager/operation_status" || message.type === "homekit_manager/operation_reconcile") {
+            return { operation_id: message.operation_id, state: operationState, automatic_retry: false };
           }
           throw new Error(`Unsupported fixture command: ${message.type}`);
         },

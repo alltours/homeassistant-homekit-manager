@@ -6,6 +6,7 @@ const WS = {
   yaml: "homekit_manager/yaml_status", mode: "homekit_manager/mode_status", activation: "homekit_manager/activation_status",
   setMode: "homekit_manager/set_mode", validate: "homekit_manager/validate_draft", preview: "homekit_manager/preview",
   save: "homekit_manager/save_draft", apply: "homekit_manager/apply_options_diff", export: "homekit_manager/export",
+  operationPlan: "homekit_manager/operation_plan", operationApply: "homekit_manager/operation_apply", operationStatus: "homekit_manager/operation_status", operationReconcile: "homekit_manager/operation_reconcile",
   devicePreview: "homekit_manager/device_preview", performance: "homekit_manager/performance",
   migrationPlan: "homekit_manager/migration_plan", migrationStatus: "homekit_manager/migration_status", migrationStart: "homekit_manager/migration_start",
   managementStatus: "homekit_manager/management_status", managementEnable: "homekit_manager/management_enable", managementDisable: "homekit_manager/management_disable",
@@ -20,6 +21,7 @@ class HomeKitManagerPanel extends HTMLElement {
       view: "home", settingsView: "configuration", groupMode: "areas", selectionMode: false, expanded: new Set(), query: "", page: 0,
       filters: { status: "", compatibility: "", domain: "", integration: "", area: "", availability: "", published: "", changed: "" },
       selected: new Set(), draft: new Map(), fingerprint: null, serverPreview: null, error: null, loading: false, statusMessage: "Keine Änderungen", expandedBridges: new Set(), activationMessage: "", actionMenuOpen: false, diagnosticFilter: "", filtersOpen: false });
+    this.operationPlan = null; this.operationStatus = null;
     Object.assign(this, { action: "", statusTone: "neutral", expandedAreas: new Set(), areaPages: new Map(), draftFingerprint: null, conflict: false, dialog: null, lastFetchAt: null, _subscription: null, _pendingRevision: 0, _seenRevision: 0, _refreshQueued: false });
     this.filters.device = "";
     this.render();
@@ -54,6 +56,7 @@ class HomeKitManagerPanel extends HTMLElement {
         [WS.bridges, WS.devices, WS.areas, WS.diagnostics, WS.history, WS.yaml, WS.mode, WS.activation, WS.migrationPlan, WS.migrationStatus, WS.managementStatus].map(type => this._hass.callWS({ type }))
       );
       if (this.draft.size && this.draftFingerprint && this.draftFingerprint !== inventory.overview?.fingerprint) this.conflict = true;
+      if (this.operationPlan && this.operationPlan.inventory_fingerprint !== inventory.overview?.fingerprint) this.conflict = true;
       Object.assign(this, { entities: inventory.entities || [], overview: inventory.overview || {}, bridges: bridges.bridges || [], devices: devices.devices || [], areas: areas.areas || [], diagnostics, historyEntries: history.entries || [], yamlStatus: yaml, modeStatus: mode, activationStatus: activation || { state: "unknown" }, migrationPlan, migrationStatus, managementStatus });
       this._seenRevision = Math.max(this._seenRevision, Number(this.overview.refresh_count) || 0);
       this.fingerprint = yaml.fingerprint || this.overview.fingerprint || null;
@@ -72,7 +75,7 @@ class HomeKitManagerPanel extends HTMLElement {
   async selectBridge(entryId) {
     if (!entryId || entryId === this.bridge?.entry_id) return;
     if (this.draft.size) { this.error = "Bitte den Entwurf zuerst speichern oder verwerfen, bevor du die Bridge wechselst."; this.render(); return; }
-    try { await this._hass.callWS({ type: WS.selectBridge, entry_id: entryId }); this.serverPreview = null; await this.refresh(); } catch (error) { this.error = error?.message || String(error); this.render(); }
+    try { await this._hass.callWS({ type: WS.selectBridge, entry_id: entryId }); this.serverPreview = null; this.operationPlan = null; this.operationStatus = null; await this.refresh(); } catch (error) { this.error = error?.message || String(error); this.render(); }
   }
   async loadSettingsData() {
     if (this.settingsView !== "performance") return;
@@ -104,6 +107,7 @@ class HomeKitManagerPanel extends HTMLElement {
     const current = this.currentStatus(entity);
     if (!value || value === current) this.draft.delete(id); else this.draft.set(id, value);
     this.serverPreview = null;
+    this.operationPlan = null; this.operationStatus = null;
     this.statusMessage = `${this.changes().length} Änderung(en) als Entwurf vorgemerkt`;
     this.statusTone = "neutral";
     if (render) this.render();
@@ -123,7 +127,7 @@ class HomeKitManagerPanel extends HTMLElement {
     this.selected.clear(); this.render();
   }
   async applyToSelection(value) { await this.planSelection([...this.selected], value); }
-  discard() { this.draft.clear(); this.selected.clear(); this.draftFingerprint = null; this.conflict = false; this.serverPreview = null; this.statusMessage = "Entwurf verworfen"; this.statusTone = "neutral"; this.render(); }
+  discard() { this.draft.clear(); this.selected.clear(); this.draftFingerprint = null; this.conflict = false; this.serverPreview = null; this.operationPlan = null; this.operationStatus = null; this.statusMessage = "Entwurf verworfen"; this.statusTone = "neutral"; this.render(); }
   async setMode(mode) { try { this.modeStatus = await this._hass.callWS({ type: WS.setMode, mode }); this.statusMessage = "Modus vorbereitet · Aktivierung gesperrt"; } catch (error) { this.error = error?.message || String(error); } this.render(); }
   async startMigration() { const target = this.migrationPlan?.target || this.modeStatus.desired_mode || this.modeStatus.active_mode; if (!target) return; try { const result = await this._hass.callWS({ type: WS.migrationStart, target, confirmed: true }); this.migrationPlan = result; this.migrationStatus = result.status || this.migrationStatus; this.statusMessage = this.migrationStatus.state === "completed" ? "Speicherort verifiziert" : "Speicherwechsel gesperrt"; } catch (error) { this.error = error?.message || String(error); } this.render(); }
   async chooseMigrationTarget(target) { try { this.migrationPlan = await this._hass.callWS({ type: WS.migrationPlan, target }); } catch (error) { this.error = error?.message || String(error); } this.render(); }
@@ -162,13 +166,49 @@ class HomeKitManagerPanel extends HTMLElement {
       const saved = await this._hass.callWS({ type: WS.save, document: validated.document, ...(this.yamlStatus.file_version ? { expected_file_version: this.yamlStatus.file_version } : {}), expected_fingerprint: this.draftFingerprint || this.fingerprint });
       if (!saved.valid || !saved.exists) throw new Error("Die Speicherung wurde nicht bestätigt.");
       this.yamlStatus = saved; this.fingerprint = saved.fingerprint || this.fingerprint; this.draftFingerprint = this.fingerprint;
+      this.operationPlan = null; this.operationStatus = null;
       this.historyEntries = (await this._hass.callWS({ type: WS.history })).entries || [];
       this.statusMessage = saved.history_error || "Entwurf gespeichert · HomeKit unverändert";
       if (saved.history_error) this.statusTone = "warning";
     });
   }
-  supportsApply() { return false; }
-  async applyDraft() { this.statusMessage = "HomeKit-Anwendung ist in Version 0.9.20 gesperrt."; this.statusTone = "neutral"; this.render(); }
+  async planOperation() {
+    if (!this.bridge?.entry_id || !this.fingerprint || this.conflict) { this.error = "Bridge-Kontext oder Inventarstand ist nicht eindeutig."; this.render(); return; }
+    await this.runAction("Änderung planen", async () => {
+      const result = await this._hass.callWS({ type: WS.operationPlan, document: this.desiredDocument(), entry_id: this.bridge.entry_id, expected_fingerprint: this.fingerprint });
+      this.operationPlan = { ...result, inventory_fingerprint: this.fingerprint };
+      this.operationStatus = result;
+      this.statusMessage = "Änderungsplan validiert · Quelle und Revision gebunden";
+    });
+  }
+  supportsApply() { return Boolean(this.overview.operation_policy?.enabled && this.operationPlan?.apply_enabled && this.operationPlan?.state === "validated" && this.operationPlan?.entry_id === this.bridge?.entry_id && this.operationPlan?.inventory_fingerprint === this.fingerprint && !this.conflict); }
+  async reconcileOperation() {
+    if (!this.operationPlan?.operation_id) return;
+    await this.runAction("Vorgang lesend abgleichen", async () => {
+      this.operationStatus = await this._hass.callWS({ type: WS.operationReconcile, operation_id: this.operationPlan.operation_id });
+      this.statusMessage = `Vorgangsstatus: ${this.operationStatus.state || "unbekannt"}`;
+    });
+  }
+  async applyDraft() {
+    if (!this.supportsApply()) { this.statusMessage = this.overview.operation_policy?.reason || "HomeKit-Anwendung ist serverseitig gesperrt."; this.statusTone = "neutral"; this.render(); return; }
+    const plan = this.operationPlan;
+    if (!await this.requestConfirmation("HomeKit-Änderung anwenden", `Operation ${plan.operation_id} für ${this.bridge?.title || plan.entry_id} aus Quelle ${plan.source}. ${plan.changed_entities?.length || 0} Entität(en) sind betroffen.`, "Genau diese Änderung anwenden")) return;
+    await this.runAction("HomeKit-Änderung anwenden", async () => {
+      try {
+        const result = await this._hass.callWS({ type: WS.operationApply, operation_id: plan.operation_id, entry_id: plan.entry_id, source_revision: plan.source_revision, expected_fingerprint: plan.inventory_fingerprint, confirmed_operation_id: plan.operation_id });
+        this.operationStatus = result;
+        if (result.state !== "verified") throw new Error("Die Nachverifikation wurde nicht bestätigt.");
+        this.operationPlan = null; this.draft.clear(); this.draftFingerprint = null;
+        await this.refresh(false);
+        this.statusMessage = "HomeKit-Konfigurationswerte vom Backend verifiziert; Apple Home nicht bestätigt";
+      } catch (error) {
+        try { this.operationStatus = await this._hass.callWS({ type: WS.operationStatus, operation_id: plan.operation_id }); }
+        catch { this.operationStatus = { state: "unknown_outcome", automatic_retry: false }; }
+        this.operationPlan = null;
+        throw error;
+      }
+    });
+  }
   async exportDraft() {
     await this.runAction("Export erstellen", async () => {
       const result = await this._hass.callWS({ type: WS.export, document: this.desiredDocument(), format: "yaml" });
@@ -283,7 +323,7 @@ class HomeKitManagerPanel extends HTMLElement {
     const labels = { validated: "Entwurf validiert", prepared: "Änderung vorbereitet", activating: "Anwendung läuft", saved: "Optionen gespeichert, Aktivierung unbestätigt", active: "Anwendung bestätigt", failed: "Anwendung fehlgeschlagen", unknown: "Ergebnis unbekannt" };
     const tone = state === "active" && this.activationStatus.has_operation ? "success" : state === "failed" ? "error" : "neutral";
     const previewById = new Map((this.serverPreview?.changes || []).map(item => [item.entity_id, item]));
-    return `${this.pageHeading("Änderungen", "Dein geplanter Zustand", "Vorschau und Entwurfsspeicherung verändern keine produktive HomeKit-Konfiguration.")}<section class="surface activation-card"><div class="section-heading"><h3>Anwendungsstatus</h3><span class="state tone-${tone}" data-activation-state="${this.escape(state)}">${this.escape(labels[state] || "Unbekannt")}</span></div><p>${this.escape(this.activationStatus.message || (this.activationStatus.has_operation ? "Gespeicherter Vorgangsstatus" : "Es liegt kein persistenter Nachweis einer früheren Anwendung vor."))}</p><p class="muted">Eine geladene Bridge allein bestätigt keine frühere Anwendung. Unbekannte Vorgänge werden nicht automatisch wiederholt.</p><button data-refresh>Status lesend prüfen</button><details class="technical"><summary>Vorgangsdaten</summary><dl class="definition-list"><div><dt>Request-ID</dt><dd><code>${this.escape(this.activationStatus.request_id || "Nicht vorhanden")}</code></dd></div><div><dt>Letzte Meldung</dt><dd>${this.formatTime(this.activationStatus.updated_at)}</dd></div><div><dt>Aktueller Bridge-Zustand</dt><dd>${this.escape(this.activationStatus.observations?.bridge_state || "Unbekannt")}</dd></div></dl></details></section>${this.conflict ? `<aside class="notice warning" role="alert">Der aktuelle Zustand oder die Vorschau enthält einen Konflikt. Bitte die Vorschau erneut prüfen.</aside>` : ""}<section class="surface changes-surface"><div class="section-heading"><h3>Geplante Änderungen</h3><span class="muted">${changes.length}</span></div>${changes.length ? changes.map(item => { const planned = previewById.get(item.entity_id); return `<article class="change-row"><div class="entity-copy"><strong>${this.escape(item.name)}</strong><code>${this.escape(item.entity_id)}</code><small>Bridge: ${this.escape(this.bridge?.title || "Nicht ausgewählt")}</small></div><dl class="change-states"><div><dt>Bisher</dt><dd>${this.statusLabel(item.current)}</dd></div><div><dt>Geplant</dt><dd>${this.statusLabel(item.desired)}</dd></div></dl>${planned?.blocked || planned?.risk === "high" ? `<p class="text-warning">${this.escape(planned.reason || "Zusätzliche Prüfung erforderlich")}</p>` : ""}</article>`; }).join("") : `<div class="empty"><strong>Keine Änderungen vorgemerkt</strong><p>Wähle unter Geräte die gewünschten Entitäten aus.</p><button data-nav="devices">Geräte öffnen</button></div>`}</section><section class="notice lock-note"><button data-apply disabled title="HomeKit-Schreibpfad in 0.9.20 gesperrt">Änderung anwenden · gesperrt</button><p>Der Schreibpfad ist im Backend gesperrt. Verwaltung und Vorschau heben diese Sperre nicht auf.</p></section><footer class="sticky-actions" aria-label="Änderungsaktionen"><span class="footer-count">${changes.length} vorgemerkt</span><button class="primary" data-save${changes.length ? "" : " disabled"}>Entwurf speichern</button><button data-preview${changes.length ? "" : " disabled"}>Vorschau</button><button data-action-menu aria-expanded="${this.actionMenuOpen}">Weitere</button>${this.actionMenuOpen ? `<div class="action-menu"><button data-export>YAML exportieren</button><button data-load>Entwurf laden</button><button data-discard${changes.length ? "" : " disabled"}>Verwerfen</button></div>` : ""}</footer>`;
+    return `${this.pageHeading("Änderungen", "Dein geplanter Zustand", "Vorschau und Entwurfsspeicherung verändern keine produktive HomeKit-Konfiguration.")}<section class="surface activation-card"><div class="section-heading"><h3>Anwendungsstatus</h3><span class="state tone-${tone}" data-activation-state="${this.escape(state)}">${this.escape(labels[state] || "Unbekannt")}</span></div><p>${this.escape(this.activationStatus.message || (this.activationStatus.has_operation ? "Gespeicherter Vorgangsstatus" : "Es liegt kein persistenter Nachweis einer früheren Anwendung vor."))}</p><p class="muted">Eine geladene Bridge allein bestätigt keine frühere Anwendung. Unbekannte Vorgänge werden nicht automatisch wiederholt.</p><button data-refresh>Status lesend prüfen</button><details class="technical"><summary>Vorgangsdaten</summary><dl class="definition-list"><div><dt>Request-ID</dt><dd><code>${this.escape(this.activationStatus.request_id || "Nicht vorhanden")}</code></dd></div><div><dt>Letzte Meldung</dt><dd>${this.formatTime(this.activationStatus.updated_at)}</dd></div><div><dt>Aktueller Bridge-Zustand</dt><dd>${this.escape(this.activationStatus.observations?.bridge_state || "Unbekannt")}</dd></div></dl></details></section>${this.conflict ? `<aside class="notice warning" role="alert">Der aktuelle Zustand oder die Vorschau enthält einen Konflikt. Bitte die Vorschau erneut prüfen.</aside>` : ""}<section class="surface changes-surface"><div class="section-heading"><h3>Geplante Änderungen</h3><span class="muted">${changes.length}</span></div>${changes.length ? changes.map(item => { const planned = previewById.get(item.entity_id); return `<article class="change-row"><div class="entity-copy"><strong>${this.escape(item.name)}</strong><code>${this.escape(item.entity_id)}</code><small>Bridge: ${this.escape(this.bridge?.title || "Nicht ausgewählt")}</small></div><dl class="change-states"><div><dt>Bisher</dt><dd>${this.statusLabel(item.current)}</dd></div><div><dt>Geplant</dt><dd>${this.statusLabel(item.desired)}</dd></div></dl>${planned?.blocked || planned?.risk === "high" ? `<p class="text-warning">${this.escape(planned.reason || "Zusätzliche Prüfung erforderlich")}</p>` : ""}</article>`; }).join("") : `<div class="empty"><strong>Keine Änderungen vorgemerkt</strong><p>Wähle unter Geräte die gewünschten Entitäten aus.</p><button data-nav="devices">Geräte öffnen</button></div>`}</section><section class="surface operation-card"><div class="section-heading"><h3>Validierter Änderungsplan</h3><span class="state">${this.escape(this.operationStatus?.state || "Noch nicht geplant")}</span></div><p class="muted">Der Plan bindet Bridge, Quelle und Revision. Sicherung und Nachverifikation erfolgen erst beim erlaubten Apply; Apple Home bleibt ungeprüft.</p>${this.operationPlan ? `<dl class="definition-list"><div><dt>Operation-ID</dt><dd><code>${this.escape(this.operationPlan.operation_id)}</code></dd></div><div><dt>Quelle</dt><dd>${this.escape(this.operationPlan.source)}</dd></div><div><dt>Betroffene Entitäten</dt><dd>${this.operationPlan.changed_entities?.length || 0}</dd></div></dl>` : ""}<button data-operation-plan${changes.length && !this.conflict ? "" : " disabled"}>Plan validieren</button>${this.operationPlan?.operation_id ? `<button data-operation-reconcile>Vorgang lesend abgleichen</button>` : ""}</section><section class="notice lock-note"><button data-apply${this.supportsApply() ? "" : " disabled"} title="${this.escape(this.overview.operation_policy?.reason || "HomeKit-Schreibpfad gesperrt")}">${this.supportsApply() ? "Änderung anwenden" : "Änderung anwenden · gesperrt"}</button><p>${this.escape(this.overview.operation_policy?.reason || "Der Schreibpfad ist im Backend gesperrt. Verwaltung und Vorschau heben diese Sperre nicht auf.")}</p></section><footer class="sticky-actions" aria-label="Änderungsaktionen"><span class="footer-count">${changes.length} vorgemerkt</span><button class="primary" data-save${changes.length ? "" : " disabled"}>Entwurf speichern</button><button data-preview${changes.length ? "" : " disabled"}>Vorschau</button><button data-action-menu aria-expanded="${this.actionMenuOpen}">Weitere</button>${this.actionMenuOpen ? `<div class="action-menu"><button data-export>YAML exportieren</button><button data-load>Entwurf laden</button><button data-discard${changes.length ? "" : " disabled"}>Verwerfen</button></div>` : ""}</footer>`;
   }
   settingsTemplate() {
     const tabs = [["general", "Allgemein"], ["configuration", "Konfiguration"], ["diagnostics", "Diagnose"], ["rules", "Regeln"], ["history", "Historie"], ["performance", "Performance"]];
@@ -346,6 +386,9 @@ class HomeKitManagerPanel extends HTMLElement {
     one("[data-management-enable]", "click", () => this.enableManagement()); one("[data-management-disable]", "click", () => this.disableManagement());
     one("[data-diagnostic-filter]", "change", event => { this.diagnosticFilter = event.target.value; this.render(); });
     one("[data-action-menu]", "click", () => { this.actionMenuOpen = !this.actionMenuOpen; this.render(); });
+    one("[data-operation-plan]", "click", () => this.planOperation());
+    one("[data-operation-reconcile]", "click", () => this.reconcileOperation());
+    one("[data-apply]", "click", () => this.applyDraft());
     one("[data-save]", "click", () => this.saveDraft()); one("[data-preview]", "click", () => this.previewServer()); one("[data-export]", "click", () => this.exportDraft()); one("[data-load]", "click", () => this.loadSaved()); one("[data-discard]", "click", async () => { if (await this.requestConfirmation("Entwurf verwerfen", "Die ungespeicherten Vormerkungen werden verworfen. Ein gespeicherter Entwurf bleibt erhalten.", "Verwerfen")) this.discard(); });
     one("[data-confirm-accept]", "click", () => this.finishConfirmation(true)); one("[data-confirm-cancel]", "click", () => this.finishConfirmation(false)); one("dialog", "cancel", event => { event.preventDefault(); this.finishConfirmation(false); });
   }

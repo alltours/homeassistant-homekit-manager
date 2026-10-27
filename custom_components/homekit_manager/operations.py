@@ -85,11 +85,13 @@ class HomeKitOperationService:
         else:
             raise HomeKitWriteBlocked("Unbekannte HomeKit-Konfigurationsquelle")
         plan = OperationPlan(payload.operation_id, entry_id, str(entry.source), payload.source_revision, tuple(entities), payload)
-        self._plans[plan.operation_id] = plan
-        await self._set_state(plan, "validated")
+        async with self._lock:
+            self._plans[plan.operation_id] = plan
+            await self._set_state(plan, "validated")
         return {"operation_id": plan.operation_id, "entry_id": entry_id, "source": plan.source,
                 "source_revision": plan.source_revision, "changed_entities": list(plan.changed_entities),
-                "state": "validated", "apply_enabled": False, "reason": WRITE_LOCK_REASON}
+                "state": "validated", "apply_enabled": self._isolated_write_authority,
+                "reason": "Nur isolierte Testinstanz" if self._isolated_write_authority else WRITE_LOCK_REASON}
 
     async def status(self, operation_id: str) -> dict[str, Any] | None:
         record = (await self._records()).get(operation_id)
@@ -132,6 +134,12 @@ class HomeKitOperationService:
 
     async def reconcile(self, operation_id: str) -> dict[str, Any]:
         """Read actual state after a lost response; never call a writer."""
+        # An in-flight apply holds this lock. Reconcile must not classify the
+        # pre-write revision as "not_applied" while that apply is still running.
+        async with self._lock:
+            return await self._reconcile_locked(operation_id)
+
+    async def _reconcile_locked(self, operation_id: str) -> dict[str, Any]:
         plan = self._plans.get(operation_id)
         record = (await self._records()).get(operation_id)
         if record is None:

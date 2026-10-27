@@ -1,4 +1,5 @@
 """Common operation lifecycle against real isolated Core entries."""
+import asyncio
 import pytest
 from homeassistant import config_entries
 from homeassistant.config import async_hass_config_yaml
@@ -6,6 +7,7 @@ from homeassistant.setup import async_setup_component
 
 from custom_components.homekit_manager.homekit_writer import HomeKitWriteBlocked, HomeKitWriteDisabled
 from custom_components.homekit_manager.operations import HomeKitOperationService
+from custom_components.homekit_manager.native_adapter import NativeHomeKitAdapter
 
 
 def desired(entry_id):
@@ -90,3 +92,44 @@ async def test_yaml_operation_is_verified_by_core_only_in_isolation(hass, tmp_pa
     assert (await reopened.reconcile(plan["operation_id"]))["state"] == "verified"
     assert "target_filter" not in (await reopened.status(plan["operation_id"]))
     assert "light.after" in hass.config_entries.async_get_entry(entry.entry_id).options["filter"]["include_entities"]
+
+
+async def test_reconcile_waits_for_running_native_apply(hass, monkeypatch):
+    async def no_network_start(_self):
+        return None
+    monkeypatch.setattr("homeassistant.components.homekit.HomeKit.async_start", no_network_start)
+    monkeypatch.setattr("homeassistant.components.homekit.async_port_is_available", lambda _port: True)
+    entry = config_entries.ConfigEntry(
+        version=1, minor_version=1, domain="homekit", title="Concurrent Operation",
+        data={"name": "Concurrent Operation", "port": 21086},
+        options={"mode": "bridge", "filter": {"include_entities": ["light.before"]}},
+        source=config_entries.SOURCE_USER, entry_id="concurrent-native", unique_id=None,
+        discovery_keys={}, subentries_data=None,
+    )
+    await hass.config_entries.async_add(entry)
+    await hass.async_block_till_done()
+    service = HomeKitOperationService(hass, isolated_write_authority=True)
+    bridge = {"entry_id": entry.entry_id, "source": "user", "filter": dict(entry.options["filter"])}
+    plan = await service.plan_filter(entry_id=entry.entry_id, bridge=bridge,
+                                    document=desired(entry.entry_id), inventory=inventory())
+    entered = asyncio.Event()
+    release = asyncio.Event()
+    original_apply = NativeHomeKitAdapter.apply
+
+    async def delayed_apply(self, payload):
+        entered.set()
+        await release.wait()
+        return await original_apply(self, payload)
+
+    monkeypatch.setattr(NativeHomeKitAdapter, "apply", delayed_apply)
+    applying = asyncio.create_task(service.apply(
+        plan["operation_id"], entry_id=entry.entry_id,
+        expected_revision=plan["source_revision"],
+        confirmed_operation_id=plan["operation_id"], admin=True))
+    await asyncio.wait_for(entered.wait(), timeout=5)
+    reconciling = asyncio.create_task(service.reconcile(plan["operation_id"]))
+    await asyncio.sleep(0)
+    assert not reconciling.done()
+    release.set()
+    assert (await applying)["state"] == "verified"
+    assert (await reconciling)["state"] == "verified"

@@ -52,7 +52,7 @@
                 unavailable_entities: 1,
                 compatible_entities: 1,
                 configured_entities: 1,
-                integration_version: "0.9.19", core_version: "2026.10.4", last_updated: "2026-10-27T08:00:00Z", refresh_duration_ms: 3.2, refresh_count: 1, unavailable_entities: 1, accessories: 1, write_policy: { enabled: false },
+                integration_version: "0.9.20", core_version: "2026.10.4", last_updated: "2026-10-27T08:00:00Z", refresh_duration_ms: 3.2, refresh_count: 1, unavailable_entities: 1, accessories: 1, write_policy: { enabled: false },
                 fingerprint: "fixture-fingerprint",
               },
               entities,
@@ -135,7 +135,7 @@
             return { exists: true, valid: true, document: savedDocument, file_version: "fixture-version-2", fingerprint: "fixture-fingerprint-2", is_applied: false };
           }
           if (message.type === "homekit_manager/apply_options_diff") {
-            throw new Error("HomeKit-Schreibpfad in 0.9.19 gesperrt");
+            throw new Error("HomeKit-Schreibpfad in 0.9.20 gesperrt");
           }
           throw new Error(`Unsupported fixture command: ${message.type}`);
         },

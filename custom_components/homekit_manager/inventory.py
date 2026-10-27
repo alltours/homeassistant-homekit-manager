@@ -1,6 +1,7 @@
 """Pure inventory assembly from Home Assistant registries and states."""
 from __future__ import annotations
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
+from copy import deepcopy
 from typing import Any, Mapping
 
 def _value(obj: Any, key: str, default=None):
@@ -25,12 +26,47 @@ def _lookup(registry: Any, key: str):
     values = _value(registry, "devices", registry)
     return values.get(key) if isinstance(values, Mapping) else None
 
+def _device_status(registry: Any, device_id: str | None, device: Any) -> str:
+    """Distinguish a displayed registry device from a synthetic lookup result.
+
+    Since Core 2026.8, async_get can synthesize a pre-split composite device
+    that is absent from the native device list. A successful lookup alone is
+    therefore insufficient evidence that a device is listed in the UI.
+    """
+    if not device_id:
+        return "none"
+    if registry is None:
+        return "unknown"
+    if device is None:
+        return "missing"
+    if _value(device, "is_composite_device", False):
+        return "composite"
+    if _value(device, "parent_device_id") is not None:
+        return "child"
+    return "main"
+
+def _availability_status(entry: Any, device: Any, device_status: str, state: str | None) -> str:
+    """Return one exclusive user-facing status, with evidence-first priority."""
+    if _value(entry, "disabled_by") is not None or _value(device, "disabled_by") is not None:
+        return "disabled"
+    if device_status == "missing":
+        return "orphaned"
+    if state is None:
+        return "no_state"
+    if state == "unavailable":
+        return "unavailable"
+    if state == "unknown":
+        return "unknown"
+    return "available"
+
 @dataclass(frozen=True)
 class InventoryEntity:
     entity_id: str
     name: str | None
     domain: str
     device_id: str | None
+    device_registry_status: str
+    availability_status: str
     device_name: str | None
     area_id: str | None
     area_name: str | None
@@ -44,7 +80,12 @@ class InventoryEntity:
     attributes: dict[str, Any]
     config_entry_id: str | None
     def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        # Only the attributes container may hold nested mutable values. Deep
+        # copying every scalar through dataclasses.asdict dominated the measured
+        # 1,172-entity projection, while a selective copy keeps snapshots safe.
+        result = dict(vars(self))
+        result["attributes"] = deepcopy(self.attributes)
+        return result
 
 def build_inventory(entity_registry: Any, device_registry: Any = None,
                     area_registry: Any = None,
@@ -54,6 +95,7 @@ def build_inventory(entity_registry: Any, device_registry: Any = None,
     areas = _value(area_registry, "areas", area_registry) or {}
     result: list[InventoryEntity] = []
     seen_entity_ids: set[str] = set()
+    device_cache: dict[str, Any] = {}
     for entry in sorted(_items(entity_registry), key=lambda item: _value(item, "entity_id", "")):
         entity_id = _value(entry, "entity_id", "")
         if not entity_id or "." not in entity_id:
@@ -61,16 +103,21 @@ def build_inventory(entity_registry: Any, device_registry: Any = None,
         seen_entity_ids.add(entity_id)
         domain = entity_id.split(".", 1)[0]
         device_id = _value(entry, "device_id")
-        device = _lookup(device_registry, device_id)
+        if device_id and device_id not in device_cache:
+            device_cache[device_id] = _lookup(device_registry, device_id)
+        device = device_cache.get(device_id)
+        device_status = _device_status(device_registry, device_id, device)
         area_id = _value(entry, "area_id") or _value(device, "area_id")
         area = areas.get(area_id) if isinstance(areas, Mapping) else None
         state_obj = state_map.get(entity_id)
         state = _value(state_obj, "state")
         attributes = dict(_value(state_obj, "attributes", {}) or {})
-        available = state not in (None, "unknown", "unavailable")
+        availability_status = _availability_status(entry, device, device_status, state)
+        available = availability_status == "available"
         name = _value(entry, "name") or _value(entry, "original_name") or attributes.get("friendly_name")
         result.append(InventoryEntity(
             entity_id=entity_id, name=name, domain=domain, device_id=device_id,
+            device_registry_status=device_status, availability_status=availability_status,
             device_name=_value(device, "name_by_user") or _value(device, "name"), area_id=area_id,
             area_name=_value(area, "name"), integration_domain=_value(entry, "platform"),
             device_class=_value(entry, "device_class") or _value(entry, "original_device_class") or attributes.get("device_class"),
@@ -86,6 +133,8 @@ def build_inventory(entity_registry: Any, device_registry: Any = None,
         state = _value(state_obj, "state")
         result.append(InventoryEntity(
             entity_id=entity_id,
+            device_registry_status="none",
+            availability_status=_availability_status(None, None, "none", state),
             name=attributes.get("friendly_name"),
             domain=domain,
             device_id=None,

@@ -13,6 +13,7 @@ from homeassistant.core import callback
 from .compatibility import classify_entity
 from .homekit_reader import read_homekit_entries
 from .inventory import build_inventory
+from .device_reconciliation import reconcile_devices
 from .change_planner import plan_changes
 from .fingerprint import build_fingerprint
 from .homekit_writer import HomeKitWriter, OptionsDiff, build_options_diff, HomeKitWriteBlocked, HomeKitActivationUnknown
@@ -51,6 +52,7 @@ class HomeKitManagerCoordinator:
         self.inventory: list[dict[str, Any]] = []
         self.bridges: list[dict[str, Any]] = []
         self.devices: list[dict[str, Any]] = []
+        self.device_reconciliation: dict[str, Any] = {}
         self.areas: list[dict[str, Any]] = []
         self.diagnostic_findings: list[dict[str, Any]] = []
         self.history_entries: list[dict[str, Any]] = []
@@ -94,6 +96,12 @@ class HomeKitManagerCoordinator:
         self.last_updated = None
         self.refresh_count = 0
         self.refresh_duration_ms = None
+        self.refresh_cpu_ms = None
+        self.refresh_phases_ms: dict[str, float] = {}
+        self.events_seen = 0
+        self.events_ignored = 0
+        self.events_by_type: dict[str, int] = {}
+        self.refresh_requests = 0
         self._last_refresh_monotonic = 0.0
         self._management_lock = asyncio.Lock()
         self._subscribe_events()
@@ -145,13 +153,22 @@ class HomeKitManagerCoordinator:
         return {"selected_bridge_id": self.selected_bridge_id, "overview": self.overview()}
 
     def _subscribe_events(self) -> None:
-        for event_type in ("state_changed", "entity_registry_updated", "device_registry_updated", "area_registry_updated", "homekit_state_change"):
+        for event_type in ("state_changed", "entity_registry_updated", "device_registry_updated", "area_registry_updated"):
             self._unsubscribers.append(self.hass.bus.async_listen(event_type, self._event_received))
 
     @callback
-    def _event_received(self, _event) -> None:
+    def _event_received(self, event) -> None:
         if self._stopping:
             return
+        kind = getattr(event, "event_type", "unknown")
+        self.events_seen += 1
+        self.events_by_type[kind] = self.events_by_type.get(kind, 0) + 1
+        if kind == "state_changed":
+            data = getattr(event, "data", {}) or {}
+            old, new = data.get("old_state"), data.get("new_state")
+            if old is not None and new is not None and old.state == new.state and old.attributes == new.attributes:
+                self.events_ignored += 1
+                return
         self._refresh_pending = True
         if not self._refresh_task or self._refresh_task.done():
             self._refresh_task = self.hass.async_create_task(self._async_debounced_refresh())
@@ -166,10 +183,22 @@ class HomeKitManagerCoordinator:
     async def async_refresh(self, selected_entry_id: str | None = None) -> None:
         """Build a complete snapshot locally, then publish it atomically."""
         async with self._refresh_lock:
+            self.refresh_requests += 1
             started = time.perf_counter()
+            cpu_started = time.process_time()
+            phase_started = started
+            phases: dict[str, float] = {}
+            def mark_phase(name: str) -> None:
+                nonlocal phase_started
+                now = time.perf_counter()
+                phases[name] = round((now - phase_started) * 1000, 2)
+                phase_started = now
             try:
                 from homeassistant.helpers import area_registry, device_registry, entity_registry
-                records = build_inventory(entity_registry.async_get(self.hass), device_registry.async_get(self.hass), area_registry.async_get(self.hass), {state.entity_id: state for state in self.hass.states.async_all()})
+                devices_registry = device_registry.async_get(self.hass)
+                records = build_inventory(entity_registry.async_get(self.hass), devices_registry, area_registry.async_get(self.hass), {state.entity_id: state for state in self.hass.states.async_all()})
+                device_reconciliation = reconcile_devices((vars(record) for record in records), devices_registry)
+                mark_phase("registry_inventory")
                 entries = read_homekit_entries(self.hass)
                 bridges = [entry for entry in entries if entry.mode == "bridge"]
                 bridge_ids = {bridge.entry_id for bridge in bridges}
@@ -192,9 +221,11 @@ class HomeKitManagerCoordinator:
                     configured = item["homekit"]["configured_by_filter"]
                     item["homekit"]["current_status"] = "included" if configured is True else "excluded" if configured is False else "unknown"
                     inventory.append(item)
+                mark_phase("filter_compatibility")
                 bridge_data = [entry.as_dict() | {"selected": entry.entry_id == selected_id} for entry in bridges]
                 devices = build_device_views(inventory)
                 areas = build_area_views(inventory)
+                mark_phase("grouping")
                 snapshot = await self.hass.async_add_executor_job(self.yaml_store.load)
                 def read_sources():
                     configuration = self._config_dir / "configuration.yaml"
@@ -202,13 +233,16 @@ class HomeKitManagerCoordinator:
                         text = configuration.read_text(encoding="utf-8")
                     except OSError:
                         text = ""
-                    return inspect_configuration_sources(text, config_dir=self._config_dir, manager_file_exists=snapshot.exists, bridge_count=len(bridges))
+                    return inspect_configuration_sources(text, config_dir=self._config_dir, manager_file_exists=snapshot.exists, bridge_count=sum(entry.source == "user" for entry in bridges))
                 sources = await self.hass.async_add_executor_job(read_sources)
+                mark_phase("source_io")
                 findings = build_diagnostics(inventory, bridge_data, {"valid": snapshot.valid, "error": snapshot.error})
                 fingerprint = build_fingerprint(bridge_data, inventory, snapshot.document)
+                mark_phase("diagnostics_fingerprint")
                 # No await beyond this point: readers see one consistent snapshot.
                 self.inventory, self.bridges = inventory, bridge_data
                 self.devices, self.areas = devices, areas
+                self.device_reconciliation = device_reconciliation
                 self.accessories = [entry.as_dict() for entry in entries if entry.mode == "accessory"]
                 self.other_homekit_entries = [entry.as_dict() for entry in entries if entry.mode not in {"accessory", "bridge"}]
                 self.selected_bridge_id = selected_id
@@ -218,6 +252,8 @@ class HomeKitManagerCoordinator:
                 self.last_updated = datetime.now(timezone.utc).isoformat()
                 self.refresh_count += 1
                 self.refresh_duration_ms = round((time.perf_counter() - started) * 1000, 2)
+                self.refresh_cpu_ms = round((time.process_time() - cpu_started) * 1000, 2)
+                self.refresh_phases_ms = phases
                 self._last_refresh_monotonic = time.monotonic()
                 self.hass.bus.async_fire("homekit_manager_updated", {"revision": self.refresh_count})
             except Exception as err:
@@ -232,10 +268,12 @@ class HomeKitManagerCoordinator:
         filter_known = bool(self.bridges) and unknown == 0
         return {
             "total_entities": len(self.inventory),
-            "active_entities": sum(item["disabled_by"] is None for item in self.inventory),
-            "disabled_entities": sum(item["disabled_by"] is not None for item in self.inventory),
+            "active_entities": sum(item.get("availability_status") != "disabled" for item in self.inventory),
+            "disabled_entities": sum(item.get("availability_status") == "disabled" for item in self.inventory),
             "unavailable_entities": sum(not item["available"] for item in self.inventory),
             "device_count": len({item["device_id"] for item in self.inventory if item["device_id"]}),
+            "device_reconciliation": self.device_reconciliation,
+            "availability_counts": {status: sum(item.get("availability_status") == status for item in self.inventory) for status in ("available", "unavailable", "unknown", "no_state", "disabled", "orphaned")},
             "area_count": len({item["area_id"] for item in self.inventory if item["area_id"]}),
             "compatible_entities": compatible,
             "configured_entities": configured if filter_known else None,
@@ -257,6 +295,12 @@ class HomeKitManagerCoordinator:
             "write_policy": write_policy(),
             "refresh_count": self.refresh_count,
             "refresh_duration_ms": self.refresh_duration_ms,
+            "refresh_cpu_ms": self.refresh_cpu_ms,
+            "refresh_phases_ms": dict(self.refresh_phases_ms),
+            "events_seen": self.events_seen,
+            "events_ignored": self.events_ignored,
+            "events_by_type": dict(self.events_by_type),
+            "refresh_requests": self.refresh_requests,
             "diagnostics": diagnostics_summary(self.diagnostic_findings),
         }
 

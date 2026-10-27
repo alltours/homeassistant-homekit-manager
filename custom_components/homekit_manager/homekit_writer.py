@@ -1,6 +1,6 @@
 """Read-only diff preparation and an explicitly isolated Core test adapter.
 
-The coordinator rejects production writes in 0.9.19. This module rejects
+The coordinator rejects production writes in 0.9.20. This module rejects
 allow_production=True independently. Only an explicitly enabled test fixture
 can exercise ConfigEntry options; it cannot establish Apple Home compatibility.
 """
@@ -22,7 +22,7 @@ class HomeKitWriteError(Exception):
 
 
 class HomeKitWriteDisabled(HomeKitWriteError):
-    """Applying HomeKit changes is disabled in release 0.9.19."""
+    """Applying HomeKit changes is disabled in release 0.9.20."""
 
 
 class HomeKitWriteBlocked(HomeKitWriteError):
@@ -137,7 +137,7 @@ class HomeKitWriter:
     """Disabled for production; explicit isolated tests can exercise Core options.
 
     The retained allow_production argument deliberately rejects former callers.
-    No coordinator endpoint enables this test adapter in 0.9.19.
+    No coordinator endpoint enables this test adapter in 0.9.20.
     """
 
     def __init__(self, hass: Any, *, test_environment: bool = False, apply_enabled: bool = False, allow_production: bool = False):

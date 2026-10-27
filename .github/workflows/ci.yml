@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   quality:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       PYTHONPATH: .
     steps:
@@ -48,7 +48,7 @@ jobs:
         run: |
           python scripts/build_release.py --output /tmp/hkm-release-one
           python scripts/build_release.py --output /tmp/hkm-release-two
-          cmp /tmp/hkm-release-one/homekit-manager-0.9.19.zip /tmp/hkm-release-two/homekit-manager-0.9.19.zip
+          cmp /tmp/hkm-release-one/homekit-manager-0.9.20.zip /tmp/hkm-release-two/homekit-manager-0.9.20.zip
       - name: Install pinned browser dependencies for real backend E2E
         run: |
           npm ci
@@ -69,7 +69,7 @@ jobs:
           node tests/frontend/test_panel.mjs
 
   browser:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -81,6 +81,6 @@ jobs:
         run: npx playwright install --with-deps chromium webkit
       - name: Responsive browser regression
         run: |
-          npx playwright test -c tests/frontend/playwright.config.mjs tests/frontend/browser_regression.spec.mjs tests/frontend/screenshot_reference.spec.mjs --project=chromium
-          npx playwright test -c tests/frontend/playwright.config.mjs tests/frontend/browser_regression.spec.mjs tests/frontend/screenshot_reference.spec.mjs --project=webkit
+          npx playwright test -c tests/frontend/playwright.config.mjs tests/frontend/browser_regression.spec.mjs tests/frontend/screenshot_reference.spec.mjs --project=chromium --workers=1
+          npx playwright test -c tests/frontend/playwright.config.mjs tests/frontend/browser_regression.spec.mjs tests/frontend/screenshot_reference.spec.mjs --project=webkit --workers=1
 

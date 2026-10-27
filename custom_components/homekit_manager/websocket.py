@@ -1,7 +1,7 @@
 """Authenticated WebSocket API for read operations and controlled drafts.
 
 All commands require an administrator connection. HomeKit writes are locked
-in 0.9.19 before any native options or operation state can change.
+in 0.9.20 before any native options or operation state can change.
 """
 from __future__ import annotations
 import probatio
@@ -146,7 +146,7 @@ async def websocket_history_restore(hass, connection, msg):
 @websocket_api.async_response
 async def websocket_performance(hass, connection, msg):
     coordinator = hass.data["homekit_manager"]["coordinator"]
-    connection.send_result(msg["id"], summarize_inventory(coordinator.inventory) | {"last_updated": coordinator.last_updated, "refresh_duration_ms": coordinator.refresh_duration_ms, "refresh_count": coordinator.refresh_count, "snapshot_stale": bool(coordinator.last_error)} )
+    connection.send_result(msg["id"], summarize_inventory(coordinator.inventory) | {"last_updated": coordinator.last_updated, "refresh_duration_ms": coordinator.refresh_duration_ms, "refresh_cpu_ms": coordinator.refresh_cpu_ms, "refresh_phases_ms": dict(coordinator.refresh_phases_ms), "refresh_count": coordinator.refresh_count, "refresh_requests": coordinator.refresh_requests, "events_seen": coordinator.events_seen, "events_ignored": coordinator.events_ignored, "events_by_type": dict(coordinator.events_by_type), "snapshot_stale": bool(coordinator.last_error)} )
 
 
 @websocket_api.require_admin

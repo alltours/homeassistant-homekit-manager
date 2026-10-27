@@ -15,7 +15,7 @@ from custom_components.homekit_manager.inventory import build_inventory
 from custom_components.homekit_manager.draft import serialize_draft
 from custom_components.homekit_manager.yaml_store import YamlStore, YamlValidationError, YamlVersionConflict, YamlWriteError
 from custom_components.homekit_manager.change_planner import plan_changes
-from custom_components.homekit_manager.homekit_writer import OptionsDiff, HomeKitWriter, HomeKitWriteBlocked, HomeKitWriteDisabled, build_options_diff
+from custom_components.homekit_manager.homekit_writer import OptionsDiff, HomeKitWriter, HomeKitWriteBlocked, HomeKitWriteDisabled, HomeKitActivationUnknown, build_options_diff
 from custom_components.homekit_manager.reconcile import reconcile_desired_state
 from custom_components.homekit_manager.exporter import export_desired_state
 from custom_components.homekit_manager.homekit_reader import read_homekit_entries
@@ -66,7 +66,8 @@ class HomeKitManagerTests(unittest.TestCase):
         bridges = [{"entry_id": "b1", "filter": {"include_entities": ["number.bad", "sensor.missing"]}}]
         findings = build_diagnostics(inventory, bridges, {"valid": False, "error": "bad yaml"})
         self.assertEqual(findings, build_diagnostics(inventory, bridges, {"valid": False, "error": "bad yaml"}))
-        self.assertEqual(diagnostics_summary(findings)["critical"], 2)
+        self.assertEqual(diagnostics_summary(findings)["critical"], 1)
+        self.assertEqual(next(item for item in findings if item["code"] == "unsupported_entity")["severity"], "info")
         self.assertTrue(any(item["code"] == "stale_filter_reference" for item in findings))
 
     def test_diagnostics_group_identical_findings_without_losing_entities(self):
@@ -469,6 +470,24 @@ class HomeKitManagerTests(unittest.TestCase):
         )
         with self.assertRaises(HomeKitWriteBlocked):
             asyncio.run(HomeKitWriter(hass, test_environment=True, apply_enabled=True).async_apply(diff))
+
+    def test_isolated_writer_timeout_is_unknown_not_success(self):
+        entry = SimpleNamespace(domain="homekit", entry_id="b", source="user", data={},
+                                options={"filter": {"include_entities": ["light.a"]}},
+                                state=SimpleNamespace(value="loaded"))
+        hass = SimpleNamespace(
+            config_entries=SimpleNamespace(
+                async_get_entry=lambda _entry_id: entry,
+                async_update_entry=lambda updated, *, options: setattr(updated, "options", options),
+            ),
+            async_block_till_done=lambda: asyncio.sleep(0.1),
+        )
+        diff = OptionsDiff("b", {"filter": {"include_entities": ["light.a"]}},
+                           {"filter": {"include_entities": ["light.a", "light.b"]}},
+                           ("filter",), ("light.b",), {"summary": {"blocked": False}})
+        with patch("custom_components.homekit_manager.homekit_writer.ACTIVATION_TIMEOUT", 0.001):
+            with self.assertRaises(HomeKitActivationUnknown):
+                asyncio.run(HomeKitWriter(hass, test_environment=True, apply_enabled=True).async_apply(diff))
 
     def test_reader_is_read_only_and_redacts_sensitive_values(self):
         entry = SimpleNamespace(

@@ -22,22 +22,26 @@ def build_diagnostics(
     for item in entities:
         entity_id = item.get("entity_id")
         compatibility = item.get("compatibility", {})
+        included = item.get("homekit", {}).get("configured_by_filter")
         if compatibility.get("status") == "unsupported":
             findings.append(_finding(
-                "unsupported_entity", "critical", "Nicht unterstützte Entität",
+                "unsupported_entity", "critical" if included is True else "info", "Nicht unterstützte Entität",
                 compatibility.get("reason") or "Für diese Entität ist kein sicherer HomeKit-Pfad bekannt.",
-                entity_id=entity_id, recommendation="Entität nicht freigeben und HomeKit-Zuordnung prüfen.",
+                entity_id=entity_id, filter_included=included,
+                published="unknown", apple_home_visible="unknown",
+                recommendation="Bridge-Filter und HomeKit-Zuordnung prüfen; Veröffentlichung ist nicht nachgewiesen." if included is True else "Nur Inventarhinweis; diese Entität ist für die ausgewählte Bridge nicht nachweislich eingeschlossen.",
             ))
-        elif compatibility.get("status") in {"conditionally_supported", "unknown"}:
+        elif compatibility.get("status") in {"conditionally_supported", "unknown"} and included is True:
             findings.append(_finding(
                 "uncertain_compatibility", "warning", "Kompatibilität nicht eindeutig",
                 compatibility.get("reason") or "Die HomeKit-Darstellung muss zur Laufzeit geprüft werden.",
                 entity_id=entity_id, recommendation="Device Class, Einheit und HomeKit-Zuordnung prüfen.",
             ))
-        if not item.get("available", False):
+        status = item.get("availability_status", "available" if item.get("available") else "unavailable")
+        if status != "available" and included is True:
             findings.append(_finding(
-                "entity_unavailable", "warning", "Entität nicht verfügbar",
-                "Die aktuelle State Machine liefert keinen verfügbaren Zustand.",
+                "entity_unavailable", "warning", "Entitätsstatus prüfen",
+                f"Inventarstatus: {status}.",
                 entity_id=entity_id, recommendation="Integration und Gerät prüfen; keine automatische Freigabe.",
             ))
 
@@ -63,7 +67,7 @@ def build_diagnostics(
             ))
         if len(set(bridge_ids)) > 1:
             findings.append(_finding(
-                "duplicate_bridge_assignment", "critical", "Mehrfacher Bridge-Zuordnungskonflikt",
+                "duplicate_bridge_assignment", "warning", "Entität in mehreren Bridge-Filtern",
                 "Die Entität ist in mehreren Bridge-Filtern explizit eingeschlossen.",
                 entity_id=entity_id, bridges=sorted(set(bridge_ids)), recommendation="Bridge-Zuordnung manuell vergleichen.",
             ))

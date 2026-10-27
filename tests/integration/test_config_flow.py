@@ -1,6 +1,7 @@
 """Home Assistant Core integration tests for the HomeKit Manager."""
 
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntryState
@@ -260,13 +261,13 @@ async def test_management_surface_status_is_read_only_and_requires_loaded_bridge
     await client.send_json_auto_id({"type": "homekit_manager/management_status"})
     status = await client.receive_json()
     assert status["success"] is True
-    assert status["result"]["management_surface"] == "homekit_manager"
+    assert status["result"]["management_surface"] == "unknown"
     assert status["result"]["state"] == "unknown"
     await client.send_json_auto_id({"type": "homekit_manager/management_enable", "confirmed": True})
     blocked = await client.receive_json()
     assert blocked["success"] is True
     assert blocked["result"]["state"] == "blocked"
-    assert "SOURCE_USER" in blocked["result"]["message"]
+    assert "Home-Assistant-Konfiguration" in blocked["result"]["message"]
     await client.send_json_auto_id({"type": "homekit_manager/management_disable", "confirmed": True})
     blocked_disable = await client.receive_json()
     assert blocked_disable["success"] is True
@@ -296,7 +297,7 @@ async def test_management_surface_verifies_existing_source_user_bridge_without_m
     assert status["configuration_source"] == "home_assistant"
     assert status["management_surface"] == "homekit_manager"
     assert status["message"] == "HomeKit Manager verwaltet diese Bridge jetzt."
-    assert status["write_status"] == "available"
+    assert status["write_status"] == "locked"
     status = await manager.async_disable_management(confirmed=True)
     assert status["active"] is False
     assert status["management_surface"] == "home_assistant"
@@ -315,8 +316,12 @@ async def test_homekit_manager_draft_save_reload_and_conflict(
         "homekit_manager", context={"source": config_entries.SOURCE_USER}
     )
     await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    native = MockConfigEntry(domain="homekit", data={"name": "Draft Bridge"}, options={"filter": {}})
+    native.add_to_hass(hass)
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    await coordinator.async_refresh()
     client = await hass_ws_client()
-    document = empty_document()
+    document = {"schema_version": 1, "bridges": {native.entry_id: {"policy": "explicit_overrides", "entities": {}}}}
 
     await client.send_json_auto_id({"type": "homekit_manager/yaml_status"})
     initial = await client.receive_json()
@@ -395,55 +400,26 @@ async def test_homekit_manager_apply_uses_authenticated_websocket(
     })
     response = await client.receive_json()
     assert response["type"] == "result"
-    assert response["success"] is True
-    assert response["result"]["applied"] is True
-    assert "input_boolean.test_a" in hass.config_entries.async_get_entry(bridge.entry_id).options["filter"]["include_entities"]
-    await client.send_json_auto_id({
-        "type": "homekit_manager/activation_status",
-        "entry_id": bridge.entry_id,
-        "request_id": response["result"]["request_id"],
-    })
-    status_response = await client.receive_json()
-    assert status_response["success"] is True
-    assert status_response["result"]["state"] == "active"
+    assert response["success"] is False
+    assert response["error"]["code"] == "write_blocked"
+    assert hass.config_entries.async_get_entry(bridge.entry_id).options["filter"]["include_entities"] == []
+    assert coordinator.activation_status()["state"] == "unknown"
 
 
-async def test_homekit_manager_duplicate_request_id_does_not_retry_failed_apply(
-    hass, enable_custom_integrations, monkeypatch
-):
-    """A failed request ID is terminal and cannot trigger an implicit retry."""
-    result = await hass.config_entries.flow.async_init(
-        "homekit_manager", context={"source": config_entries.SOURCE_USER}
-    )
+async def test_homekit_manager_duplicate_request_id_does_not_retry_failed_apply(hass, enable_custom_integrations, monkeypatch):
+    """Neither old nor new request IDs may bypass an unknown operation."""
+    result = await hass.config_entries.flow.async_init("homekit_manager", context={"source": config_entries.SOURCE_USER})
     await hass.config_entries.flow.async_configure(result["flow_id"], {})
-    coordinator = hass.data["homekit_manager"]["coordinator"]
-    coordinator.bridges = [{"entry_id": "bridge-a", "source": "user", "filter": {}, "data": {}, "options": {"filter": {}}}]
-    coordinator.selected_bridge_id = "bridge-a"
-    coordinator.inventory = [{
-        "entity_id": "light.test",
-        "compatibility": {"status": "supported"},
-        "homekit": {"configured_by_filter": False, "current_status": "excluded"},
-    }]
-    coordinator.fingerprint = "fingerprint"
-
-    class FailingWriter:
-        calls = 0
-
-        async def async_apply(self, _diff):
-            self.calls += 1
-            raise RuntimeError("reload failed")
-
-    writer = FailingWriter()
-    monkeypatch.setattr("custom_components.homekit_manager.coordinator.HomeKitWriter", lambda *_args, **_kwargs: writer)
-    document = {"schema_version": 1, "bridges": {"bridge-a": {"policy": "explicit_overrides", "entities": {"light.test": "include"}}}}
-
-    with pytest.raises(RuntimeError, match="reload failed"):
-        await coordinator.async_apply_options_diff(document, "fingerprint", "request-1")
-    result = await coordinator.async_apply_options_diff(document, "fingerprint", "request-1")
-
-    assert result["activation_status"] == "failed"
-    assert result["applied"] is False
-    assert writer.calls == 1
+    manager = hass.data["homekit_manager"]["coordinator"]
+    await manager.async_record_activation_status("bridge-a", "request-1", "unknown", message="Interrupted")
+    from unittest.mock import AsyncMock
+    writer = AsyncMock()
+    monkeypatch.setattr(coordinator_module, "HomeKitWriter", writer)
+    for request_id in ("request-1", "request-1", "request-2"):
+        with pytest.raises(HomeKitWriteDisabled):
+            await manager.async_apply_options_diff({}, None, request_id)
+    writer.assert_not_called()
+    assert manager.activation_status("bridge-a")["state"] == "unknown"
 
 
 async def test_homekit_manager_mode_status_is_conservative(
@@ -459,7 +435,7 @@ async def test_homekit_manager_mode_status_is_conservative(
     response = await client.receive_json()
     assert response["success"] is True
     status = response["result"]
-    assert status["active_mode"] in {"yaml", "homekit_bridge", "homekit_manager"}
+    assert status["active_mode"] == "unknown"
     assert status["transition"] == "stable"
     assert all(item["status"] in {"verify_only", "blocked"} for item in status["matrix"].values())
     for direction in (

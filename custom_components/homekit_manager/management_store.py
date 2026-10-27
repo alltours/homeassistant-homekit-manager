@@ -19,7 +19,7 @@ class ManagementStore:
             return {}
         return {
             str(entry_id): {
-                "state": value.get("state", "not_enabled"),
+                "state": value.get("state") if isinstance(value.get("state"), str) and value.get("state") in {"active", "inactive", "not_enabled", "verifying", "unknown"} else "unknown",
                 "source": value.get("source", "unknown"),
                 "management": value.get("management", "homekit_manager"),
                 "updated_at": value.get("updated_at"),

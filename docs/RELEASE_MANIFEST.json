@@ -1,44 +1,191 @@
 {
-  "release_candidate": "0.9.18",
-  "integration_version": "0.9.18",
-  "created": "2026-10-27",
-  "source_root": "custom_components/homekit_manager",
-  "file_count": 35,
+  "integration_version": "0.9.19",
+  "file_count": 37,
   "files": [
-    {"path":"__init__.py","sha256":"f57a1a57491d36d653d4606e6257872e124a145957c04e42e7bb62aeb3f4893d"},
-    {"path":"brand/icon.png","sha256":"40d244ade07455a4ca8069e36699f51fff94718f6b0fded8564864f51e93b3ab"},
-    {"path":"change_planner.py","sha256":"f8e0efd3f1717fd30c2240080fa474c1de270c3bdbe0a81af34ce5e193baf51c"},
-    {"path":"compatibility.py","sha256":"1911293db98a99128725d63211f65fce3c91a4f567a3d929b661d9731901f115"},
-    {"path":"config_flow.py","sha256":"dc5808229a66b28d83d29b6ec8a9410a7c326526966f9cd8a53e813e96039d26"},
-    {"path":"config_source.py","sha256":"28289ba9c9f4ef3ec9e19c97e27be2daff7e0a59223f0c08bc747307f3b5b550"},
-    {"path":"const.py","sha256":"bf5bd4ae21f283bcd610e0483fa4ce4b569dfde46f94d304787509461b786536"},
-    {"path":"coordinator.py","sha256":"de577a2caf83bb1fe51f4a94d5222a26c269ffd44762ee44636516313b90317e"},
-    {"path":"device_config.py","sha256":"8e769bc44c9a2403a3b587f99a0f9df06d4c2bb13e57b3c3c32b753c1075bf26"},
-    {"path":"diagnostics.py","sha256":"d97424c6eda0c92f02046eebf20299b2032e21e8317a99244aaf39392bf1b52c"},
-    {"path":"draft.py","sha256":"5c28f0a25b70f082ee471bcf3975121537dae69d0d3a50d6b4375a2898287783"},
-    {"path":"exporter.py","sha256":"a8d9e498b62676a2638c0be40a808eb16ff454ff611303bdd23f306f22a64f58"},
-    {"path":"filtering.py","sha256":"9f6099acca6acfea9fe94f4381d80900a1e8284d8af2c1632778621aeee8d37f"},
-    {"path":"fingerprint.py","sha256":"4e0c193765a6cbc1b712aff22642fe21edca3fbe432cec936da18d49ca7f069c"},
-    {"path":"grouping.py","sha256":"e815a65114dc5554176e77f4aa69741801d9ae5807231e27a27dce6e652bd3c0"},
-    {"path":"history.py","sha256":"1dc3921637035480e8dab3e3b735c0e97644a50dea1a594d187ce8f6b6b5537e"},
-    {"path":"history_store.py","sha256":"c0a4968f98cb87e116d9167deb81677ae164a4b55d2941e82ed6a0b41797b038"},
-    {"path":"homekit_reader.py","sha256":"bc2365b18a9d67a8b440a298aa696a3937bd066ffe3e901f69152ca9070632d2"},
-    {"path":"homekit_writer.py","sha256":"e789beaf671962733173a737db64abafbd609766a4520d39e1efb4ad46437bba"},
-    {"path":"inventory.py","sha256":"00765005d0054d430a6e7b2a32647862700c2683ed35b37a61352f80c2fcbedb"},
-    {"path":"manifest.json","sha256":"c132ef0d58fa588b5de699e6a92f0f8c275d0484c9105e3339f40fb174c32b69"},
-    {"path":"management_store.py","sha256":"626e9d342b312d58f1c384a640483a0a00ed8f43f037a07aa5fda1f265008b73"},
-    {"path":"migration.py","sha256":"7942034ad92405a7e66fef7b109b72ac0610cae58b7cbf0094edf3efe2528d87"},
-    {"path":"migration_store.py","sha256":"c6daacc748b7a583e1f77025919331b916ac08a1d8c56a0ee1cc53c0594e6b7a"},
-    {"path":"mode_store.py","sha256":"817f331fcc3383e66cd09cd1aa66c0f0c1018126b70e4a4fce68d779245fe543"},
-    {"path":"panel.py","sha256":"43f833cd291afa75a7744fbe94883dc3795b74f134c54d5929a54bbe9a10ff91"},
-    {"path":"performance.py","sha256":"dc554cd935397a24db4ec74982e9674661656400ff15a48dfbd55baff0b2099e"},
-    {"path":"reconcile.py","sha256":"9b58b1929b9d465fd8c8b7263f66d6b429bf300b0bf4605bb3f293eb0a6bafa6"},
-    {"path":"rules.py","sha256":"b1b62950fe384536e31f530932fd13415861c4862e36046e0a514b05b577e45a"},
-    {"path":"strings.json","sha256":"9d0b96eb535d446b5630f6f9215b8fc08d950726924e096e6e104f7abe9c8f6e"},
-    {"path":"translations/de.json","sha256":"dd9511c4a293d702013162c9268c78c9c59dfb37ec0036bb2d2ac0c9034651da"},
-    {"path":"translations/en.json","sha256":"93ac0e28518a94d5a07cd4e98e393ee78019a47ce0cac64b14a90ba2383bc5f2"},
-    {"path":"websocket.py","sha256":"3dd50a90c97ead3217fcb525d8965e89abda3014bcf9a14298cdfb339c08bd43"},
-    {"path":"www/homekit-manager.js","sha256":"6d623aa4854455dc02fb331f6a22105fb3e5298a1471224bef848ef47fe9439c"},
-    {"path":"yaml_store.py","sha256":"ed21ccda913837a2d91c3c49da89f78bc17bb470efe9dea461cc129905f1f980"}
+    {
+      "path": "__init__.py",
+      "sha256": "2574381eb1c7db1489f0b8be714a7b683a003516e019ee98a07d48e33ed470df",
+      "size": 2540
+    },
+    {
+      "path": "activation_store.py",
+      "sha256": "8da992e381cf20dfb4a46933d4f782c9ae74c356da34bf2526f9c43be9c8e919",
+      "size": 2289
+    },
+    {
+      "path": "brand/icon.png",
+      "sha256": "40d244ade07455a4ca8069e36699f51fff94718f6b0fded8564864f51e93b3ab",
+      "size": 607118
+    },
+    {
+      "path": "change_planner.py",
+      "sha256": "66c5f0cfd00d5159b6f98cee07521b8675a3b391fe6e1b53860b527d61e4a3c4",
+      "size": 5142
+    },
+    {
+      "path": "compatibility.py",
+      "sha256": "f477391c6b4f73c15ed029c39b88e7a7a3a2231829a0293b01195b4642861684",
+      "size": 7140
+    },
+    {
+      "path": "config_flow.py",
+      "sha256": "dc5808229a66b28d83d29b6ec8a9410a7c326526966f9cd8a53e813e96039d26",
+      "size": 679
+    },
+    {
+      "path": "config_source.py",
+      "sha256": "28289ba9c9f4ef3ec9e19c97e27be2daff7e0a59223f0c08bc747307f3b5b550",
+      "size": 4901
+    },
+    {
+      "path": "const.py",
+      "sha256": "b212fae588f5e430360e500002abf21932b1076c9abae9ede72a2df4966a19d4",
+      "size": 2204
+    },
+    {
+      "path": "coordinator.py",
+      "sha256": "6c3f1f9adcb8f66effb512cef2e0fafa31a02e46aec676dfbae1cf4bdcf0e763",
+      "size": 35739
+    },
+    {
+      "path": "device_config.py",
+      "sha256": "8e769bc44c9a2403a3b587f99a0f9df06d4c2bb13e57b3c3c32b753c1075bf26",
+      "size": 1547
+    },
+    {
+      "path": "diagnostics.py",
+      "sha256": "d97424c6eda0c92f02046eebf20299b2032e21e8317a99244aaf39392bf1b52c",
+      "size": 5828
+    },
+    {
+      "path": "draft.py",
+      "sha256": "5c28f0a25b70f082ee471bcf3975121537dae69d0d3a50d6b4375a2898287783",
+      "size": 606
+    },
+    {
+      "path": "exporter.py",
+      "sha256": "a8d9e498b62676a2638c0be40a808eb16ff454ff611303bdd23f306f22a64f58",
+      "size": 1066
+    },
+    {
+      "path": "filtering.py",
+      "sha256": "9f6099acca6acfea9fe94f4381d80900a1e8284d8af2c1632778621aeee8d37f",
+      "size": 4606
+    },
+    {
+      "path": "fingerprint.py",
+      "sha256": "4e0c193765a6cbc1b712aff22642fe21edca3fbe432cec936da18d49ca7f069c",
+      "size": 1583
+    },
+    {
+      "path": "grouping.py",
+      "sha256": "91bac0a305dfaab2803d28c44f397a5348832dae6b5b88a89c0165802da4a746",
+      "size": 5662
+    },
+    {
+      "path": "history.py",
+      "sha256": "1dc3921637035480e8dab3e3b735c0e97644a50dea1a594d187ce8f6b6b5537e",
+      "size": 2297
+    },
+    {
+      "path": "history_store.py",
+      "sha256": "c0a4968f98cb87e116d9167deb81677ae164a4b55d2941e82ed6a0b41797b038",
+      "size": 1994
+    },
+    {
+      "path": "homekit_reader.py",
+      "sha256": "9ce837e2168e62283d32b3d6375ad79ffb55a73aeea5a98d6c37b713dc9596a3",
+      "size": 2776
+    },
+    {
+      "path": "homekit_writer.py",
+      "sha256": "223ff6fa71685039615390b7752d619d5f1267037d31e5e14a6f1ae3c3ef78ef",
+      "size": 9212
+    },
+    {
+      "path": "inventory.py",
+      "sha256": "00765005d0054d430a6e7b2a32647862700c2683ed35b37a61352f80c2fcbedb",
+      "size": 4563
+    },
+    {
+      "path": "management_store.py",
+      "sha256": "0f67563d21b49d814402ab1b108df71e3b4cc6230c4b5c2cc492a524f7d1fc13",
+      "size": 1719
+    },
+    {
+      "path": "manifest.json",
+      "sha256": "bc548e536a9c41c81e7cce50f22416a7cd1250363e2478c31f0d845079219c40",
+      "size": 457
+    },
+    {
+      "path": "migration.py",
+      "sha256": "7942034ad92405a7e66fef7b109b72ac0610cae58b7cbf0094edf3efe2528d87",
+      "size": 3676
+    },
+    {
+      "path": "migration_store.py",
+      "sha256": "69167f434f7f0acdbf2c092e1c3412093e0d63b95d0ee16715420cd256259db0",
+      "size": 1796
+    },
+    {
+      "path": "mode_store.py",
+      "sha256": "494ae0551b843bda88b5e39b5fa6341413c375db792678fd3a468598374c9515",
+      "size": 1472
+    },
+    {
+      "path": "panel.py",
+      "sha256": "4ca23ab5fdb00de260a3f9cb5499f21d623980c3fdd213134ffe127c60f9a757",
+      "size": 1161
+    },
+    {
+      "path": "performance.py",
+      "sha256": "dc554cd935397a24db4ec74982e9674661656400ff15a48dfbd55baff0b2099e",
+      "size": 905
+    },
+    {
+      "path": "reconcile.py",
+      "sha256": "9b58b1929b9d465fd8c8b7263f66d6b429bf300b0bf4605bb3f293eb0a6bafa6",
+      "size": 1870
+    },
+    {
+      "path": "rules.py",
+      "sha256": "e674e11eafeedfe3a72d931b40a8905060649213e9746642afb288302e5be297",
+      "size": 3679
+    },
+    {
+      "path": "safety.py",
+      "sha256": "e194f913fecd10a5fbd8a7ffc1c257ce45aef999bdf3fcf1d352a397bfa14b3b",
+      "size": 509
+    },
+    {
+      "path": "strings.json",
+      "sha256": "9d0b96eb535d446b5630f6f9215b8fc08d950726924e096e6e104f7abe9c8f6e",
+      "size": 259
+    },
+    {
+      "path": "translations/de.json",
+      "sha256": "dd9511c4a293d702013162c9268c78c9c59dfb37ec0036bb2d2ac0c9034651da",
+      "size": 183
+    },
+    {
+      "path": "translations/en.json",
+      "sha256": "93ac0e28518a94d5a07cd4e98e393ee78019a47ce0cac64b14a90ba2383bc5f2",
+      "size": 183
+    },
+    {
+      "path": "websocket.py",
+      "sha256": "fd2b24d29b262dd596a0641fe1e86b4f401a53a0e08ae5e650edae9d1baf8b2a",
+      "size": 19062
+    },
+    {
+      "path": "www/homekit-manager.js",
+      "sha256": "51b17110cd08af05a87bf2f06843581a2a60c2579038856cb207765f9c420c52",
+      "size": 69506
+    },
+    {
+      "path": "yaml_store.py",
+      "sha256": "e80baeed8a3f07693e016b519fa5dd4c72aa9a2ba2ea845c8ce5a9d33d1a6d7b",
+      "size": 11251
+    }
   ]
 }

@@ -68,7 +68,7 @@ def read_homekit_entries(hass) -> list[BridgeInfo]:
             state=getattr(getattr(entry, "state", None), "value", getattr(entry, "state", None)),
             supports_options=bool(getattr(entry, "supports_options", True)),
             supports_reconfigure=bool(getattr(entry, "supports_reconfigure", False)),
-            mode=safe.get("homekit_mode", safe.get("mode")), name=safe.get("name"), port=safe.get("port"),
+            mode=safe.get("homekit_mode", safe.get("mode", "bridge")), name=safe.get("name"), port=safe.get("port"),
             filter=safe.get("filter") if "filter" in safe else None,
             entity_config=safe.get("entity_config") if "entity_config" in safe else None,
             data=_safe_mapping(getattr(entry, "data", {})),

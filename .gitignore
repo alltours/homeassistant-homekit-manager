@@ -25,3 +25,6 @@ secrets.yaml
 .idea/
 .vscode/
 
+
+test-results/
+playwright-report/

@@ -33,6 +33,10 @@ def build_device_views(entities: Iterable[dict[str, Any]]) -> list[dict[str, Any
             "compatible_count": compatible,
             "configured_count": configured,
             "unavailable_count": sum(not item.get("available") for item in members),
+            "conditional_count": sum(item.get("compatibility", {}).get("status") == "conditionally_supported" for item in members),
+            "unknown_count": sum(item.get("homekit", {}).get("configured_by_filter") is None for item in members),
+            "excluded_count": sum(item.get("homekit", {}).get("configured_by_filter") is False for item in members),
+            "unassigned_entity_count": sum(not item.get("device_id") for item in members),
             "integrations": sorted({item.get("integration_domain") for item in members if item.get("integration_domain")}),
         })
     return sorted(result, key=lambda item: (str(item.get("name", "")).casefold(), item["device_id"]))
@@ -62,6 +66,10 @@ def build_area_views(entities: Iterable[dict[str, Any]]) -> list[dict[str, Any]]
             "compatible_count": sum(item.get("compatibility", {}).get("status") == "supported" for item in members),
             "configured_count": sum(item.get("homekit", {}).get("configured_by_filter") is True for item in members),
             "unavailable_count": sum(not item.get("available") for item in members),
+            "conditional_count": sum(item.get("compatibility", {}).get("status") == "conditionally_supported" for item in members),
+            "unknown_count": sum(item.get("homekit", {}).get("configured_by_filter") is None for item in members),
+            "excluded_count": sum(item.get("homekit", {}).get("configured_by_filter") is False for item in members),
+            "unassigned_entity_count": sum(not item.get("device_id") for item in members),
         })
     if without_area:
         result.append({
@@ -74,5 +82,9 @@ def build_area_views(entities: Iterable[dict[str, Any]]) -> list[dict[str, Any]]
             "compatible_count": sum(item.get("compatibility", {}).get("status") == "supported" for item in without_area),
             "configured_count": sum(item.get("homekit", {}).get("configured_by_filter") is True for item in without_area),
             "unavailable_count": sum(not item.get("available") for item in without_area),
+            "conditional_count": sum(item.get("compatibility", {}).get("status") == "conditionally_supported" for item in without_area),
+            "unknown_count": sum(item.get("homekit", {}).get("configured_by_filter") is None for item in without_area),
+            "excluded_count": sum(item.get("homekit", {}).get("configured_by_filter") is False for item in without_area),
+            "unassigned_entity_count": sum(not item.get("device_id") for item in without_area),
         })
     return sorted(result, key=lambda item: str(item.get("name", "")).casefold())

@@ -393,7 +393,7 @@ class HomeKitManagerTests(unittest.TestCase):
         )
         result = asyncio.run(HomeKitWriter(hass, test_environment=True, apply_enabled=True).async_apply(diff))
         self.assertTrue(result["applied"])
-        self.assertEqual(result["activation"], "core_update_listener")
+        self.assertEqual(result["activation"], "isolated_options_adapter")
         self.assertEqual(updates[0]["filter"]["include_entities"], ["light.a", "light.b"])
 
     def test_isolated_writer_blocks_stale_options_diff(self):
@@ -429,7 +429,7 @@ class HomeKitManagerTests(unittest.TestCase):
             ("filter",), ("light.b",), {"summary": {"blocked": False}},
         )
         with self.assertRaises(HomeKitWriteBlocked):
-            asyncio.run(HomeKitWriter(hass, allow_production=True).async_apply(diff))
+            asyncio.run(HomeKitWriter(hass, test_environment=True, apply_enabled=True).async_apply(diff))
 
     def test_production_writer_requires_homekit_update_listener(self):
         entry = SimpleNamespace(
@@ -449,7 +449,7 @@ class HomeKitManagerTests(unittest.TestCase):
             {"filter": {"include_entities": ["light.a", "light.b"]}},
             ("filter",), ("light.b",), {"summary": {"blocked": False}},
         )
-        with self.assertRaises(HomeKitWriteBlocked):
+        with self.assertRaises(HomeKitWriteDisabled):
             asyncio.run(HomeKitWriter(hass, allow_production=True).async_apply(diff))
 
     def test_isolated_writer_blocks_yaml_import_entries_without_reload_contract(self):

@@ -1,8 +1,7 @@
 """Authenticated WebSocket API for read operations and controlled drafts.
 
-All commands require an administrator connection. The sole mutating HomeKit
-command is the narrow ``SOURCE_USER`` options-diff path, which performs its
-own validation and lifecycle checks in the coordinator and writer.
+All commands require an administrator connection. HomeKit writes are locked
+in 0.9.19 before any native options or operation state can change.
 """
 from __future__ import annotations
 import probatio
@@ -24,22 +23,36 @@ from .rules import evaluate_rules
 from .performance import summarize_inventory
 
 @websocket_api.require_admin
-@websocket_api.websocket_command({probatio.Required("type"): INVENTORY_COMMAND, probatio.Optional("query"): str})
+@websocket_api.websocket_command({probatio.Required("type"): INVENTORY_COMMAND, probatio.Optional("query"): str, probatio.Optional("refresh", default=False): bool, probatio.Optional("include_context", default=False): bool})
 @websocket_api.async_response
 async def websocket_inventory(hass, connection, msg):
     coordinator = hass.data["homekit_manager"]["coordinator"]
+    if msg.get("refresh"):
+        await coordinator.async_refresh()
     query = (msg.get("query") or "").casefold()
     entities = coordinator.inventory
     if query:
         entities = [e for e in entities if query in (e.get("entity_id", "") + " " + (e.get("name") or "")).casefold()]
-    connection.send_result(msg["id"], {"overview": coordinator.overview(), "entities": entities})
+    result = {"overview": coordinator.overview(), "entities": entities}
+    if msg.get("include_context"):
+        # One event-loop turn, no awaits: every section has the same bridge context.
+        result["context"] = [
+            {"bridges": coordinator.bridges, "accessories": coordinator.accessories},
+            {"devices": coordinator.devices}, {"areas": coordinator.areas},
+            coordinator.diagnostics(), coordinator.history(),
+            coordinator._yaml_status_payload(coordinator.yaml_snapshot),
+            coordinator.mode_status(), coordinator.activation_status(),
+            coordinator.migration_plan(), coordinator.migration_status_snapshot(),
+            coordinator.management_status(),
+        ]
+    connection.send_result(msg["id"], result)
 
 @websocket_api.require_admin
 @websocket_api.websocket_command({probatio.Required("type"): BRIDGES_COMMAND})
 @websocket_api.async_response
 async def websocket_bridges(hass, connection, msg):
     coordinator = hass.data["homekit_manager"]["coordinator"]
-    connection.send_result(msg["id"], {"bridges": coordinator.bridges})
+    connection.send_result(msg["id"], {"bridges": coordinator.bridges, "accessories": coordinator.accessories, "unclassified": coordinator.other_homekit_entries})
 
 
 @websocket_api.require_admin
@@ -133,7 +146,7 @@ async def websocket_history_restore(hass, connection, msg):
 @websocket_api.async_response
 async def websocket_performance(hass, connection, msg):
     coordinator = hass.data["homekit_manager"]["coordinator"]
-    connection.send_result(msg["id"], summarize_inventory(coordinator.inventory))
+    connection.send_result(msg["id"], summarize_inventory(coordinator.inventory) | {"last_updated": coordinator.last_updated, "refresh_duration_ms": coordinator.refresh_duration_ms, "refresh_count": coordinator.refresh_count, "snapshot_stale": bool(coordinator.last_error)} )
 
 
 @websocket_api.require_admin
@@ -178,7 +191,7 @@ async def websocket_migration_status(hass, connection, msg):
 
 
 @websocket_api.require_admin
-@websocket_api.websocket_command({probatio.Required("type"): MIGRATION_START_COMMAND, probatio.Required("target"): str, probatio.Optional("confirmed"): bool})
+@websocket_api.websocket_command({probatio.Required("type"): MIGRATION_START_COMMAND, probatio.Required("target"): str, probatio.Optional("confirmed"): bool, probatio.Optional("expected_entry_id"): str})
 @websocket_api.async_response
 async def websocket_migration_start(hass, connection, msg):
     """Verify a same-source mode or return a durable cross-source blocker."""
@@ -199,19 +212,27 @@ async def websocket_management_status(hass, connection, msg):
 
 
 @websocket_api.require_admin
-@websocket_api.websocket_command({probatio.Required("type"): MANAGEMENT_ENABLE_COMMAND, probatio.Optional("confirmed"): bool})
+@websocket_api.websocket_command({probatio.Required("type"): MANAGEMENT_ENABLE_COMMAND, probatio.Optional("confirmed"): bool, probatio.Optional("expected_entry_id"): str})
 @websocket_api.async_response
 async def websocket_management_enable(hass, connection, msg):
     coordinator = hass.data["homekit_manager"]["coordinator"]
-    connection.send_result(msg["id"], await coordinator.async_enable_management(bool(msg.get("confirmed", False))))
+    try:
+        result = await coordinator.async_enable_management(bool(msg.get("confirmed", False)), msg.get("expected_entry_id"))
+        connection.send_result(msg["id"], result)
+    except (ValueError, OSError) as err:
+        connection.send_error(msg["id"], "management_blocked", str(err))
 
 
 @websocket_api.require_admin
-@websocket_api.websocket_command({probatio.Required("type"): MANAGEMENT_DISABLE_COMMAND, probatio.Optional("confirmed"): bool})
+@websocket_api.websocket_command({probatio.Required("type"): MANAGEMENT_DISABLE_COMMAND, probatio.Optional("confirmed"): bool, probatio.Optional("expected_entry_id"): str})
 @websocket_api.async_response
 async def websocket_management_disable(hass, connection, msg):
     coordinator = hass.data["homekit_manager"]["coordinator"]
-    connection.send_result(msg["id"], await coordinator.async_disable_management(bool(msg.get("confirmed", False))))
+    try:
+        result = await coordinator.async_disable_management(bool(msg.get("confirmed", False)), msg.get("expected_entry_id"))
+        connection.send_result(msg["id"], result)
+    except (ValueError, OSError) as err:
+        connection.send_error(msg["id"], "management_blocked", str(err))
 
 
 def _document(msg):
@@ -223,7 +244,10 @@ def _document(msg):
 @websocket_api.async_response
 async def websocket_yaml_status(hass, connection, msg):
     coordinator = hass.data["homekit_manager"]["coordinator"]
-    connection.send_result(msg["id"], await coordinator.async_yaml_status())
+    try:
+        connection.send_result(msg["id"], await coordinator.async_yaml_status())
+    except YamlStoreError as err:
+        connection.send_error(msg["id"], "storage_error", str(err))
 
 
 @websocket_api.require_admin
@@ -277,6 +301,7 @@ async def websocket_save_draft(hass, connection, msg):
     probatio.Required("type"): APPLY_OPTIONS_DIFF_COMMAND,
     probatio.Required("document"): dict,
     probatio.Optional("expected_fingerprint"): str,
+    probatio.Optional("request_id"): str,
 })
 @websocket_api.async_response
 async def websocket_apply_options_diff(hass, connection, msg):
@@ -343,10 +368,19 @@ async def websocket_export(hass, connection, msg):
     except (YamlValidationError, ValueError) as err:
         connection.send_error(msg["id"], "invalid_format", str(err))
 
+REGISTERED_HANDLERS = (websocket_inventory, websocket_bridges, websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_activation_status, websocket_mode_status, websocket_set_mode, websocket_migration_plan, websocket_migration_status, websocket_migration_start, websocket_management_status, websocket_management_enable, websocket_management_disable, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_apply_options_diff, websocket_prepare_options_diff, websocket_reconcile, websocket_export)
+
+
 def async_register_websocket_commands(hass, coordinator) -> None:
-    """Register authenticated inventory, draft, and guarded apply commands."""
-    websocket_api.async_register_command(hass, websocket_inventory)
-    websocket_api.async_register_command(hass, websocket_bridges)
-    for handler in (websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_activation_status, websocket_mode_status, websocket_set_mode, websocket_migration_plan, websocket_migration_status, websocket_migration_start, websocket_management_status, websocket_management_enable, websocket_management_disable, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_apply_options_diff, websocket_prepare_options_diff, websocket_reconcile, websocket_export):
+    """Register the complete authenticated API contract."""
+    for handler in REGISTERED_HANDLERS:
         websocket_api.async_register_command(hass, handler)
 
+
+def async_unregister_websocket_commands(hass) -> None:
+    """Remove only handlers owned by this integration on entry unload."""
+    registry = hass.data.get(websocket_api.DOMAIN, {})
+    for handler in REGISTERED_HANDLERS:
+        command = handler._ws_command
+        if command in registry and registry[command][0] is handler:
+            registry.pop(command)

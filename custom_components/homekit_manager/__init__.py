@@ -25,12 +25,24 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     from .websocket import async_register_websocket_commands
 
     coordinator = HomeKitManagerCoordinator(hass)
-    await coordinator.async_initialize()
-    hass.data[DOMAIN] = {"coordinator": coordinator}
-    await coordinator.async_refresh()
-    async_register_websocket_commands(hass, coordinator)
-    await async_register_panel(hass)
+    try:
+        await coordinator.async_initialize()
+        hass.data[DOMAIN] = {"coordinator": coordinator}
+        await coordinator.async_refresh()
+        if coordinator.last_error:
+            raise RuntimeError(coordinator.last_error)
+        async_register_websocket_commands(hass, coordinator)
+        await async_register_panel(hass)
+    except Exception:
+        from .websocket import async_unregister_websocket_commands
+        await coordinator.async_shutdown()
+        async_unregister_websocket_commands(hass)
+        frontend.async_remove_panel(hass, DOMAIN, warn_if_unknown=False)
+        hass.data.pop(DOMAIN, None)
+        _LOGGER.exception("HomeKit Manager konnte nicht vollständig eingerichtet werden")
+        return False
     return True
+
 
 async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
     """Set up a read-only config entry."""
@@ -51,6 +63,8 @@ async def async_unload_entry(hass: HomeAssistant, entry) -> bool:
         coordinator = domain_data.get("coordinator")
         if coordinator is not None:
             await coordinator.async_shutdown()
+        from .websocket import async_unregister_websocket_commands
+        async_unregister_websocket_commands(hass)
         frontend.async_remove_panel(hass, DOMAIN, warn_if_unknown=False)
         hass.data.pop(DOMAIN, None)
     return True

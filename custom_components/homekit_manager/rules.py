@@ -10,6 +10,8 @@ def _matches(entity: Mapping[str, Any], match: Mapping[str, Any]) -> bool:
             actual = entity.get("compatibility", {}).get("status")
         elif key == "available":
             actual = bool(entity.get("available"))
+        elif key == "entity_id_prefix":
+            actual = entity.get("entity_id")
         else:
             actual = entity.get(key)
         if isinstance(wanted, list):
@@ -30,13 +32,22 @@ def evaluate_rules(
 ) -> dict[str, Any]:
     """Evaluate rules deterministically; output is never applied automatically."""
     normalized = []
+    if not isinstance(rules, (list, tuple)):
+        raise ValueError("Regeln müssen als Liste angegeben werden")
     for index, rule in enumerate(rules):
+        if not isinstance(rule, Mapping) or not isinstance(rule.get("match", {}), Mapping):
+            raise ValueError(f"Regel {index} muss gültige Filter enthalten")
+        priority = rule.get("priority", 0)
+        if type(priority) is not int or not isinstance(rule.get("enabled", True), bool):
+            raise ValueError(f"Regel {index} hat eine ungültige Priorität oder Aktivierung")
         action = rule.get("action")
-        if action not in {"include", "exclude"}:
+        if not isinstance(action, str) or action not in {"include", "exclude"}:
             raise ValueError(f"Regel {rule.get('id', index)} hat keine gültige Aktion")
         normalized.append((-(int(rule.get("priority", 0))), str(rule.get("id", index)), index, rule))
     normalized.sort()
     manual = dict(manual or {})
+    if any(not isinstance(key, str) or not isinstance(value, str) or value not in {"include", "exclude"} for key, value in manual.items()):
+        raise ValueError("Manuelle Regeln benötigen Entity-IDs und include/exclude")
     decisions = []
     conflicts = []
     for entity in sorted(entities, key=lambda item: str(item.get("entity_id", ""))):

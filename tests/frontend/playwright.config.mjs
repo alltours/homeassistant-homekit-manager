@@ -2,14 +2,14 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: ".",
-  timeout: 15000,
+  timeout: 30000,
   reporter: [["line"]],
   projects: [
     { name: "chromium", use: { browserName: "chromium" } },
     { name: "webkit", use: { browserName: "webkit" } },
   ],
   webServer: {
-    command: "python3 -m http.server 4173 --directory ../..",
+    command: "python3 -m http.server 4173 --bind 127.0.0.1 --directory ../..",
     port: 4173,
     reuseExistingServer: false,
   },

@@ -1,12 +1,8 @@
-"""Controlled HomeKit options adapter with explicit production checks.
+"""Read-only diff preparation and an explicitly isolated Core test adapter.
 
-The HomeKit OptionsFlow is a user-facing flow, not a stable automation API
-for submitting an arbitrary complete option document. This module therefore
-computes and validates a minimal diff. The regular backend path may apply
-that diff only to an existing ``SOURCE_USER`` HomeKit entry after the
-coordinator has performed the bridge, scope, fingerprint, and lifecycle
-checks. The default writer constructor remains locked for all other callers
-and for isolated tests unless their explicit test gate is enabled.
+The coordinator rejects production writes in 0.9.19. This module rejects
+allow_production=True independently. Only an explicitly enabled test fixture
+can exercise ConfigEntry options; it cannot establish Apple Home compatibility.
 """
 from __future__ import annotations
 
@@ -18,6 +14,7 @@ from typing import Any, Callable, Mapping
 from .change_planner import plan_changes
 from .const import SUPPORTED_CORE_VERSION
 from .filtering import evaluate_filter
+from .safety import WRITE_LOCK_REASON
 
 
 class HomeKitWriteError(Exception):
@@ -25,7 +22,7 @@ class HomeKitWriteError(Exception):
 
 
 class HomeKitWriteDisabled(HomeKitWriteError):
-    """Applying HomeKit changes is intentionally disabled in Phase 4B."""
+    """Applying HomeKit changes is disabled in release 0.9.19."""
 
 
 class HomeKitWriteBlocked(HomeKitWriteError):
@@ -137,13 +134,10 @@ def build_options_diff(
 
 
 class HomeKitWriter:
-    """Version-bound writer for isolated tests and supported user entries.
+    """Disabled for production; explicit isolated tests can exercise Core options.
 
-    Home Assistant does not expose a stable external API for another custom
-    integration to submit an arbitrary HomeKit OptionsFlow. The supported
-    path is consequently narrow and version-bound: the coordinator passes a
-    validated minimal diff for an existing ``SOURCE_USER`` entry, while the
-    default constructor remains write-disabled.
+    The retained allow_production argument deliberately rejects former callers.
+    No coordinator endpoint enables this test adapter in 0.9.19.
     """
 
     def __init__(self, hass: Any, *, test_environment: bool = False, apply_enabled: bool = False, allow_production: bool = False):
@@ -153,11 +147,9 @@ class HomeKitWriter:
         self.allow_production = bool(allow_production)
 
     async def async_apply(self, diff: OptionsDiff) -> dict[str, Any]:
-        """Apply only through an explicit test gate or coordinator gate."""
-        if not self.allow_production and (not self.test_environment or not self.apply_enabled):
-            raise HomeKitWriteDisabled(
-                "HomeKit-Schreibpfad ist gesperrt; nur der geprüfte isolierte oder explizit freigegebene Backend-Pfad darf ihn aktivieren"
-            )
+        """Exercise only explicitly enabled isolated fixtures."""
+        if self.allow_production or not (self.test_environment and self.apply_enabled):
+            raise HomeKitWriteDisabled(WRITE_LOCK_REASON)
         if not isinstance(diff, OptionsDiff):
             raise HomeKitWriteBlocked("Ungültiger Options-Diff")
         from homeassistant.const import __version__
@@ -173,21 +165,11 @@ class HomeKitWriter:
             raise HomeKitWriteBlocked(
                 "Nur reguläre HomeKit-Config-Entries vom Typ SOURCE_USER werden unterstützt"
             )
-        if self.allow_production and getattr(getattr(entry, "state", None), "value", getattr(entry, "state", None)) != "loaded":
-            raise HomeKitWriteBlocked("HomeKit-Config-Entry ist vor der Anwendung nicht geladen")
-        # Core 2026.10.4 reloads HomeKit options through the integration's
-        # update listener. Without that listener, async_update_entry would
-        # persist options while leaving the running bridge untouched.
-        if self.allow_production and not getattr(entry, "update_listeners", None):
-            raise HomeKitWriteBlocked(
-                "HomeKit-Config-Entry besitzt keinen registrierten Update-Listener; Aktivierung nicht nachweisbar"
-            )
         allowed = {"filter", "entity_config", "homekit_mode", "devices"}
         if any(key not in allowed for key in diff.changed_keys):
             raise HomeKitWriteBlocked("Options-Diff enthält nicht freigegebene Schlüssel")
         lock = _locks.setdefault(diff.entry_id, asyncio.Lock())
         async with lock:
-            previous_runtime_data = getattr(entry, "runtime_data", None)
             current_options = dict(entry.options)
             current_data = dict(entry.data)
             for key in diff.changed_keys:
@@ -197,11 +179,7 @@ class HomeKitWriter:
             next_options = dict(current_options)
             for key in diff.changed_keys:
                 next_options[key] = copy.deepcopy(diff.after[key])
-            changed = self.hass.config_entries.async_update_entry(entry, options=next_options)
-            if self.allow_production and not changed and diff.changed_keys:
-                raise HomeKitWriteBlocked(
-                    "HomeKit-Config-Entry wurde nicht aktualisiert; Aktivierung abgebrochen"
-                )
+            self.hass.config_entries.async_update_entry(entry, options=next_options)
             if hasattr(self.hass, "async_block_till_done"):
                 try:
                     await asyncio.wait_for(
@@ -219,14 +197,11 @@ class HomeKitWriter:
                 "HomeKit-Bridge wurde nach der Optionsänderung nicht erfolgreich aktiviert"
                 + detail
             )
-        if self.allow_production and previous_runtime_data is getattr(entry, "runtime_data", None):
-            raise HomeKitActivationUnknown(
-                "HomeKit-Optionen wurden gespeichert, aber kein neuer Bridge-Lifecycle wurde bestätigt"
-            )
         return {
             "applied": True,
             "options_saved": True,
-            "activation": "core_update_listener",
+            "activation": "isolated_options_adapter",
+            "production_verified": False,
             "activation_status": "active" if state == "loaded" else "unknown",
             "entry_id": diff.entry_id,
             "apply_enabled": True,

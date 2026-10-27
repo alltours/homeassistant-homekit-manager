@@ -1,14 +1,18 @@
 {
   "domain": "homekit_manager",
   "name": "HomeKit Manager",
-  "codeowners": ["@alltours"],
+  "codeowners": [
+    "@alltours"
+  ],
   "config_flow": true,
-  "dependencies": ["frontend", "http"],
+  "dependencies": [
+    "frontend",
+    "http"
+  ],
   "documentation": "https://github.com/alltours/homeassistant-homekit-manager#readme",
   "integration_type": "hub",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/alltours/homeassistant-homekit-manager/issues",
   "requirements": [],
-  "version": "0.9.18"
+  "version": "0.9.19"
 }
-

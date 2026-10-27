@@ -24,6 +24,8 @@ class ModeStore:
         """Load validated desired modes."""
         data = await self._store.async_load() or {}
         modes = data.get("modes", {}) if isinstance(data, dict) else {}
+        if not isinstance(modes, dict):
+            return {}
         return {
             str(entry_id): str(mode)
             for entry_id, mode in modes.items()

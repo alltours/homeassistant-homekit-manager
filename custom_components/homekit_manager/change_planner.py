@@ -68,7 +68,7 @@ def plan_changes(
             counts["unknown"] += 1
         desired_status = "included" if requested == "include" else "excluded" if requested == "exclude" else current
         compat = item.get("compatibility", {}).get("status", "unknown")
-        if compat == "unsupported" and requested:
+        if compat == "unsupported" and requested == "include":
             incompatible += 1
             counts["conflicts"] += 1
             changes.append({"entity_id": entity_id, "current": current, "desired": desired_status, "action": "conflict", "risk": "high", "reason": "incompatible_entity", "blocked": True})

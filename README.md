@@ -1,68 +1,41 @@
-# HomeKit Manager 0.9.18
+# HomeKit Manager 0.9.19
 
-Home Assistant custom integration for HomeKit Bridge inventory management, safe configuration planning and a version-bound controlled apply path.
+Home Assistant custom integration for reading existing HomeKit Bridges, inspecting entities and safely planning configuration changes. Continues the 0.9.18 implementation; no new bridge or pairing is created.
 
 ## Features
 
-- Entity, device, and area inventory from Home Assistant registries.
-- Read-only discovery of existing HomeKit bridge config entries.
-- HomeKit filter and compatibility status evaluation.
-- Admin-protected WebSocket commands for inventory, validation, preview, drafts, and export.
-- Native Home Assistant panel with search, filters, sorting, multi-selection, draft planning, preview, and export.
-- Explicit multi-bridge context selection with bridge-scoped drafts and conflict protection.
-- Persistent, secret-free draft history with restore-as-draft and read-only rule previews.
-- Controlled application for existing `SOURCE_USER` HomeKit entries on Core 2026.10.4.
+- HomeKit, Devices, Changes and Settings views with theme-aware, responsive layouts.
+- Entity/device/area inventory, search, seven filters and explicit bulk draft selection.
+- Separate native configuration source and Manager administration metadata.
+- Atomic draft files with optimistic conflict checks, per-bridge merging, export and bounded history.
+- Durable activation evidence: interrupted operations recover as unknown; no automatic retry.
+- Admin-protected WebSocket API, consistent snapshot responses and event-driven updates.
+- Side-effect-free compatibility projection for Home Assistant Core 2026.10.4. Eligibility and filter inclusion do not prove Apple Home publication.
 
-## Safety model
+## Safety in 0.9.19
 
-The integration does not manipulate pairings, accessory identifiers or `.storage` data. The apply path is restricted in the backend to an administrator, Core 2026.10.4, a uniquely selected `SOURCE_USER` HomeKit entry, a fresh validated diff and a successfully loaded entry after activation. YAML-imported entries, migrations and bridge creation/deletion remain blocked.
+**Applying HomeKit changes is disabled in the backend and visibly disabled in the panel.** Administrative ownership only stores Manager metadata. It does not enable the writer, migrate native HomeKit configuration, reload a bridge or move pairing data. No production deployment is part of this remediation.
 
-Version 0.9.18 restores the mobile-first storage-management UI and adds a conservative, persisted migration assistant. Cross-source migrations remain explicitly blocked because Core 2026.10.4 provides no stable public contract that guarantees bridge identity and pairing preservation.
+Drafts use `homekit_manager.yaml` and its backup; Manager metadata uses separate `homekit_manager.*` Home Assistant stores. Native HomeKit keys, pairings and identifiers are never read into these stores. The legacy writer is retained only behind an explicit isolated-test gate; `allow_production=True` is rejected.
+
+There is no retrospective proof for a pre-0.9.19 activation that was only kept in process memory. A loaded bridge is a current observation and does not resolve an unknown historical operation.
+
+## Development and release
+
+Use Python 3.14.2 or later. The verified local runtime was Python 3.14.9 and Home Assistant Core 2026.10.4. Install `tests/integration/requirements-ha-2026.10.4.txt`, then run `npm ci` and `npx playwright install chromium webkit`.
+
+Run `pytest -q`, `npm run test:frontend` and `npm run test:browser`. The Python suite includes real authenticated Home Assistant WebSocket/browser tests when pinned browser dependencies are installed. Each integration test receives a separate temporary configuration directory. The five-minute browser observation is `npx playwright test -c tests/frontend/playwright.config.mjs tests/frontend/browser_stability.spec.mjs`.
+
+Build with `python scripts/build_release.py --output .release`. After intentional source changes update the checked release file list with `--update-manifest`. The builder rejects unknown files and version/hash mismatches, uses fixed ZIP metadata and verifies every archived source byte. Repeat the build and compare the ZIP bytes. Before release, extract the ZIP into a temporary validation directory with the repository tests/tooling and run all checks there.
+
+The authoritative product repository is `https://github.com/alltours/homeassistant-homekit-manager`; local canonical location: `/Users/felixalshut/Documents/ChatGPT/homeassistant-homekit-manager`. Older copied sources and historical reports describe historical releases only. This work is on branch `fix/homekit-manager-0.9.19-safety-ux`.
+
+## Installation and limits
+
+Review [the 0.9.19 report](docs/HOMEKIT_MANAGER_0_9_19.md) before installation. This repository does not prove the currently installed production version or Apple Home behavior. Deployment, restarts and any later re-enabling of HomeKit writes require a separate task with a backup and identity-preservation acceptance plan. Replacing custom-component files does not itself update a running Home Assistant process.
+
+Accessory-mode instances are reported separately and cannot be selected as bridge targets. Cross-source migration and bridge creation/deletion stay blocked. Versions other than Core 2026.10.4 receive unknown compatibility rather than a positive claim. Browser tests cover Chromium and WebKit; physical iPhone and VoiceOver acceptance remains separate.
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE).
-
-## Installation
-
-Install `custom_components/homekit_manager/` through HACS or copy it into the Home Assistant configuration directory after reviewing the release and backup plan. Create the integration through the Home Assistant UI. A Core restart is required after changing custom-component files.
-
-## Development
-
-The integration targets Home Assistant Core 2026.10.4 and Python 3.14+. The integration test dependencies are pinned in `tests/integration/requirements-ha-2026.10.4.txt`.
-
-```bash
-python -m pip install -r tests/integration/requirements-ha-2026.10.4.txt
-pytest -c tests/integration/pytest.ini -q tests/integration tests/test_homekit_manager.py
-node tests/frontend/test_panel.mjs
-node --check custom_components/homekit_manager/www/homekit-manager.js
-```
-
-## Release process
-
-Changes are developed on a branch, tested locally, committed, pushed to `main`, and verified by GitHub Actions. Starting with `0.9.2`, versioned GitHub Releases use the `0.9.x` series. Existing `1.0.x` releases remain historical. Versioned GitHub Releases are used for HACS installation.
-
-See [the 0.9.2 implementation notes](docs/HOMEKIT_MANAGER_0_9_2.md).
-See [the 0.9.3 implementation notes](docs/HOMEKIT_MANAGER_0_9_3.md).
-See [the 0.9.4 implementation notes](docs/HOMEKIT_MANAGER_0_9_4.md).
-See [the 0.9.5 implementation notes](docs/HOMEKIT_MANAGER_0_9_5.md).
-See [the 0.9.6 implementation notes](docs/HOMEKIT_MANAGER_0_9_6.md).
-See [the 0.9.7 implementation notes](docs/HOMEKIT_MANAGER_0_9_7.md).
-See [the 0.9.8 implementation notes](docs/HOMEKIT_MANAGER_0_9_8.md).
-See [the 0.9.9 implementation notes](docs/HOMEKIT_MANAGER_0_9_9.md).
-See [the 0.9.11 stabilization notes](docs/HOMEKIT_MANAGER_0_9_11.md).
-See [the 0.9.17 stabilization notes](docs/HOMEKIT_MANAGER_0_9_17.md).
-See [the 0.9.18 storage and UI notes](docs/HOMEKIT_MANAGER_0_9_18.md).
-
-## HACS status
-
-The repository uses the supported single-integration layout, includes `hacs.json`, and is public for HACS discovery. See `docs/HACS_STATUS.md` and `docs/HOMEKIT_MANAGER_GITHUB_UPDATE.md` for the publication and update process.
-
-## Known limitations
-
-- No production Home Assistant installation is managed by this repository.
-- YAML-imported HomeKit entries are intentionally not writable through the standard adapter.
-- Migration between configuration methods is not automatic.
-- The final release gate requires a real authenticated WebSocket E2E run against an isolated paired bridge.
-- Browser regression coverage includes Chromium and WebKit viewport/theme tests; production browser acceptance remains separate.
-
+MIT; see [LICENSE](LICENSE).

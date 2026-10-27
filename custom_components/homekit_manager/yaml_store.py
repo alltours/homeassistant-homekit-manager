@@ -88,13 +88,15 @@ def validate_document(document: Any) -> dict[str, Any]:
         raise YamlValidationError("Dokument muss ein Mapping sein")
     if set(document) - {"schema_version", "bridges"}:
         raise YamlValidationError("Unbekannte Top-Level-Schlüssel")
-    if document.get("schema_version") != SCHEMA_VERSION:
+    if type(document.get("schema_version")) is not int or document.get("schema_version") != SCHEMA_VERSION:
         raise YamlValidationError(f"Unbekannte Schema-Version: {document.get('schema_version')!r}")
     bridges = document.get("bridges")
     if not isinstance(bridges, Mapping):
         raise YamlValidationError("bridges muss ein Mapping sein")
 
     normalized_bridges: dict[str, Any] = {}
+    if any(not isinstance(key, str) for key in bridges):
+        raise YamlValidationError("Bridge-IDs müssen Zeichenketten sein")
     for entry_id in sorted(bridges):
         if not isinstance(entry_id, str) or not entry_id or _is_sensitive(entry_id):
             raise YamlValidationError("Ungültige Bridge-ID")
@@ -109,10 +111,12 @@ def validate_document(document: Any) -> dict[str, Any]:
         if not isinstance(entities, Mapping):
             raise YamlValidationError(f"bridges.{entry_id}.entities muss ein Mapping sein")
         normalized_entities: dict[str, str] = {}
+        if any(not isinstance(key, str) for key in entities):
+            raise YamlValidationError("Entity-IDs müssen Zeichenketten sein")
         for entity_id in sorted(entities):
             entity_id = _validate_entity_id(entity_id, f"bridges.{entry_id}.entities")
             status = entities[entity_id]
-            if status not in {"include", "exclude"}:
+            if not isinstance(status, str) or status not in {"include", "exclude"}:
                 raise YamlValidationError(f"Ungültiger Status für {entity_id}: {status!r}")
             normalized_entities[entity_id] = status
         normalized_bridges[entry_id] = {"policy": _POLICY, "entities": normalized_entities}
@@ -197,6 +201,8 @@ class YamlStore:
             return self.path.read_bytes()
         except FileNotFoundError:
             return b""
+        except OSError as err:
+            raise YamlStoreError("Entwurf konnte nicht gelesen werden") from err
 
     def _version_for_bytes(self, content: bytes) -> str | None:
         return hashlib.sha256(content).hexdigest() if content else None

@@ -1,156 +1,114 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from '@playwright/test';
+import path from 'node:path';
+import fs from 'node:fs';
 
-const viewports = [
-  ["iphone-390", 390, 844],
-  ["iphone-430", 430, 932],
-  ["tablet-768", 768, 1024],
-  ["desktop-1440", 1440, 900],
-];
+const sizes = [['phone-320', 320, 740], ['phone-430', 430, 932], ['tablet', 768, 1024], ['desktop', 1440, 900]];
+const views = [['home', 'HomeKit'], ['devices', 'Geräte'], ['changes', 'Änderungen'], ['settings', 'Einstellungen']];
+const artifacts = process.env.HKM_SCREENSHOTS || 'test-results/screenshots';
 
-for (const [name, width, height] of viewports) {
-  for (const colorScheme of ["light", "dark"]) {
-    test(`${name} ${colorScheme} renders and preserves draft interactions`, async ({ page }) => {
-      await page.setViewportSize({ width, height });
-      await page.emulateMedia({ colorScheme });
-      const errors = [];
-      page.on("pageerror", (error) => errors.push(error.message));
-      await page.goto("/tests/frontend/browser_fixture.html");
-      const panel = page.locator("homekit-manager-panel");
-      await expect(panel).toBeVisible();
-      await expect(panel.getByRole("heading", { name: "Konfigurationsquelle" })).toBeVisible();
-      await expect(panel.locator("text=Fixture Bridge")).toBeVisible();
-      await expect(panel.locator(".storage-card.active small")).toContainText("Aktive Konfigurationsquelle");
-      await expect(panel.getByRole("heading", { name: "Verwaltungsoberfläche" })).toBeVisible();
-      await page.evaluate(() => { window.confirm = () => true; });
-      await panel.locator("[data-management-enable]").click();
-      await expect(panel.locator("text=HomeKit Manager verwaltet diese Bridge jetzt.")).toBeVisible();
-      await panel.locator("[data-bridge-expand]").click();
-      await expect(panel.getByText("Modus: bridge", { exact: true })).toBeVisible();
-      await panel.locator("[data-bridge-expand]").click();
-      await expect(panel.getByText("Modus: bridge", { exact: true })).not.toBeVisible();
-      await panel.getByRole("tab", { name: "Geräte" }).click();
-      await expect(panel.locator("text=Was soll in HomeKit erscheinen?")).toBeVisible();
-      const input = panel.locator("[data-query]");
-      await input.fill("Kitchen");
-      await expect(input).toHaveValue("Kitchen");
-      await panel.locator(".filters summary").click();
-      await panel.locator("[data-filter=status]").selectOption("included");
-      await panel.locator("[data-reset-filters]").click();
-      await panel.locator("[data-group=entities]").click();
-      await panel.locator("[data-entity-toggle]").first().click();
-      await panel.getByRole("tab", { name: "Änderungen" }).click();
-      await expect(panel.locator("text=Nur geplante Änderungen")).toBeVisible();
-      await expect(panel.locator("text=Entwurf speichern")).toBeVisible();
-      await panel.locator("[data-action-menu]").click();
-      await panel.locator("[data-preview]").click();
-      await panel.locator("[data-save]").click();
-      await expect(panel.locator("text=Entwurf gespeichert")).toBeVisible();
-      await panel.locator("[data-load]").click();
-      await expect(panel.locator("text=Entwurf gespeichert")).toBeVisible();
-      await panel.getByRole("tab", { name: "Einstellungen" }).click();
-      await expect(panel.locator("[data-settings-view=rules]")).toBeVisible();
-      await panel.locator("[data-settings-view=rules]").click();
-      await expect(panel.getByRole("heading", { name: "Regeln" })).toBeVisible();
-      await panel.locator("[data-rules-preview]").click();
-      await panel.getByRole("tab", { name: "Einstellungen" }).click();
-      await panel.locator("[data-settings-view=history]").click();
-      await expect(panel.getByRole("heading", { name: "Historie" })).toBeVisible();
-      await panel.getByRole("tab", { name: "Einstellungen" }).click();
-      await panel.locator("[data-settings-view=performance]").click();
-      await panel.locator("[data-performance]").click();
-      const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
-      expect(overflow).toBe(false);
+for (const [name, width, height] of sizes) {
+  for (const colorScheme of ['light', 'dark']) {
+    test(`${name} ${colorScheme}: all four views fit and navigate`, async ({ page }, info) => {
+      await page.setViewportSize({ width, height }); await page.emulateMedia({ colorScheme });
+      const errors = []; page.on('pageerror', error => errors.push(error.message));
+      await page.goto('/tests/frontend/browser_fixture.html');
+      const panel = page.locator('homekit-manager-panel');
+      await expect(panel.getByText('Fixture Bridge', { exact: true })).toBeVisible();
+      for (const [id, label] of views) {
+        await panel.getByRole('tab', { name: label, exact: true }).click();
+        await expect(panel.getByRole('tab', { name: label, exact: true })).toHaveAttribute('aria-selected', 'true');
+        await expect(panel.locator('h2').first()).toBeVisible();
+        const geometry = await panel.evaluate(element => {
+          const root = element.shadowRoot;
+          return { pageOverflow: document.documentElement.scrollWidth - innerWidth, navOverflow: root.querySelector('.main-nav').scrollWidth - root.querySelector('.main-nav').clientWidth, cardOverflow: [...root.querySelectorAll('.surface,.area-card')].some(card => card.getBoundingClientRect().right > innerWidth + 1) };
+        });
+        expect(geometry.pageOverflow).toBeLessThanOrEqual(1); expect(geometry.navOverflow).toBeLessThanOrEqual(1); expect(geometry.cardOverflow).toBe(false);
+        await page.screenshot({ path: path.join(artifacts, info.project.name, `${name}-${colorScheme}-${id}.png`), fullPage: true });
+      }
       expect(errors).toEqual([]);
-      await page.screenshot({ path: `test-results/${name}-${colorScheme}.png`, fullPage: true });
     });
   }
 }
 
-test("large inventories render within the browser budget", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/tests/frontend/browser_fixture.html");
-  await expect(page.locator("homekit-manager-panel")).toBeVisible();
-  const results = await page.evaluate(() => {
-    const panel = document.querySelector("homekit-manager-panel");
-    panel.view = "devices";
-    panel.groupMode = "entities";
-    return [1000, 2500, 5000].map((count) => {
-      panel.entities = Array.from({ length: count }, (_, index) => ({
-        entity_id: `light.synthetic_${index}`,
-        name: `Light ${index}`,
-        area_name: `Area ${index % 20}`,
-        device_name: `Device ${index % 100}`,
-        domain: "light",
-        compatibility: { status: "supported" },
-        homekit: { current_status: index % 2 ? "excluded" : "included" },
-      }));
-      const start = performance.now();
-      panel.render();
-      return { count, render_ms: Number((performance.now() - start).toFixed(2)), html_length: panel.shadowRoot.innerHTML.length };
-    });
-  });
-  for (const result of results) expect(result.render_ms).toBeLessThan(1000);
-  expect(results.map((result) => result.count)).toEqual([1000, 2500, 5000]);
-  console.log("browser performance", JSON.stringify(results));
+test('search keeps focus, supports areas, all filters work, and pagination reaches later entries', async ({ page }) => {
+  await page.goto('/tests/frontend/browser_fixture.html'); const panel = page.locator('homekit-manager-panel');
+  await panel.getByRole('tab', { name: 'Geräte', exact: true }).click();
+  const search = panel.getByRole('searchbox', { name: 'Entitäten suchen' });
+  await search.pressSequentially('Kitchen'); await expect(search).toBeFocused(); await expect(search).toHaveValue('Kitchen');
+  await search.fill('Hall'); await expect(panel.locator('.result-count')).toContainText('1 von 2');
+  await search.fill(''); await panel.locator('.filters summary').click();
+  for (const [key, value] of [['domain', 'light'], ['area', 'Kitchen'], ['device', 'Kitchen device'], ['status', 'included'], ['compatibility', 'supported'], ['availability', 'available'], ['integration', 'sensor_demo']]) {
+    await panel.locator(`[data-filter=${key}]`).selectOption(value);
+    await expect(panel.locator('.result-count')).toContainText('1 von 2');
+    await panel.locator('[data-reset-filters]').click();
+  }
+  await panel.locator('[data-group=entities]').click();
+  await panel.evaluate(element => { element.entities = Array.from({length: 101}, (_, index) => ({ entity_id: `light.test_${index}`, name: `Lamp ${index}`, domain: 'light', available: true, compatibility: {status: 'supported'}, homekit: {configured_by_filter: true} })); element.render(); });
+  await expect(panel.locator('.entity-row')).toHaveCount(80);
+  await panel.getByRole('button', {name: 'Nächste Seite'}).click(); await expect(panel.locator('.entity-row')).toHaveCount(21);
 });
 
-test("activation interruption remains explicitly unknown and is not retried", async ({ page }) => {
-  await page.goto("/tests/frontend/browser_fixture.html?activation-error");
-  const panel = page.locator("homekit-manager-panel");
-  await expect(panel).toBeVisible();
-  await panel.getByRole("tab", { name: "Geräte" }).click();
-  await panel.locator("[data-group=entities]").click();
-  await panel.locator("[data-entity-toggle]").first().click();
-  await panel.getByRole("tab", { name: "Änderungen" }).click();
-  await page.evaluate(() => { window.confirm = () => true; });
-  await panel.locator("[data-apply]").click();
-  await expect(panel.locator("text=Aktivierungsstatus: unknown")).toBeVisible();
-  await expect(panel.locator("text=keine automatische Wiederholung")).toBeVisible();
-  await expect(panel.locator("[role=alert]")).not.toBeVisible();
+test('draft workflow validates, saves, downloads and keeps applying disabled', async ({ page }) => {
+  await page.goto('/tests/frontend/browser_fixture.html'); const panel = page.locator('homekit-manager-panel');
+  await panel.getByRole('tab', { name: 'Geräte', exact: true }).click(); await panel.locator('[data-group=entities]').click();
+  await panel.locator('[data-entity-toggle]').first().click();
+  await panel.getByRole('tab', { name: 'Änderungen', exact: true }).click();
+  await expect(panel.locator('.change-row')).toHaveCount(1); await expect(panel.locator('.change-row code')).toHaveText('light.kitchen');
+  await panel.locator('[data-preview]').click(); await expect(panel.locator('.status-line')).toContainText('Vorschau bestätigt');
+  await panel.locator('[data-save]').click(); await expect(panel.locator('.status-line')).toContainText('Entwurf gespeichert');
+  await expect(panel.locator('[data-apply]')).toBeDisabled();
+  await panel.locator('[data-action-menu]').click();
+  const downloadPromise = page.waitForEvent('download'); await panel.locator('[data-export]').click(); const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe('homekit-manager-entwurf.yaml');
+  expect(fs.readFileSync(await download.path(), 'utf8')).toContain('schema_version: 1');
+  await panel.locator('[data-load]').click(); await panel.getByRole('button', {name:'Entwurf laden', exact:true}).last().click();
+  await expect(panel.locator('.status-line')).toContainText('Entwurf geladen');
+  await panel.locator('[data-discard]').click();
+  await panel.getByRole('button', {name:'Verwerfen', exact:true}).last().click(); await expect(panel.locator('.change-row')).toHaveCount(0);
+  expect(await page.evaluate(() => window.fixtureCommands.includes('homekit_manager/apply_options_diff'))).toBe(false);
 });
 
-test("sticky change actions remain visible inside a Home Assistant-like scroll container", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/tests/frontend/browser_fixture.html");
-  const panel = page.locator("homekit-manager-panel");
-  await expect(panel).toBeVisible();
-  await panel.getByRole("tab", { name: "Änderungen" }).click();
-  await page.evaluate(() => {
-    const element = document.querySelector("homekit-manager-panel");
-    const wrapper = document.createElement("div");
-    wrapper.id = "ha-scroll-container";
-    wrapper.style.height = "320px";
-    wrapper.style.overflow = "auto";
-    element.replaceWith(wrapper);
-    wrapper.append(element);
-  });
-  const footer = panel.locator(".sticky-actions");
-  const wrapper = page.locator("#ha-scroll-container");
-  await wrapper.evaluate((element) => { element.scrollTop = element.scrollHeight; });
-  const geometry = await page.evaluate(() => {
-    const footer = document.querySelector("homekit-manager-panel").shadowRoot.querySelector(".sticky-actions").getBoundingClientRect();
-    const wrapper = document.querySelector("#ha-scroll-container").getBoundingClientRect();
-    return { footerBottom: footer.bottom, wrapperBottom: wrapper.bottom, footerHeight: footer.height };
-  });
-  expect(geometry.footerHeight).toBeGreaterThan(0);
-  expect(geometry.footerBottom).toBeLessThanOrEqual(geometry.wrapperBottom + 1);
+test('whole area and device selection use an explicit draft confirmation', async ({page}) => {
+  await page.goto('/tests/frontend/browser_fixture.html'); const panel=page.locator('homekit-manager-panel');
+  await panel.getByRole('tab',{name:'Geräte',exact:true}).click(); await panel.locator('[data-selection]').click();
+  await panel.locator('[data-select-area="Kitchen"]').click(); await expect(panel.locator('.selection-bar')).toContainText('1 ausgewählt');
+  await panel.locator('[data-exclude]').click(); await expect(panel.getByRole('dialog')).toBeVisible();
+  await panel.getByRole('button',{name:'Vormerken',exact:true}).click(); await expect(panel.locator('.selection-bar')).toContainText('0 ausgewählt');
+  await panel.getByRole('tab',{name:'Änderungen',exact:true}).click(); await expect(panel.locator('.change-row')).toHaveCount(1);
 });
 
-test("storage cards distinguish verified source from management surface", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/tests/frontend/browser_fixture.html");
-  const panel = page.locator("homekit-manager-panel");
-  await expect(panel.locator(".storage-card.active small")).toContainText("Aktive Konfigurationsquelle");
-  await expect(panel.getByRole("heading", { name: "Verwaltungsoberfläche" })).toBeVisible();
-  await expect(panel.locator("text=YAML- und SOURCE_IMPORT-Migrationen bleiben gesperrt.")).toBeVisible();
+test('management metadata can move in both directions with backend-confirmed dialogs', async ({page}) => {
+  await page.goto('/tests/frontend/browser_fixture.html'); const panel=page.locator('homekit-manager-panel');
+  await panel.locator('[data-management-enable]').click(); await expect(panel.getByRole('dialog')).toBeVisible();
+  await panel.getByRole('button',{name:'Verwaltung übernehmen',exact:true}).last().click();
+  await expect(panel.locator('[data-management-disable]')).toBeVisible();
+  await panel.locator('[data-management-disable]').click(); await panel.getByRole('button',{name:'Zurückstellen',exact:true}).click();
+  await expect(panel.locator('[data-management-enable]')).toBeVisible();
+  expect(await page.evaluate(() => window.fixtureCommands.includes('homekit_manager/apply_options_diff'))).toBe(false);
 });
 
-test("management can be disabled without changing the native source", async ({ page }) => {
-  await page.goto("/tests/frontend/browser_fixture.html");
-  const panel = page.locator("homekit-manager-panel");
-  await page.evaluate(() => { window.confirm = () => true; });
-  await panel.locator("[data-management-enable]").click();
-  await panel.locator("[data-management-disable]").click();
-  await expect(panel.locator("text=Die Verwaltung wurde auf Home Assistant zurückgestellt.")).toBeVisible();
-  await expect(panel.locator("text=Änderungen anwenden: Gesperrt")).toBeVisible();
+test('unknown activation stays neutral, all settings remain reachable, keyboard tabs work', async ({page}) => {
+  await page.goto('/tests/frontend/browser_fixture.html?activation-error'); const panel=page.locator('homekit-manager-panel');
+  await panel.getByRole('tab',{name:'Änderungen',exact:true}).click();
+  await expect(panel.locator('[data-activation-state=unknown]')).toHaveClass(/tone-neutral/);
+  await expect(panel.locator('[data-apply]')).toBeDisabled(); await panel.locator('[data-refresh]').last().click();
+  await expect(panel.locator('[data-activation-state=unknown]')).toHaveClass(/tone-neutral/);
+  await panel.getByRole('tab',{name:'Änderungen',exact:true}).focus();
+  await panel.getByRole('tab',{name:'Änderungen',exact:true}).press('ArrowRight');
+  await expect(panel.getByRole('tab',{name:'Einstellungen',exact:true})).toBeFocused();
+  for(const section of ['general','configuration','diagnostics','rules','history','performance']) {
+    await panel.locator(`[data-settings-view=${section}]`).click(); await expect(panel.locator('.settings-nav')).toBeVisible(); await expect(panel.locator('.settings-content h3')).toBeVisible();
+  }
+});
+
+test('transport errors are visible and do not pretend empty success', async ({page}) => {
+  await page.goto('/tests/frontend/browser_fixture.html?error'); const panel=page.locator('homekit-manager-panel');
+  await expect(panel.getByRole('alert')).toContainText('Fixture-WebSocket nicht erreichbar');
+  await expect(panel.locator('.tone-success')).toHaveCount(0);
+});
+
+test('large inventories render a bounded entity page', async ({page}) => {
+  await page.goto('/tests/frontend/browser_fixture.html'); const panel=page.locator('homekit-manager-panel');
+  const metrics = await panel.evaluate(element => { element.entities=Array.from({length:5000},(_,i)=>({entity_id:`light.large_${i}`,name:`Lamp ${i}`,domain:'light',available:true,compatibility:{status:'supported'},homekit:{configured_by_filter:true}})); element.view='devices';element.groupMode='entities';const start=performance.now();element.render();return {ms:performance.now()-start,rows:element.shadowRoot.querySelectorAll('.entity-row').length}; });
+  expect(metrics.rows).toBe(80); expect(metrics.ms).toBeLessThan(1000); console.log('5000 entity page',metrics);
 });

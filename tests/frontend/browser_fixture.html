@@ -4,12 +4,13 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>HomeKit Manager browser fixture</title>
+    <style>:root{--primary-background-color:#f5f6f8;--card-background-color:#fff;--primary-text-color:#202124;--secondary-text-color:#606873;--divider-color:#dfe2e7;--primary-color:#0075b9;--secondary-background-color:#eef1f4;--warning-color:#a55b00;--success-color:#268235}@media(prefers-color-scheme:dark){:root{--primary-background-color:#101418;--card-background-color:#1c2229;--primary-text-color:#eef2f6;--secondary-text-color:#a7b0bc;--divider-color:#38424d;--primary-color:#6cbdf4;--secondary-background-color:#272f38;--warning-color:#ffc66b;--success-color:#7bd394;--text-primary-color:#082130}}</style>
     <script type="module">
       import "../../custom_components/homekit_manager/www/homekit-manager.js";
 
       const entities = [
         {
-          entity_id: "light.kitchen",
+          entity_id: "light.kitchen", device_id: "device-kitchen", area_id: "kitchen",
           name: "Kitchen light",
           area_name: "Kitchen",
           device_name: "Kitchen device",
@@ -20,23 +21,25 @@
           homekit: { configured_by_filter: true, current_status: "included", filter_reason: "domain_include", published: "unknown" },
         },
         {
-          entity_id: "sensor.temperature",
+          entity_id: "sensor.temperature", device_id: "device-hall", area_id: "hall",
           name: "Temperature",
           area_name: "Hall",
           device_name: "Hall device",
-          integration_domain: "demo",
+          integration_domain: "sensor_demo",
           domain: "sensor",
-          available: true,
-          compatibility: { status: "supported", expected_type: "TemperatureSensor" },
+          available: false,
+          compatibility: { status: "conditionally_supported", expected_type: "TemperatureSensor" },
           homekit: { configured_by_filter: false, current_status: "excluded", filter_reason: "not_in_include", published: "unknown" },
         },
       ];
       let savedDocument = { schema_version: 1, bridges: {} };
       let desiredMode = "homekit_bridge";
       let managementActive = new URLSearchParams(window.location.search).has("activation-error");
+      window.fixtureCommands = [];
       const hass = {
         states: { "light.kitchen": {}, "sensor.temperature": {} },
         callWS: async (message) => {
+          window.fixtureCommands.push(message.type);
           if (new URLSearchParams(window.location.search).has("error")) {
             throw new Error("Fixture-WebSocket nicht erreichbar");
           }
@@ -46,16 +49,17 @@
                 total_entities: entities.length,
                 active_entities: entities.length,
                 disabled_entities: 0,
-                unavailable_entities: 0,
-                compatible_entities: entities.length,
+                unavailable_entities: 1,
+                compatible_entities: 1,
                 configured_entities: 1,
+                integration_version: "0.9.19", core_version: "2026.10.4", last_updated: "2026-10-27T08:00:00Z", refresh_duration_ms: 3.2, refresh_count: 1, unavailable_entities: 1, accessories: 1, write_policy: { enabled: false },
                 fingerprint: "fixture-fingerprint",
               },
               entities,
             };
           }
           if (message.type === "homekit_manager/bridges") {
-            return { bridges: [{ entry_id: "fixture-bridge", title: "Fixture Bridge", source: "user", mode: "bridge", filter: { include_domains: ["light"] } }] };
+            return { bridges: [{ entry_id: "fixture-bridge", title: "Fixture Bridge", source: "user", state: "loaded", mode: "bridge", filter: { include_domains: ["light"] } }] };
           }
           if (message.type === "homekit_manager/history") {
             return { entries: [], count: 0 };
@@ -74,7 +78,7 @@
             return { active_mode: "homekit_bridge", desired_mode: desiredMode, transition: "prepared", matrix: {} };
           }
           if (message.type === "homekit_manager/activation_status") {
-            return { state: "unknown", entry_id: "fixture-bridge", message: "Kein Anwendungsvorgang" };
+            return { state: "unknown", entry_id: "fixture-bridge", has_operation: new URLSearchParams(window.location.search).has("activation-error"), message: "Kein bestätigter Aktivierungsnachweis", observations: { bridge_state: "loaded" } };
           }
           if (message.type === "homekit_manager/migration_plan") {
             const target = message.target || desiredMode;
@@ -84,7 +88,7 @@
             return { state: "unknown", stale: true };
           }
           if (message.type === "homekit_manager/management_status") {
-            return { state: managementActive ? "active" : "not_enabled", configuration_source: "home_assistant", configuration_source_label: "Home Assistant", management_surface: managementActive ? "homekit_manager" : "home_assistant", management_surface_label: managementActive ? "HomeKit Manager" : "Home Assistant", supported: true, active: managementActive, write_status: managementActive ? "available" : "locked", write_status_label: managementActive ? "Verfügbar" : "Gesperrt", bridge_title: "Fixture Bridge", message: managementActive ? "HomeKit Manager verwaltet diese Bridge jetzt." : "HomeKit Manager kann diese bestehende Bridge nach Bestätigung verwalten." };
+            return { state: managementActive ? "active" : "not_enabled", configuration_source: "home_assistant", configuration_source_label: "Home Assistant", management_surface: managementActive ? "homekit_manager" : "home_assistant", management_surface_label: managementActive ? "HomeKit Manager" : "Home Assistant", supported: true, active: managementActive, write_status: "locked", write_status_label: "Gesperrt", bridge_title: "Fixture Bridge", message: managementActive ? "HomeKit Manager verwaltet diese Bridge jetzt." : "HomeKit Manager kann diese bestehende Bridge nach Bestätigung verwalten." };
           }
           if (message.type === "homekit_manager/management_enable") {
             managementActive = true;
@@ -107,7 +111,7 @@
             return { rules: [], suggestions: [], applied: false };
           }
           if (message.type === "homekit_manager/performance") {
-            return { entity_count: entities.length, render_ms: 1, websocket_calls: 1 };
+            return { entity_count: entities.length, refresh_duration_ms: 3.2, refresh_count: 1, last_updated: "2026-10-27T08:00:00Z" };
           }
           if (message.type === "homekit_manager/device_preview") {
             return { simulation: true, title: "Kitchen light", service_type: "Lightbulb", applied: false };
@@ -131,8 +135,7 @@
             return { exists: true, valid: true, document: savedDocument, file_version: "fixture-version-2", fingerprint: "fixture-fingerprint-2", is_applied: false };
           }
           if (message.type === "homekit_manager/apply_options_diff") {
-            if (new URLSearchParams(window.location.search).has("activation-error")) throw new Error("Verbindung unterbrochen");
-            return { applied: true, activation: "core_update_listener", activation_status: "active", entry_id: "fixture-bridge", core_version: "2026.10.4" };
+            throw new Error("HomeKit-Schreibpfad in 0.9.19 gesperrt");
           }
           throw new Error(`Unsupported fixture command: ${message.type}`);
         },
@@ -142,7 +145,7 @@
       }, { once: true });
     </script>
   </head>
-  <body style="margin:0;background:#111;color:#fff">
+  <body style="margin:0;background:var(--primary-background-color);color:var(--primary-text-color)">
     <homekit-manager-panel></homekit-manager-panel>
   </body>
 </html>

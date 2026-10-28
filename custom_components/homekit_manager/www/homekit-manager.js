@@ -8,6 +8,7 @@ const WS = {
   validate: "homekit_manager/validate_draft", preview: "homekit_manager/preview",
   save: "homekit_manager/save_draft", apply: "homekit_manager/apply_options_diff", export: "homekit_manager/export",
   operationPlan: "homekit_manager/operation_plan", operationApply: "homekit_manager/operation_apply", operationStatus: "homekit_manager/operation_status", operationReconcile: "homekit_manager/operation_reconcile",
+  testModeEnable: "homekit_manager/test_write_mode_enable", testModeDisable: "homekit_manager/test_write_mode_disable",
   devicePreview: "homekit_manager/device_preview", performance: "homekit_manager/performance",
   migrationPlan: "homekit_manager/migration_plan", migrationStatus: "homekit_manager/migration_status",
   managementStatus: "homekit_manager/management_status",
@@ -185,7 +186,8 @@ class HomeKitManagerPanel extends HTMLElement {
   async applyDraft() {
     if (!this.supportsApply()) { this.statusMessage = this.overview.operation_policy?.reason || "HomeKit-Anwendung ist serverseitig gesperrt."; this.statusTone = "neutral"; this.render(); return; }
     const plan = this.operationPlan;
-    if (!await this.requestConfirmation("HomeKit-Änderung anwenden", `Operation ${plan.operation_id} für ${this.bridge?.title || plan.entry_id} aus Quelle ${plan.source}. ${plan.changed_entities?.length || 0} Entität(en) sind betroffen.`, "Genau diese Änderung anwenden")) return;
+    const exactDiff = this.changes().map(item => `${item.entity_id}: ${this.statusLabel(item.current)} → ${this.statusLabel(item.desired)}`).join("; ");
+    if (!await this.requestConfirmation("HomeKit-Änderung anwenden", `Operation ${plan.operation_id} für ${this.bridge?.title || plan.entry_id} (${plan.entry_id}, Quelle ${plan.source}). Konkreter Diff: ${exactDiff}.`, "Genau diese Änderung anwenden")) return;
     await this.runAction("HomeKit-Änderung anwenden", async () => {
       try {
         const result = await this._hass.callWS({ type: WS.operationApply, operation_id: plan.operation_id, entry_id: plan.entry_id, source_revision: plan.source_revision, expected_fingerprint: plan.inventory_fingerprint, confirmed_operation_id: plan.operation_id });
@@ -300,13 +302,40 @@ class HomeKitManagerPanel extends HTMLElement {
   sourceCard() { const source = this.managementStatus.configuration_source; const label = this.overview.snapshot_stale ? "Unbekannt" : source === "home_assistant" ? "Native Home-Assistant-Konfiguration" : source === "yaml" ? "YAML-Konfiguration" : "Unbekannt"; return `<div class="source-option selected"><strong>${this.escape(label)}</strong><small>Quelle dieser Bridge · bleibt bei Änderungen erhalten</small></div>`; }
   managementCard() {
     const policy = this.overview.operation_policy || {};
-    return `<p class="lock-note">${this.escape(policy.reason || "HomeKit-Schreiben ist ohne lokale, Bridge-gebundene Freigabe gesperrt.")}</p><p class="muted">HomeKit Manager zeigt und plant Änderungen für die ausgewählte Bridge. Die Konfigurationsquelle bleibt erhalten.</p>`;
+    return `<p class="lock-note">${this.escape(policy.reason || "HomeKit-Schreiben ist gesperrt.")}</p><p class="muted">HomeKit Manager zeigt und plant Änderungen für die ausgewählte Bridge. Die Konfigurationsquelle bleibt erhalten.</p>`;
+  }
+  testWriteModeCard() {
+    const mode = this.overview.test_write_mode || {};
+    const bridge = this.bridge;
+    const supported = Boolean(bridge?.source === "user" && bridge?.mode === "bridge" && bridge?.state === "loaded" && this.overview.core_version === "2026.10.4" && !this.overview.snapshot_stale);
+    const activeHere = mode.enabled && mode.entry_id === bridge?.entry_id;
+    const detail = mode.enabled ? `Aktiv für Entry ${mode.entry_id} bis ${this.formatTime(mode.expires_at)}. Nach Core-Neustart deaktiviert.` : "Deaktiviert. Nach bewusster Admin-Aktivierung 60 Minuten nur für eine native Bridge und Filteränderungen gültig.";
+    return `<section class="notice${mode.enabled ? " warning" : ""}" aria-label="Produktiver Filter-Testmodus"><strong>Produktiver Filter-Testmodus</strong><p>${this.escape(detail)}</p><p>Keine separate Grant-Datei erforderlich. Vor jedem Apply sind ein aktueller Plan, der konkrete Diff und eine eigene Bestätigung nötig. Pairing-Erhalt in Apple Home wird dadurch nicht garantiert.</p>${mode.enabled ? `<button data-test-mode-disable>Testmodus sofort widerrufen</button>` : `<button data-test-mode-enable${supported ? "" : " disabled"}>Testmodus für diese Bridge aktivieren</button>`}${!supported && !mode.enabled ? `<p>Nur eine geladene native Bridge mit Core 2026.10.4 ist freigegeben.</p>` : ""}</section>`;
+  }
+  async enableTestWriteMode() {
+    const bridge = this.bridge;
+    if (!bridge || !this.fingerprint) return;
+    if (!await this.requestConfirmation("Produktiven Filter-Testmodus aktivieren", `Bridge ${bridge.title || bridge.entry_id}, Entry-ID ${bridge.entry_id}, Quelle user. 60 Minuten lang können Admins validierte Filteränderungen nach eigener Apply-Bestätigung ausführen. Die Freigabe endet bei Widerruf, Ablauf oder Core-Neustart.`, "Testmodus für diese Bridge aktivieren")) return;
+    await this.runAction("Testmodus aktivieren", async () => {
+      await this._hass.callWS({ type: WS.testModeEnable, entry_id: bridge.entry_id, expected_fingerprint: this.fingerprint, confirmed_entry_id: bridge.entry_id });
+      this.operationPlan = null;
+      await this.refresh(false);
+      this.statusMessage = "Testmodus befristet aktiviert · neuen Änderungsplan validieren";
+    });
+  }
+  async disableTestWriteMode() {
+    await this.runAction("Testmodus widerrufen", async () => {
+      await this._hass.callWS({ type: WS.testModeDisable });
+      this.operationPlan = null;
+      await this.refresh(false);
+      this.statusMessage = "Testmodus widerrufen";
+    });
   }
   homeTemplate() {
     const bridge = this.bridge, stale = this.overview.snapshot_stale || !this.lastFetchAt;
     const available = !stale && bridge?.state === "loaded";
     const source = stale ? "Unbekannt" : this.managementStatus.configuration_source_label || "Unbekannt";
-    const writeStatus = this.overview.operation_policy?.enabled ? "Befristet freigegeben" : "Gesperrt";
+    const writeStatus = this.overview.test_write_mode?.enabled && this.overview.test_write_mode.entry_id === bridge?.entry_id ? "Testmodus aktiv" : this.overview.operation_policy?.enabled ? "Befristet freigegeben" : "Gesperrt";
     return `${this.pageHeading("HomeKit", "Deine Bridge im Überblick", "Bridge, Konfigurationsquelle und offene Entwürfe auf einen Blick.")}<section class="status-grid" aria-label="Systemübersicht">${this.stateTile("Bridge", available ? "Geladen" : stale || !bridge ? "Unbekannt" : "Nicht geladen", available ? "success" : "neutral")}${this.stateTile("Konfigurationsquelle", source)}${this.stateTile("Schreiben", writeStatus)}${this.stateTile("Offene Änderungen", this.changes().length, this.changes().length ? "warning" : "neutral")}</section><section class="surface"><div class="section-heading"><h3>HomeKit-Bridges</h3><span class="muted">${this.bridges.length} erkannt</span></div>${this.bridges.map(item => this.bridgeCard(item)).join("") || `<div class="empty">Keine Bridge bestätigt. Accessory-Instanzen werden separat erkannt und nicht als Bridge behandelt.</div>`}${this.overview.accessories ? `<p class="muted">${this.overview.accessories} separate Accessory-Instanz(en) · keine Bridge-Ziele</p>` : ""}</section><section class="surface"><h3>Konfigurationsquelle und Schreibstatus</h3><p class="muted">Die Bridge behält ihre bestehende Konfigurationsquelle. Entwürfe ändern diese Quelle nicht.</p><div class="source-options">${this.sourceCard()}</div>${this.managementCard()}</section><section class="surface"><div class="section-heading"><h3>Entitäten und Entwürfe</h3><button data-nav="devices">Geräte öffnen</button></div><dl class="definition-list"><div><dt>Entitäten im Inventar</dt><dd>${this.overview.total_entities ?? this.entities.length}</dd></div><div><dt>Durch Bridge-Filter eingeschlossen</dt><dd>${this.overview.configured_entities ?? "Unbekannt"}</dd></div><div><dt>Ohne verfügbaren Status</dt><dd>${this.overview.unavailable_entities ?? "Unbekannt"}</dd></div></dl><p class="muted">Geräte-IDs aus Entitäten: ${this.overview.device_reconciliation?.referenced_device_count ?? "Unbekannt"} · davon in der nativen Registry gelistet: ${this.overview.device_reconciliation?.registered_referenced_device_count ?? "Unbekannt"}. Synthetische Composite-IDs: ${this.overview.device_reconciliation?.composite_reference_ids?.length ?? "Unbekannt"}; fehlende Referenzen: ${this.overview.device_reconciliation?.missing_reference_ids?.length ?? "Unbekannt"}.</p><p class="muted">Ein Filtertreffer ist kein Nachweis der Veröffentlichung in Apple Home.</p>${this.changes().length ? `<button class="primary" data-nav="changes">${this.changes().length} Änderung(en) prüfen</button>` : `<p class="muted">Keine offenen Änderungen.</p>`}</section>`;
   }
   changesTemplate() {
@@ -319,7 +348,7 @@ class HomeKitManagerPanel extends HTMLElement {
   settingsTemplate() {
     const tabs = [["general", "Allgemein"], ["configuration", "Konfiguration"], ["diagnostics", "Diagnose"], ["rules", "Regeln"], ["history", "Historie"], ["performance", "Performance"]];
     let body;
-    if (this.settingsView === "configuration") body = `<h3>Konfigurationsquelle</h3><p class="muted">Aktive Bridge-Konfiguration und Manager-Entwürfe sind getrennte Daten.</p><div class="source-options">${this.sourceCard()}</div>${this.managementCard()}<dl class="definition-list"><div><dt>Gespeicherter Entwurf</dt><dd>${!this.yamlStatus.valid ? "Ungültig" : this.yamlStatus.exists ? "Vorhanden" : "Nicht vorhanden"}</dd></div><div><dt>Letzte Entwurfsspeicherung</dt><dd>${this.formatTime(this.yamlStatus.last_modified)}</dd></div></dl><p class="lock-note">Änderungen bewahren die bestehende Konfigurationsquelle der Bridge.</p>`;
+    if (this.settingsView === "configuration") body = `<h3>Konfigurationsquelle</h3><p class="muted">Aktive Bridge-Konfiguration und Manager-Entwürfe sind getrennte Daten.</p><div class="source-options">${this.sourceCard()}</div>${this.managementCard()}${this.testWriteModeCard()}<dl class="definition-list"><div><dt>Gespeicherter Entwurf</dt><dd>${!this.yamlStatus.valid ? "Ungültig" : this.yamlStatus.exists ? "Vorhanden" : "Nicht vorhanden"}</dd></div><div><dt>Letzte Entwurfsspeicherung</dt><dd>${this.formatTime(this.yamlStatus.last_modified)}</dd></div></dl><p class="lock-note">Änderungen bewahren die bestehende Konfigurationsquelle der Bridge.</p>`;
     else if (this.settingsView === "diagnostics") {
       const findings = this.diagnostics.grouped_findings || this.diagnostics.findings || [];
       body = `<h3>Backend und Diagnose</h3><dl class="definition-list"><div><dt>Letzter Datenabruf</dt><dd>${this.formatTime(this.lastFetchAt)}</dd></div><div><dt>Letzter vollständiger Backend-Stand</dt><dd>${this.formatTime(this.overview.last_updated)}</dd></div><div><dt>Aktualisierung</dt><dd>${this.overview.snapshot_stale ? "Letzter Abruf fehlgeschlagen" : this.lastFetchAt ? "Bestätigt" : "Nicht geprüft"}</dd></div></dl>${this.overview.last_error ? `<p class="notice error">${this.escape(this.overview.last_error)}</p>` : ""}<label>Problemtyp<select data-diagnostic-filter><option value="">Alle</option>${[...new Map(findings.map(item => [item.code, item.title])).entries()].map(([code, title]) => `<option value="${this.escape(code)}"${this.diagnosticFilter === code ? " selected" : ""}>${this.escape(title)}</option>`).join("")}</select></label>${findings.filter(item => !this.diagnosticFilter || item.code === this.diagnosticFilter).map(item => `<details class="finding"><summary><strong>${this.escape(item.title)}</strong><span>${item.count || 1} betroffen</span></summary><p>${this.escape(item.detail)}</p><p>${this.escape(item.recommendation || "Keine weitere Empfehlung")}</p><ul>${(item.entity_ids || (item.entity_id ? [item.entity_id] : [])).map(id => `<li><code>${this.escape(id)}</code></li>`).join("")}</ul></details>`).join("") || `<p class="muted">${this.lastFetchAt ? "Keine Befunde im letzten Backend-Stand." : "Diagnose noch nicht bestätigt."}</p>`}`;
@@ -376,6 +405,8 @@ class HomeKitManagerPanel extends HTMLElement {
 
     one("[data-diagnostic-filter]", "change", event => { this.diagnosticFilter = event.target.value; this.render(); });
     one("[data-action-menu]", "click", () => { this.actionMenuOpen = !this.actionMenuOpen; this.render(); });
+    one("[data-test-mode-enable]", "click", () => this.enableTestWriteMode());
+    one("[data-test-mode-disable]", "click", () => this.disableTestWriteMode());
     one("[data-operation-plan]", "click", () => this.planOperation());
     one("[data-operation-reconcile]", "click", () => this.reconcileOperation());
     one("[data-apply]", "click", () => this.applyDraft());

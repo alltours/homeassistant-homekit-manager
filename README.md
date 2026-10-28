@@ -1,4 +1,9 @@
-# HomeKit Manager 0.10.0
+# HomeKit Manager 0.10.1 development
+
+Version 0.10.0 is already published. This branch prepares a distinct patch
+version with an optional native filter test mode. It is **not installed** by
+publishing or building the branch. Productive installation and the first Apply
+each require separate, explicit authorization.
 
 Home Assistant custom integration for inspecting existing HomeKit Bridges and
 planning changes in one four-tab panel: HomeKit, Devices, Changes and Settings.
@@ -8,11 +13,16 @@ original source. Filter-list changes are the only supported write operation.
 Complex or ambiguous YAML structures and accessory-mode entries remain
 read-only. No YAML ↔ UI migration is performed.
 
-Production apply is disabled by default. A later, explicit, local, entry-bound
-filter grant is required in addition to Home Assistant admin authorization and
-operation confirmation; see [authorization and recovery](docs/WRITE_AUTHORIZATION_0_10_0.md).
-No grant was placed on the existing production installation. Publishing this
-version does not install it or authorize a productive apply.
+Production apply is disabled by default. For native SOURCE_USER Bridges on
+Core 2026.10.4, an administrator may deliberately enable a one-hour,
+Bridge-bound in-memory test mode in Settings. It requires no separate grant
+file, expires automatically, is revoked on Core restart and can be disabled
+immediately. It only authorizes validated filter operations; each Apply still
+requires confirmation of its concrete diff. The existing local grant remains
+available for the previously supported workflow and YAML cases. See
+[test-mode authorization](docs/TEST_WRITE_MODE_0_10_1.md) and
+[local authorization and recovery](docs/WRITE_AUTHORIZATION_0_10_0.md).
+No test mode or grant has been activated on the existing production installation.
 
 Core 2026.10.4 pins Pillow 12.3.0, for which upstream lists security
 advisories fixed in 13.0.0. The [Python dependency decision](docs/SECURITY_PYTHON_DEPENDENCIES_0_10_0.md)
@@ -44,11 +54,11 @@ Home Assistant custom integration for reading existing HomeKit Bridges, inspecti
 - Admin-protected WebSocket API, consistent snapshot responses and event-driven updates with event/recompute/CPU counters.
 - Side-effect-free compatibility projection for Home Assistant Core 2026.10.4. Eligibility and filter inclusion do not prove Apple Home publication.
 
-## Safety in 0.10.0
+## Safety in 0.10.1 development
 
-**Applying HomeKit changes is disabled by default in the backend and visibly disabled in the panel.** Administrative ownership only stores Manager metadata. It does not enable the writer, migrate native HomeKit configuration, reload a bridge or move pairing data. A separately created, time-limited local grant can enable one bridge's filter writer; it was tested only in isolated Core instances. Productive installation and writer activation are separate decisions.
+**Applying HomeKit changes is disabled by default in the backend and visibly disabled in the panel.** Administrative ownership only stores Manager metadata. It does not enable the writer, migrate native HomeKit configuration, reload a bridge or move pairing data. The optional in-memory native test mode is a separate, explicitly confirmed Admin action with a one-hour expiry. Productive installation, test-mode activation and the first Apply are separate decisions.
 
-Drafts use `homekit_manager.yaml` and its backup; Manager metadata uses separate `homekit_manager.*` Home Assistant stores. Native HomeKit keys, pairings and identifiers are never read into these stores. The old `allow_production=True` shortcut is rejected. The only productive filter path requires the separately verified local grant described above.
+Drafts use `homekit_manager.yaml` and its backup; Manager metadata uses separate `homekit_manager.*` Home Assistant stores. Native HomeKit keys, pairings and identifiers are never read into these stores. The old `allow_production=True` shortcut is rejected. The production filter path requires either the ephemeral native test mode or the separately verified local grant described above.
 
 There is no retrospective proof for an older activation that was only kept in process memory. A loaded bridge is a current observation and does not resolve an unknown historical operation.
 

@@ -1,6 +1,6 @@
 """Diff preparation and a tightly authorized native Core filter writer.
 
-Production use requires a local grant plus a complete expected Entry revision.
+Production use requires a narrow authority plus a complete expected Entry revision.
 The retained ``allow_production`` shortcut rejects legacy callers.
 """
 from __future__ import annotations
@@ -163,10 +163,10 @@ def build_options_diff(
 
 
 class HomeKitWriter:
-    """Core options writer gated by an isolated fixture or a local narrow grant.
+    """Core options writer gated by an isolated fixture or narrow authority.
 
     The retained allow_production argument deliberately rejects former callers.
-    A production grant is verified against its local file at write time.
+    The authority is rechecked at the Core mutation boundary.
     """
 
     def __init__(self, hass: Any, *, test_environment: bool = False, apply_enabled: bool = False, allow_production: bool = False, production_grant: Any = None, expected_source_revision: str | None = None):

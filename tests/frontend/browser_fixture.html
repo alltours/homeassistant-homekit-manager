@@ -43,6 +43,7 @@
       let managementActive = new URLSearchParams(window.location.search).has("activation-error");
       const isolatedWrite = new URLSearchParams(window.location.search).has("isolated-write");
       let operationState = "validated";
+      let testModeActive = false;
       window.fixtureCommands = [];
       const hass = {
         states: { "light.kitchen": {}, "sensor.temperature": {} },
@@ -60,7 +61,8 @@
                 unavailable_entities: 1,
                 compatible_entities: 1,
                 configured_entities: 1,
-                integration_version: "0.10.0", core_version: "2026.10.4", last_updated: "2026-10-27T08:00:00Z", refresh_duration_ms: 3.2, refresh_count: 1, unavailable_entities: 1, accessories: 1, write_policy: { enabled: false }, operation_policy: { enabled: isolatedWrite, reason: isolatedWrite ? "Nur isolierte Testinstanz" : "HomeKit-Schreibpfad gesperrt" },
+                integration_version: "0.10.1", core_version: "2026.10.4", last_updated: "2026-10-27T08:00:00Z", refresh_duration_ms: 3.2, refresh_count: 1, unavailable_entities: 1, accessories: 1, write_policy: { enabled: false }, operation_policy: { enabled: isolatedWrite || testModeActive, reason: isolatedWrite ? "Nur isolierte Testinstanz" : testModeActive ? "Befristeter nativer Testmodus aktiv" : "HomeKit-Schreibpfad gesperrt" },
+                test_write_mode: { enabled: testModeActive, entry_id: testModeActive ? "fixture-bridge" : null, expires_at: testModeActive ? "2026-10-28T23:00:00Z" : null, persistent: false, duration_minutes: 60 },
                 fingerprint: "fixture-fingerprint",
               },
               entities: params.has("paged") ? pagedEntities.slice(message.offset || 0, (message.offset || 0) + (message.limit || 500)) : entities,
@@ -148,15 +150,22 @@
             return { exists: true, valid: true, document: savedDocument, file_version: "fixture-version-2", fingerprint: "fixture-fingerprint-2", is_applied: false };
           }
           if (message.type === "homekit_manager/apply_options_diff") {
-            throw new Error("HomeKit-Schreibpfad in 0.10.0 gesperrt");
+            throw new Error("HomeKit-Schreibpfad in 0.10.1 gesperrt");
+          }
+          if (message.type === "homekit_manager/test_write_mode_enable") {
+            if (message.entry_id !== "fixture-bridge" || message.confirmed_entry_id !== "fixture-bridge" || message.expected_fingerprint !== "fixture-fingerprint") throw new Error("Testmodus blockiert");
+            testModeActive = true; return { enabled: true, entry_id: "fixture-bridge", persistent: false };
+          }
+          if (message.type === "homekit_manager/test_write_mode_disable") {
+            testModeActive = false; return { enabled: false, persistent: false };
           }
           if (message.type === "homekit_manager/operation_plan") {
             if (message.entry_id !== "fixture-bridge" || message.expected_fingerprint !== "fixture-fingerprint") throw new Error("Bridge oder Revision geändert");
             operationState = "validated";
-            return { operation_id: "fixture-operation-1", entry_id: message.entry_id, source: "user", source_revision: "fixture-source-revision", changed_entities: ["light.kitchen"], state: operationState, apply_enabled: isolatedWrite };
+            return { operation_id: "fixture-operation-1", entry_id: message.entry_id, source: "user", source_revision: "fixture-source-revision", changed_entities: ["light.kitchen"], state: operationState, apply_enabled: isolatedWrite || testModeActive };
           }
           if (message.type === "homekit_manager/operation_apply") {
-            if (!isolatedWrite || message.operation_id !== "fixture-operation-1" || message.confirmed_operation_id !== message.operation_id || operationState !== "validated") throw new Error("Operation blockiert");
+            if (!(isolatedWrite || testModeActive) || message.operation_id !== "fixture-operation-1" || message.confirmed_operation_id !== message.operation_id || operationState !== "validated") throw new Error("Operation blockiert");
             operationState = "verified";
             entities[0].homekit.configured_by_filter = false; entities[0].homekit.current_status = "excluded";
             return { operation_id: message.operation_id, entry_id: message.entry_id, state: operationState, pairing_verified: false };

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.1 development (2026-10-28)
+
+- Added a separately confirmed, one-hour in-memory test mode for one existing native `SOURCE_USER` HomeKit Bridge on Core 2026.10.4. It starts disabled, requires Admin access, expires or is revoked without a local grant file, and does not authorize YAML or accessory writes.
+- Preserved filter-only planning, exact Entry revision checks, Core schema validation, operation journaling, duplicate rejection and read-only reconciliation. The Apply confirmation now names the concrete entity diff.
+- Productive installation and the first Apply remain separate approvals; this development change has not been installed on the existing Home Assistant system.
+
 ## 0.10.0 (2026-10-28)
 
 - Matched the six Core 2026.10.4 filter cases and HomeKit's hidden/category gate against the installed Core implementation.

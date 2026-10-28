@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — 0.10.0 development (NO-GO)
+## 0.10.0 (2026-10-28)
 
 - Matched the six Core 2026.10.4 filter cases and HomeKit's hidden/category gate against the installed Core implementation.
 - Blocked entity-list edits that would change the default selection of unobserved entities.

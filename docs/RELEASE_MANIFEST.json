@@ -1,5 +1,5 @@
 {
-  "integration_version": "0.9.24",
+  "integration_version": "0.10.0",
   "file_count": 44,
   "files": [
     {
@@ -39,7 +39,7 @@
     },
     {
       "path": "const.py",
-      "sha256": "d4d1e83c59ee66ce0e4cbe7ab849d3a2f04b3d83b4028a63545b08de9559cc2c",
+      "sha256": "dc9f5747215e0f7b1f371a6408859ebb1846679b53de7098fabb8925731bfea2",
       "size": 2428
     },
     {
@@ -74,8 +74,8 @@
     },
     {
       "path": "exporter.py",
-      "sha256": "a8d9e498b62676a2638c0be40a808eb16ff454ff611303bdd23f306f22a64f58",
-      "size": 1066
+      "sha256": "d20f22dd94c24e644e1df5bec013d40ae87ec30993be824c19798bc1c5ba22c8",
+      "size": 1065
     },
     {
       "path": "filtering.py",
@@ -124,7 +124,7 @@
     },
     {
       "path": "manifest.json",
-      "sha256": "dafd7a1031d53b1aed7b4b61e091f8b7aa08d61f69d4c7e32f1440aae67f48f1",
+      "sha256": "eb5b5b259235133cba2813927f3e4cf8a68d9bd62ea9421a3d3999d57c56942f",
       "size": 516
     },
     {
@@ -139,8 +139,8 @@
     },
     {
       "path": "mode_store.py",
-      "sha256": "494ae0551b843bda88b5e39b5fa6341413c375db792678fd3a468598374c9515",
-      "size": 1472
+      "sha256": "4777b2e5ce81a8b2611e393b2e5ea128da08da9520f3bcdb446620d4591a0a31",
+      "size": 1448
     },
     {
       "path": "native_adapter.py",

@@ -17,7 +17,7 @@ def export_desired_state(document: Mapping[str, Any], format_name: str = "yaml")
     if format_name == "json":
         return json.dumps(normalized, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     if format_name == "text":
-        lines = [f"# HomeKit Manager Soll-Zustand – nicht angewendet"]
+        lines = ["# HomeKit Manager Soll-Zustand – nicht angewendet"]
         for entry_id in sorted(normalized["bridges"]):
             for entity_id, status in normalized["bridges"][entry_id]["entities"].items():
                 lines.append(f"{status}\t{entity_id}")

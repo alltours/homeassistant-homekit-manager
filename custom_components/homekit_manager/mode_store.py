@@ -7,8 +7,6 @@ HomeKit configuration and contains no pairing or credential material.
 """
 from __future__ import annotations
 
-from typing import Any
-
 from homeassistant.helpers.storage import Store
 
 from .const import MANAGEMENT_MODES, MODE_SCHEMA_VERSION

@@ -9,6 +9,7 @@ from aiohomekit.controller.ip.discovery import IpDiscovery
 from aiohomekit.controller.ip.pairing import IpPairing
 from aiohomekit.zeroconf import HomeKitService
 from homeassistant import config_entries
+import pytest
 
 from custom_components.homekit_manager.homekit_writer import HomeKitWriter, OptionsDiff
 
@@ -31,9 +32,19 @@ class LocalAdvertiser:
         return None
 
 
+@pytest.fixture
+def hass_storage():
+    """Use actual files in this isolated HA config directory."""
+    return {}
+
+
 async def test_loopback_hap_server_survives_native_filter_reload(hass, monkeypatch, socket_enabled):
     from homeassistant.components.homekit import HomeKit
-    from homeassistant.components.homekit.util import get_persist_fullpath_for_entry_id
+    from homeassistant.components.homekit.util import (
+        get_aid_storage_filename_for_entry_id,
+        get_iid_storage_filename_for_entry_id,
+        get_persist_fullpath_for_entry_id,
+    )
 
     advertiser = LocalAdvertiser()
 
@@ -66,6 +77,10 @@ async def test_loopback_hap_server_survives_native_filter_reload(hass, monkeypat
     before_aid = first.aid_storage.get_allocated_aid_for_entity_id("light.before")
     assert before_aid is not None
     assert Path(get_persist_fullpath_for_entry_id(hass, entry.entry_id)).is_file()
+    await first.aid_storage.async_save()
+    await first.iid_storage.async_save()
+    assert Path(hass.config.path(".storage", get_aid_storage_filename_for_entry_id(entry.entry_id))).is_file()
+    assert Path(hass.config.path(".storage", get_iid_storage_filename_for_entry_id(entry.entry_id))).is_file()
 
     reader, writer = await asyncio.open_connection("127.0.0.1", port)
     writer.write(b"GET /accessories HTTP/1.1\r\nHost: localhost\r\n\r\n")

@@ -75,6 +75,11 @@ class HomeKitOperationService:
             payload = adapter.plan_filter(bridge, document, inventory)
             entities = payload.diff.changed_entities
         elif entry.source == "import":
+            from homeassistant.const import __version__
+            if __version__ != "2026.10.4":
+                raise HomeKitWriteBlocked("YAML-Apply ist für diese Core-Version nicht verifiziert")
+            if any(item.source != "import" for item in self.hass.config_entries.async_entries("homekit")):
+                raise HomeKitWriteBlocked("Core homekit.reload würde auch native HomeKit-Entries neu laden")
             current = dict(bridge) | {"data": dict(entry.data), "options": dict(entry.options)}
             diff = build_options_diff(current, document, inventory)
             if not diff.changed_keys:

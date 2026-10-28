@@ -8,6 +8,9 @@ from typing import Any, Mapping
 class FilterResult:
     configured: bool | None
     reason: str
+    registry_eligible: bool | None = None
+    runtime_candidate: bool | None = None
+    registry_reason: str | None = None
     def as_dict(self):
         return asdict(self) | {"configured_by_filter": self.configured}
 
@@ -111,9 +114,11 @@ def _apply_core_result(
             included = result.configured
         if included != result.configured:
             result = FilterResult(included, "core_filter_result")
-    # Core's explicitly_included() accepts both an exact entity ID and an
-    # include glob. Domain includes alone do not bypass the registry gate.
-    if result.configured and (entity_category is not None or hidden_by is not None) and not explicitly_included:
-        return FilterResult(False, "category_or_hidden_exclude")
-    return result
+    # The predicate is the configuration selection. HomeKit subsequently
+    # applies a separate entity-registry gate before creating accessories.
+    # Core's explicitly_included() accepts an exact ID or include glob.
+    registry_eligible = (entity_category is None and hidden_by is None) or explicitly_included
+    registry_reason = "category_or_hidden_exclude" if not registry_eligible else "explicit_override" if (entity_category is not None or hidden_by is not None) else "registry_allowed"
+    return FilterResult(result.configured, result.reason, registry_eligible,
+                        bool(result.configured and registry_eligible), registry_reason)
 

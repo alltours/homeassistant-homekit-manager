@@ -59,6 +59,10 @@ test('availability totals follow current hits and missing device is evidence, no
       registry_entry_present: true, device_registry_status: 'missing',
       area_source: 'device', disabled_by: null, hidden_by: null,
     });
+    Object.assign(element.entities[1].homekit, {
+      configured_by_filter: true, registry_eligible: false,
+      runtime_candidate: false, registry_reason: 'category_or_hidden_exclude',
+    });
     element.render();
   });
   await expect(panel.locator('.result-count')).toContainText('2 von 2');
@@ -70,6 +74,9 @@ test('availability totals follow current hits and missing device is evidence, no
   await panel.locator('.entity-row details.technical summary').click();
   await expect(panel.locator('.entity-row details.technical')).toContainText('Gerätereferenz');
   await expect(panel.locator('.entity-row details.technical')).toContainText('missing');
+  await expect(panel.locator('.entity-row details.technical')).toContainText('Core-Registry-Gate');
+  await expect(panel.locator('.entity-row details.technical')).toContainText('Gesperrt');
+  await expect(panel.locator('.entity-row')).toContainText('Core-Registry-Sperre');
   await expect(panel.locator('.entity-row details.technical')).not.toContainText('Verwaist');
 });
 

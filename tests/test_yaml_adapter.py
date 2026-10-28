@@ -1,7 +1,8 @@
-"""Real filesystem exercises of the narrowly supported YAML writer."""
+"""Real filesystem exercises of the supported YAML sources."""
 from __future__ import annotations
 
 from hashlib import sha256
+import os
 from types import SimpleNamespace
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
@@ -73,6 +74,106 @@ def test_conflict_blocks_stale_file_and_restore(yaml_files):
     with pytest.raises(YamlAdapterConflict):
         adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
     assert adapter.operation_state(plan) == "unknown_outcome"
+    assert not (root / ".storage").exists()
+
+
+def test_direct_configuration_yaml_preserves_unrelated_bytes_and_restores(tmp_path):
+    root = tmp_path / "configuration.yaml"
+    before = (
+        "default_config:\n"
+        "# Keep this unrelated comment exactly\n"
+        "homekit:\n"
+        "  - name: Bridge One\n"
+        "    port: 21070\n"
+        "    filter:\n"
+        "      include_entities:\n"
+        "        - light.one\n"
+        "  - name: Bridge Two\n"
+        "    port: 21071\n"
+        "    filter:\n"
+        "      include_entities:\n"
+        "        - light.two\n"
+        "logger:\n"
+        "  default: warning\n"
+    ).encode()
+    root.write_bytes(before)
+    adapter = YamlHomeKitAdapter(tmp_path)
+    plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.one", "light.new"]})
+    assert plan.source_path == root
+    assert plan.after_bytes.startswith(b"default_config:\n# Keep this unrelated comment exactly\n")
+    assert plan.after_bytes.endswith(b"logger:\n  default: warning\n")
+    assert b"- light.two\n" in plan.after_bytes
+    result = adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
+    assert result.state == "verified_file"
+    assert result.backup_path.read_bytes() == before
+    assert adapter.recover(result, isolated_authority=True) == "verified_file_restore"
+    assert root.read_bytes() == before
+
+
+def test_direct_source_rejects_forged_unrelated_comment_edit(tmp_path):
+    root = tmp_path / "configuration.yaml"
+    root.write_text("# preserved\nhomekit:\n  name: Bridge One\n  port: 21070\n  filter:\n    include_entities:\n    - light.one\n")
+    adapter = YamlHomeKitAdapter(tmp_path)
+    plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+    tampered = plan.after_bytes.replace(b"# preserved", b"# altered")
+    forged = replace(plan, after_bytes=tampered, target_revision=sha256(tampered).hexdigest())
+    with pytest.raises(YamlAdapterBlocked, match="unbeteiligte YAML-Bytes"):
+        adapter.apply(forged, expected_revision=plan.source_revision, isolated_authority=True)
+    assert root.read_bytes() == plan.before_bytes
+
+
+def test_direct_source_with_external_tag_or_symlink_is_read_only(tmp_path):
+    root = tmp_path / "configuration.yaml"
+    root.write_text(
+        "homekit:\n  name: Bridge One\n  port: 21070\n  filter:\n    include_entities:\n    - light.one\n"
+        "logger: !secret log_config\n"
+    )
+    adapter = YamlHomeKitAdapter(tmp_path)
+    with pytest.raises(YamlAdapterBlocked):
+        adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+    root.unlink()
+    external = tmp_path / "external.yaml"
+    external.write_text("homekit:\n  name: Bridge One\n  port: 21070\n")
+    root.symlink_to(external)
+    with pytest.raises(YamlAdapterBlocked, match="Symlink"):
+        adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+
+
+def test_direct_source_hardlink_is_not_atomically_replaced(tmp_path):
+    root = tmp_path / "configuration.yaml"
+    root.write_text("homekit:\n  name: Bridge One\n  port: 21070\n  filter:\n    include_entities:\n    - light.one\n")
+    adapter = YamlHomeKitAdapter(tmp_path)
+    plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+    os.link(root, tmp_path / "other-link.yaml")
+    with pytest.raises(YamlAdapterBlocked, match="Dateiknoten"):
+        adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
+    assert root.read_bytes() == plan.before_bytes
+    assert not (tmp_path / ".storage").exists()
+
+
+def test_source_inode_swap_after_open_is_blocked(yaml_files, monkeypatch):
+    from custom_components.homekit_manager import yaml_adapter
+
+    root, source = yaml_files
+    adapter = YamlHomeKitAdapter(root)
+    plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+    before = source.read_bytes()
+    real_flock = yaml_adapter.fcntl.flock
+    swapped = False
+
+    def replace_before_lock(descriptor, operation):
+        nonlocal swapped
+        if operation == yaml_adapter.fcntl.LOCK_EX and not swapped:
+            replacement = root / "replacement.yaml"
+            replacement.write_bytes(before)
+            os.replace(replacement, source)
+            swapped = True
+        return real_flock(descriptor, operation)
+
+    monkeypatch.setattr(yaml_adapter.fcntl, "flock", replace_before_lock)
+    with pytest.raises(YamlAdapterConflict, match="Dateiknoten"):
+        adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
+    assert swapped and source.read_bytes() == before
     assert not (root / ".storage").exists()
 
 

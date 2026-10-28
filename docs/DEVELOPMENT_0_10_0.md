@@ -1,6 +1,6 @@
 # HomeKit Manager 0.10.0 — Arbeitsstand und Release-Gates
 
-Stand: 2026-10-27. Branch `feature/homekit-manager-0.10.0`, aus `origin/main` / `v0.9.24` bei `21dc5b72144aa934e8df7a66bcc58625f5c992be` erstellt. **NO-GO; kein 0.10.0-Release.** Diese Datei ist ein Entwicklungs-Checkpoint, keine Installationsfreigabe.
+Stand: 2026-10-28. Branch `feature/homekit-manager-0.10.0`, aus `origin/main` / `v0.9.24` bei `21dc5b72144aa934e8df7a66bcc58625f5c992be` erstellt. Entwicklungs-PR [#12](https://github.com/alltours/homeassistant-homekit-manager/pull/12) bleibt Draft. **NO-GO; kein 0.10.0-Release.** Diese Datei ist ein Entwicklungs-Checkpoint, keine Installationsfreigabe.
 
 ## Verifizierte Ausgangsbasis
 
@@ -18,6 +18,9 @@ Stand: 2026-10-27. Branch `feature/homekit-manager-0.10.0`, aus `origin/main` / 
 | Hoch | Eine Entity-Listenänderung konnte bei dünnem Inventar die Standardauswahl für unbekannte und künftige Entitäten kippen, ohne dass `_verify_scope()` es erkannte. | Analytische Default-Policy-Prüfung vor jedem Options-Diff; Scope-Wechsel blockiert. | `tests/test_writer_filter_boundary_0100.py`, einschließlich unbekannter zukünftiger Entität. |
 | Mittel | Eine unauflösbare Gerätereferenz wurde allein deshalb „verwaist“ genannt, auch bei vorhandenem gültigem State. | Primärstatus folgt Disabled/State-Evidenz; Gerätereferenz, Registry-Eintrag und State-Präsenz sind separate Merkmale. | `tests/test_inventory_quality.py`, Browser-Regressionsfall in Chromium und WebKit. |
 | Mittel | Die Status-Zeile im Geräte-Tab verwendete Gesamtzahlen, während daneben „Kennzahlen beziehen sich auf aktuelle Treffer“ stand. | Verfügbarkeitszahlen werden aus den gefilterten Treffern berechnet. | Browser-Regressionsfall mit Suche und Statuswechsel. |
+| Mittel | Konfigurationsauswahl und der nachgelagerte HomeKit-Registry-Gate waren als ein Boolescher Wert zusammengefasst. Eine verborgene, per Domain ausgewählte Entität wirkte dadurch als „ausgeschlossen“. | Roher Core-Filtertreffer, Registry-Gate und Laufzeitkandidat sind separate Felder; UI zeigt die Sperre. | Core-Vertragstest mit Hidden/Kategorie und 46 Chromium-/WebKit-Fällen. |
+| Mittel | Der YAML-Writer konnte direkte `homekit:`-Konfigurationen noch nicht sicher bearbeiten und sperrte diese pauschal. | Konservativer, bytegenauer Roundtrip für direkte Konfiguration mit Schema, Backup, Quellhash, Inode-Prüfung und isoliertem Core-Reload; Sonderformen bleiben read-only. | Dateitests und zwei isolierte Core-YAML-Import/Reload-Tests. |
+| Niedrig | Für die 32 WebSocket-Routen gab es eine statische Admin-Dekoratorprüfung, aber keinen ausführenden Nicht-Admin-Test für jede Route. | Alle 32 registrierten Routen werden mit gültigen Pflichtfeldern über einen authentifizierten Nicht-Admin-WebSocket abgefragt; jede muss `unauthorized` liefern. | `tests/integration/test_websocket_authorization_0100.py`. |
 
 ## Versionierter Core-Vertrag und Capability-Stand
 
@@ -27,11 +30,11 @@ Referenz: installierter Home Assistant Core **2026.10.4**, besonders `homeassist
 |---|---:|---:|---:|---:|---|
 | Native `SOURCE_USER`, Bridge, bekannte Filterlisten | Ja | Ja | Ja, Core-Config-Entry-Tests | Nein | Coordinator erzeugt Operationsdienst ohne Writer-Autorität; HAP-/Pairing- und produktive Grant-Nachweise fehlen. |
 | YAML `SOURCE_IMPORT`, `homekit: !include <Datei>`, eindeutiger Name und Port, sichere Formatierung, ausschließlich importierte Bridges | Effektive Core-Werte | Ja | Ja, Core-Import/Reload und Datei-Backup | Nein | Core `homekit.reload` lädt alle HomeKit-Entries; kein gezielter Reload bei gemischtem Bestand. |
-| Direktes `homekit:` in `configuration.yaml` | Effektive Core-Werte | Teilweise | Nein | Nein | Verlustfreie Provenienz-/Write-/Recovery-Prüfung fehlt. |
+| Direktes `homekit:` in `configuration.yaml`, plain YAML, eindeutiger Name/Port, ausschließlich importierte Bridges | Effektive Core-Werte | Ja | Ja, Core-Import/Reload und Datei-Backup/Restore | Nein | Nur bytegenau rundtripfähige Quellen; Produktivgrant und HAP-Nachweis fehlen. Bei gemischten nativen/YAML-Entries blockiert der globale Core-Reload. |
 | `!include_dir_*`, Packages, verschachtelte Includes, Tags/Secrets, Aliase, Symlinks, mehrdeutige Bridge | Effektive Core-Werte | Teilweise | Nein | Nein | Sichere Originaldatei-Zuordnung oder Roundtrip nicht nachgewiesen. |
 | Accessory-Modus, Netzwerk-/IP-/Advertise-Felder, `entity_config`, `devices`, unbekannte Core-Felder | Source-Snapshot soweit Core liefert | Keine allgemeine Bearbeitung | Nein | Nein | Feldspezifische Schema- und Identitätsnachweise fehlen; unbekannte Felder werden nicht still verworfen. |
 
-Die sechs von Core 2026.10.4 geprüften Filterlisten sind `include_entities`, `exclude_entities`, `include_domains`, `exclude_domains`, `include_entity_globs` und `exclude_entity_globs`. Core filtert danach beim Bridge-Start ausschließlich **vorhandene States**; Entity-Kategorie und `hidden_by` sperren außer bei expliziter Entity-ID oder Include-Glob. Ein Filtertreffer belegt weder technische Accessory-Erzeugung noch HAP-Publikation oder Apple-Home-Sichtbarkeit.
+Die sechs von Core 2026.10.4 geprüften Filterlisten sind `include_entities`, `exclude_entities`, `include_domains`, `exclude_domains`, `include_entity_globs` und `exclude_entity_globs`. Der rohe Filtertreffer ist die **Konfigurationsauswahl**. Core prüft danach beim Bridge-Start ausschließlich **vorhandene States**; Entity-Kategorie und `hidden_by` sperren außer bei expliziter Entity-ID oder Include-Glob. Der separat ausgewiesene Laufzeitkandidat ist nur Filtertreffer UND Registry-Gate. Er belegt weder technische Accessory-Erzeugung noch HAP-Publikation oder Apple-Home-Sichtbarkeit. Die Verfügbarkeits-Primärklassen sind `available`, `unavailable`, `unknown`, `no_state`, `disabled`; „ohne verfügbaren Status“ ist eine überlappende Summe aller Klassen außer `available`, nicht synonym mit `unavailable`.
 
 ## Traceability-Auszug
 
@@ -41,14 +44,14 @@ Die sechs von Core 2026.10.4 geprüften Filterlisten sind `include_entities`, `e
 | Keine globale Nebenwirkung eines Entity-Diffs | Core-Fälle in `entityfilter.py` | `homekit_writer._verify_scope` | Writer-Boundary-Test | Formale Prüfung aller zukünftigen Core-Versionen fehlt; Version ist gepinnt. |
 | State und Gerätereferenz getrennt | Core State-Machine / Entity-/Device-Registry | `inventory.py`, Geräte-UI | Inventory- und Browser-Test | Produktive Registry-Daten fehlen. |
 | Native Options-Änderung | HomeKit-Config-Entry-Update-Listener | `native_adapter.py`, `operations.py` | Bestehende Core-Integrationstests | Echter HAP-Start/Neustart/Pairing fehlt. |
-| YAML-Änderung ohne Quellenwechsel | Core YAML-Import und `homekit.reload` | `yaml_adapter.py`, `operations.py` | Bestehende Core-Integrationstests | Direkte/komplexe YAML-Strukturen und realer HAP-Lauf fehlen. |
+| YAML-Änderung ohne Quellenwechsel | Core YAML-Import und `homekit.reload` | `yaml_adapter.py`, `operations.py` | Direkter Include und direkte `configuration.yaml` in isolierten Core-Integrationstests | Komplexe YAML-Strukturen und realer HAP-Lauf fehlen. |
 | Fail-closed Writer | Nicht durch Core geliefert; Manager-Sicherheitsvertrag | `coordinator.py`, `operations.py` | Bestehende Negativtests | Kontrollierte spätere Produktivfreigabe fehlt. |
 
 ## Lokale Verifikation
 
-- Python 3.14.9 / Core 2026.10.4: `pytest -q tests` **160 bestanden**; darin enthalten sind echte isolierte Core-Config-Entry-/YAML-Integrationstests. Der zuvor übersprungene Browser-Backend-Test wurde nach `npm ci` ausgeführt.
+- Python 3.14.9 / Core 2026.10.4: `pytest -q tests` **168 bestanden**. Darin enthalten sind isolierte echte Core-Config-Entry-/YAML-Import/Reload-Tests und alle 32 Nicht-Admin-WebSocket-Routen. Der HAP-Netzwerkstart wird in diesen Tests nicht ausgeführt. Der zuvor übersprungene Browser-Backend-Test wurde nach `npm ci` ausgeführt.
 - Chromium + WebKit: **46 Browserfälle bestanden**, einschließlich 320/430-px-Mobile, Light/Dark, Entwurf, gesperrtem Apply, Filter-/Statuszahlen und 5.000-Entity-Seite. Das ist eine Browser-Fixture, kein produktives iPhone.
-- `ruff 0.17.3` für die CI-Modulliste, `pip check`, JS-Syntaxtest, Frontend-Unit-Test und `npm audit --audit-level=high`: bestanden. Für diesen Branch liegt noch **kein** GitHub-CI-Lauf vor.
+- `ruff 0.17.3` für die CI-Modulliste, `pip check`, JS-Syntaxtest, Frontend-Unit-Test und `npm audit --audit-level=high`: bestanden. Der erste gepushte Commit `cc09b6a` bestand [CI](https://github.com/alltours/homeassistant-homekit-manager/actions/runs/40584518499) und [HACS](https://github.com/alltours/homeassistant-homekit-manager/actions/runs/40584518435); die neuen Änderungen müssen nach Push erneut durch CI.
 - Der lokale Build nach Aktualisierung des Dateimanifests ist nur ein unveröffentlichtes Entwicklungsartefakt mit der bisherigen Manifest-Version 0.9.24. Er ist **kein** 0.10.0-Release-Kandidat und darf nicht installiert oder veröffentlicht werden.
 
 ## Offene Gates
@@ -57,7 +60,7 @@ Der reguläre Core-Testharness verhindert absichtlich Netzwerk-Sockets. Ein Vers
 
 1. Echte isolierte HAP-Bridge und Persistenz/AID/IID vor und nach Filteränderung, Reload und Core-Neustart prüfen; Apple-Home-Pairings nicht behaupten.
 2. Server-seitigen, begrenzten und widerrufbaren Produktiv-Grant implementieren und adversarial prüfen, ohne die bestehende Installation zu aktivieren.
-3. Direkte YAML-Konfiguration und weitere sichere Strukturen mit Dateipfadsicherheit, Roundtrip, Recovery und realem Core-Reload testen; unsichere Formen präzise read-only lassen.
+3. Komplexe YAML-Strukturen einzeln gegen sichere Provenienz, Roundtrip und Recovery prüfen; `!include_dir_*`, Packages, Tags/Secrets und mehrdeutige Zuordnungen bleiben bis zum Nachweis read-only. Direkte `homekit:`-Konfiguration und ein einfacher Include wurden isoliert gegen Core getestet.
 4. Produktive Registry-/State-/Entry-Zählung nur bei berechtigtem lesendem Zugriff nachholen; insbesondere 251/375, Shelly-Sensoren, aktiven UI-Filter und 129/121 prüfen.
 5. Vollständige Core/HAP-, Browser-, Security-, Performance-, Upgrade- und Release-Extrakt-Prüfung für den **finalen** Commit, danach zweiter Review und GitHub-CI/Review-Gates.
 

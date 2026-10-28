@@ -32,7 +32,8 @@ def test_all_six_filter_dimensions_against_core_and_homekit_registry_gate():
                 or core.explicitly_included(entity_id)
             )
             actual = evaluate_filter(entity_id, category, hidden, config=config)
-            assert actual.configured == expected, (config, entity_id, category, hidden, actual)
+            assert actual.configured == selected, (config, entity_id, category, hidden, actual)
+            assert actual.runtime_candidate == expected, (config, entity_id, category, hidden, actual)
 
 
 def test_entity_include_plus_domain_exclude_preserves_core_default_include():
@@ -40,4 +41,6 @@ def test_entity_include_plus_domain_exclude_preserves_core_default_include():
     assert evaluate_filter("switch.other", config=config).configured is True
     assert evaluate_filter("sensor.other", config=config).configured is False
     assert evaluate_filter("light.explicit", config=config).reason == "explicit_include"
-    assert evaluate_filter("switch.other", hidden_by="user", config=config).configured is False
+    hidden = evaluate_filter("switch.other", hidden_by="user", config=config)
+    assert hidden.configured is True
+    assert hidden.runtime_candidate is False

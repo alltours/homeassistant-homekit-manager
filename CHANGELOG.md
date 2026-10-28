@@ -5,6 +5,9 @@
 - Matched the six Core 2026.10.4 filter cases and HomeKit's hidden/category gate against the installed Core implementation.
 - Blocked entity-list edits that would change the default selection of unobserved entities.
 - Separated missing device references from current State availability, and aligned UI status counts with active search and filters.
+- Kept Core filter selection separate from the later hidden/category registry gate and its runtime candidacy; the panel shows both pieces of evidence.
+- Added isolated direct `configuration.yaml` HomeKit filter editing with byte-preserving plans, backups, Core import/reload tests and inode-swap refusal. Mixed native/YAML installations remain read-only for YAML apply.
+- Exercised all 32 WebSocket routes with an authenticated non-admin account; every route rejected the request.
 - Recorded verified baseline evidence, exact capability limits and remaining release gates in `docs/DEVELOPMENT_0_10_0.md`. Production writing remains disabled.
 
 ## 0.9.24 (2026-10-27)

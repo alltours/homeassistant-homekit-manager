@@ -1,5 +1,10 @@
 # HomeKit Manager 0.9.24
 
+> Version 0.10.0 is in development on `feature/homekit-manager-0.10.0`.
+> The [0.10.0 development checkpoint](docs/DEVELOPMENT_0_10_0.md) records
+> verified changes and unresolved release gates. It is not an installable
+> 0.10.0 release.
+
 > Release source for HomeKit Manager 0.9.24. This work did not install the
 > integration in the production Home Assistant environment. See
 > [development status](docs/DEVELOPMENT_0_9_24.md) for tested paths and release
@@ -38,7 +43,7 @@ Run `pytest -q`, `npm run test:frontend` and `npm run test:browser`. The Python 
 
 Build with `python scripts/build_release.py --output .release`. After intentional source changes update the checked release file list with `--update-manifest`. The builder rejects unknown files and version/hash mismatches, uses fixed ZIP metadata and verifies every archived source byte. Repeat the build and compare the ZIP bytes. Before release, extract the ZIP into a temporary validation directory with the repository tests/tooling and run all checks there.
 
-The authoritative product repository is `https://github.com/alltours/homeassistant-homekit-manager`; local canonical location: `/Users/felixalshut/Documents/ChatGPT/homeassistant-homekit-manager`. Older copied sources and historical reports describe historical releases only. Current development is on branch `feature/homekit-manager-0.9.24`.
+The authoritative product repository is `https://github.com/alltours/homeassistant-homekit-manager`; local canonical location: `/Users/felixalshut/Documents/ChatGPT/homeassistant-homekit-manager`. Older copied sources and historical reports describe historical releases only. Current 0.10.0 development is on branch `feature/homekit-manager-0.10.0`.
 
 ## Installation and limits
 

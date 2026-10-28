@@ -109,8 +109,8 @@
     },
     {
       "path": "homekit_writer.py",
-      "sha256": "3e84b209c437cc3c4bf6f85a05a3ab9012540bb0392fc9588747a3e48761f135",
-      "size": 11210
+      "sha256": "d854c584262f4f965b4cf5f624e2c26011ad37d44d2fb073f8bacd5d63b7ec7b",
+      "size": 12099
     },
     {
       "path": "inventory.py",

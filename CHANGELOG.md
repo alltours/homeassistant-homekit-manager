@@ -4,6 +4,7 @@
 
 - Matched the six Core 2026.10.4 filter cases and HomeKit's hidden/category gate against the installed Core implementation.
 - Blocked entity-list edits that would change the default selection of unobserved entities.
+- Restricted the isolated native writer to Core-validated filter lists; forged or unsupported option diffs are rejected before touching a Config Entry.
 - Separated missing device references from current State availability, and aligned UI status counts with active search and filters.
 - Kept Core filter selection separate from the later hidden/category registry gate and its runtime candidacy; the panel shows both pieces of evidence.
 - Added isolated direct `configuration.yaml` HomeKit filter editing with byte-preserving plans, backups, Core import/reload tests and inode-swap refusal. Mixed native/YAML installations remain read-only for YAML apply.

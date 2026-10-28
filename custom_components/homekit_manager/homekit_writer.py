@@ -151,6 +151,11 @@ def build_options_diff(
     after = copy.deepcopy(options)
     after["filter"] = _candidate_filter(current_filter, desired)
     _verify_scope(current_filter, after["filter"], inventory, desired)
+    from homeassistant.helpers.entityfilter import FILTER_SCHEMA
+    try:
+        FILTER_SCHEMA(after["filter"])
+    except Exception as err:
+        raise HomeKitWriteBlocked("HomeKit-Core-Filter-Schema lehnt den Entwurf ab") from err
     if core_options_validator is not None:
         core_options_validator(copy.deepcopy(after))
     changed_keys = tuple(sorted(key for key in set(options) | set(after) if options.get(key) != after.get(key)))
@@ -191,9 +196,19 @@ class HomeKitWriter:
             raise HomeKitWriteBlocked(
                 "Nur reguläre HomeKit-Config-Entries vom Typ SOURCE_USER werden unterstützt"
             )
-        allowed = {"filter", "entity_config", "homekit_mode", "devices"}
-        if any(key not in allowed for key in diff.changed_keys):
-            raise HomeKitWriteBlocked("Options-Diff enthält nicht freigegebene Schlüssel")
+        if diff.changed_keys != ("filter",):
+            raise HomeKitWriteBlocked("Nur geprüfte HomeKit-Filterlisten sind für Apply freigegeben")
+        candidate_filter = diff.after.get("filter")
+        if not isinstance(candidate_filter, Mapping) or set(candidate_filter) - set(_FILTER_LIST_KEYS):
+            raise HomeKitWriteBlocked("Filter enthält unbekannte oder ungültige Felder")
+        if any(not isinstance(value, list) or any(not isinstance(item, str) for item in value)
+               for value in candidate_filter.values()):
+            raise HomeKitWriteBlocked("Filter muss String-Listen enthalten")
+        from homeassistant.helpers.entityfilter import FILTER_SCHEMA
+        try:
+            FILTER_SCHEMA(dict(candidate_filter))
+        except Exception as err:
+            raise HomeKitWriteBlocked("HomeKit-Core-Filter-Schema lehnt den Diff ab") from err
         lock = _locks.setdefault(diff.entry_id, asyncio.Lock())
         async with lock:
             current_options = dict(entry.options)

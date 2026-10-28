@@ -72,3 +72,34 @@ async def test_native_adapter_plans_and_recovers_on_loaded_core_entry(hass, monk
     assert await adapter.recover(plan) == "verified_options_restore"
     assert adapter.reconcile(plan) == "not_applied"
     assert await reopened.reconcile_operation(plan.operation_id) == "not_applied"
+
+
+async def test_native_writer_rejects_unproven_fields_and_invalid_filters_before_core_update(hass, monkeypatch):
+    async def no_network_start(_self):
+        return None
+
+    monkeypatch.setattr("homeassistant.components.homekit.HomeKit.async_start", no_network_start)
+    monkeypatch.setattr("homeassistant.components.homekit.async_port_is_available", lambda _port: True)
+    entry = config_entries.ConfigEntry(
+        version=1, minor_version=1, domain="homekit", title="Native Schema Gate",
+        data={"name": "Native Schema Gate", "port": 21098},
+        options={"mode": "bridge", "filter": {"include_entities": ["light.before"]}},
+        source=config_entries.SOURCE_USER, entry_id="native-schema-gate", unique_id=None,
+        discovery_keys={}, subentries_data=None,
+    )
+    await hass.config_entries.async_add(entry)
+    await hass.async_block_till_done()
+    before = dict(entry.options)
+    writer = HomeKitWriter(hass, test_environment=True, apply_enabled=True)
+    bad_diffs = (
+        OptionsDiff(entry.entry_id, {"entity_config": {}}, {"entity_config": {"light.before": {"name": "Changed"}}},
+                    ("entity_config",), (), {}),
+        OptionsDiff(entry.entry_id, {"filter": before["filter"]}, {"filter": {"future_rule": ["light.after"]}},
+                    ("filter",), (), {}),
+        OptionsDiff(entry.entry_id, {"filter": before["filter"]}, {"filter": {"include_entities": ["not_an_entity_id"]}},
+                    ("filter",), (), {}),
+    )
+    for diff in bad_diffs:
+        with pytest.raises(HomeKitWriteBlocked):
+            await writer.async_apply(diff)
+        assert dict(entry.options) == before

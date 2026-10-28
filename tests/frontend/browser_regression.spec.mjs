@@ -149,14 +149,15 @@ test('whole area and device selection use an explicit draft confirmation', async
   await panel.getByRole('tab',{name:'Änderungen',exact:true}).click(); await expect(panel.locator('.change-row')).toHaveCount(1);
 });
 
-test('management metadata can move in both directions with backend-confirmed dialogs', async ({page}) => {
+test('configuration source and write status are clear without a management switch', async ({page}) => {
   await page.goto('/tests/frontend/browser_fixture.html'); const panel=page.locator('homekit-manager-panel');
-  await panel.locator('[data-management-enable]').click(); await expect(panel.getByRole('dialog')).toBeVisible();
-  await panel.getByRole('button',{name:'Verwaltung übernehmen',exact:true}).last().click();
-  await expect(panel.locator('[data-management-disable]')).toBeVisible();
-  await panel.locator('[data-management-disable]').click(); await panel.getByRole('button',{name:'Zurückstellen',exact:true}).click();
-  await expect(panel.locator('[data-management-enable]')).toBeVisible();
-  expect(await page.evaluate(() => window.fixtureCommands.includes('homekit_manager/apply_options_diff'))).toBe(false);
+  await expect(panel.locator('.source-option')).toContainText('Native Home-Assistant-Konfiguration');
+  await expect(panel.locator('.status-grid')).toContainText('Schreiben');
+  await expect(panel.locator('[data-management-enable], [data-management-disable]')).toHaveCount(0);
+  await panel.getByRole('tab',{name:'Einstellungen',exact:true}).click();
+  await panel.getByRole('button',{name:'Konfiguration',exact:true}).click();
+  await expect(panel.locator('.settings-content')).toContainText('bestehende Konfigurationsquelle');
+  expect(await page.evaluate(() => window.fixtureCommands.some(type => type === 'homekit_manager/management_enable' || type === 'homekit_manager/management_disable'))).toBe(false);
 });
 
 test('unknown activation stays neutral, all settings remain reachable, keyboard tabs work', async ({page}) => {

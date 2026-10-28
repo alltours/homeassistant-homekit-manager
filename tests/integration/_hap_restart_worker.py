@@ -97,8 +97,11 @@ async def test_worker(hass, monkeypatch, socket_enabled):
     controller = Controller()
     if phase == "pair":
         discovery = IpDiscovery(controller, HomeKitService.from_service_info(homekit.driver.mdns_service_info))
-        finish = await asyncio.wait_for(discovery.async_start_pairing("isolated-restart"), 10)
-        pairing = await asyncio.wait_for(finish(homekit.driver.state.pincode.decode()), 10)
+        try:
+            finish = await asyncio.wait_for(discovery.async_start_pairing("isolated-restart"), 10)
+            pairing = await asyncio.wait_for(finish(homekit.driver.state.pincode.decode()), 10)
+        finally:
+            await discovery.close()
         await hass.async_add_executor_job(homekit.driver.persist)
     else:
         assert homekit.driver.state.paired

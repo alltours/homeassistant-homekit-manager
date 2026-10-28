@@ -1,8 +1,7 @@
-"""Diff preparation and an explicitly isolated native Core options adapter.
+"""Diff preparation and a tightly authorized native Core filter writer.
 
-The coordinator rejects production writes in 0.9.24. This module rejects
-allow_production=True independently. Only an explicitly enabled test fixture
-can exercise ConfigEntry options; it cannot establish Apple Home compatibility.
+Production use requires a local grant plus a complete expected Entry revision.
+The retained ``allow_production`` shortcut rejects legacy callers.
 """
 from __future__ import annotations
 
@@ -15,6 +14,7 @@ from .change_planner import plan_changes
 from .const import SUPPORTED_CORE_VERSION
 from .filtering import evaluate_filter
 from .safety import WRITE_LOCK_REASON
+from .source_model import revision
 
 
 class HomeKitWriteError(Exception):
@@ -169,12 +169,13 @@ class HomeKitWriter:
     A production grant is verified against its local file at write time.
     """
 
-    def __init__(self, hass: Any, *, test_environment: bool = False, apply_enabled: bool = False, allow_production: bool = False, production_grant: Any = None):
+    def __init__(self, hass: Any, *, test_environment: bool = False, apply_enabled: bool = False, allow_production: bool = False, production_grant: Any = None, expected_source_revision: str | None = None):
         self.hass = hass
         self.test_environment = test_environment
         self.apply_enabled = bool(apply_enabled)
         self.allow_production = bool(allow_production)
         self.production_grant = production_grant
+        self.expected_source_revision = expected_source_revision
 
     async def async_apply(self, diff: OptionsDiff) -> dict[str, Any]:
         """Apply a Core-validated filter diff only after backend authorization."""
@@ -184,6 +185,8 @@ class HomeKitWriter:
             raise HomeKitWriteBlocked("Ungültiger Options-Diff")
         if self.production_grant is not None:
             await self.production_grant.verify(self.hass, diff.entry_id, "user")
+            if self.expected_source_revision is None:
+                raise HomeKitWriteBlocked("Produktiver Native-Apply benötigt eine vollständige Entry-Revision")
         if not diff.changed_keys:
             raise HomeKitWriteBlocked("Options-Diff enthält keine Änderung")
         from homeassistant.const import __version__
@@ -218,6 +221,13 @@ class HomeKitWriter:
             # held this bridge lock. Recheck before the Core mutation.
             if self.production_grant is not None:
                 await self.production_grant.verify(self.hass, diff.entry_id, "user")
+            if self.hass.config_entries.async_get_entry(diff.entry_id) is not entry:
+                raise HomeKitWriteBlocked("HomeKit-Config-Entry wurde seit der Vorschau ersetzt")
+            if self.expected_source_revision is not None:
+                current_revision = revision({"entry_id": entry.entry_id, "source": str(entry.source),
+                                             "data": dict(entry.data), "options": dict(entry.options)})
+                if current_revision != self.expected_source_revision:
+                    raise HomeKitWriteBlocked("HomeKit-Config-Entry wurde seit der Vorschau verändert")
             current_options = dict(entry.options)
             current_data = dict(entry.data)
             for key in diff.changed_keys:

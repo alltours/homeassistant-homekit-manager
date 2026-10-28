@@ -84,8 +84,11 @@ async def test_yaml_filter_reload_retains_local_hap_pairing_and_ids(hass, tmp_pa
 
     controller = Controller()
     discovery = IpDiscovery(controller, HomeKitService.from_service_info(first.driver.mdns_service_info))
-    finish_pairing = await asyncio.wait_for(discovery.async_start_pairing("isolated-yaml"), 10)
-    pairing = await asyncio.wait_for(finish_pairing(first.driver.state.pincode.decode()), 10)
+    try:
+        finish_pairing = await asyncio.wait_for(discovery.async_start_pairing("isolated-yaml"), 10)
+        pairing = await asyncio.wait_for(finish_pairing(first.driver.state.pincode.decode()), 10)
+    finally:
+        await discovery.close()
     await hass.async_add_executor_job(first.driver.persist)
     before_accessories = await asyncio.wait_for(pairing.list_accessories_and_characteristics(), 10)
     before_accessory = next(item for item in before_accessories if item["aid"] == before_aid)

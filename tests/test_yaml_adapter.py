@@ -68,6 +68,51 @@ def test_real_file_apply_backup_and_restore_preserve_other_bridge(yaml_files):
     assert adapter.operation_state(plan) == "not_applied"
 
 
+def test_yaml_apply_rejects_shared_backup_directory_without_changing_its_mode(yaml_files):
+    root, source = yaml_files
+    adapter = YamlHomeKitAdapter(root)
+    plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+    before = source.read_bytes()
+    backup_dir = root / ".storage" / "homekit_manager_backups"
+    backup_dir.mkdir(parents=True)
+    backup_dir.chmod(0o755)
+    with pytest.raises(YamlAdapterBlocked, match="Backup-Verzeichnis"):
+        adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
+    assert backup_dir.stat().st_mode & 0o777 == 0o755
+    assert source.read_bytes() == before
+
+
+def test_yaml_apply_rejects_shared_writable_storage_before_backup_creation(yaml_files):
+    root, source = yaml_files
+    adapter = YamlHomeKitAdapter(root)
+    plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+    before = source.read_bytes()
+    storage = root / ".storage"
+    storage.mkdir()
+    storage.chmod(0o777)
+    with pytest.raises(YamlAdapterBlocked, match="Backup-Verzeichnis"):
+        adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
+    assert not (storage / "homekit_manager_backups").exists()
+    assert source.read_bytes() == before
+
+
+def test_yaml_apply_rejects_hardlinked_journal(yaml_files):
+    root, source = yaml_files
+    adapter = YamlHomeKitAdapter(root)
+    plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+    before = source.read_bytes()
+    backup_dir = root / ".storage" / "homekit_manager_backups"
+    backup_dir.mkdir(parents=True, mode=0o700)
+    other = root / "unrelated-private-file"
+    other.write_text("keep")
+    other.chmod(0o600)
+    os.link(other, backup_dir / "journal.jsonl")
+    with pytest.raises(YamlAdapterBlocked, match="Journal"):
+        adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
+    assert other.read_text() == "keep"
+    assert source.read_bytes() == before
+
+
 def test_conflict_blocks_stale_file_and_restore(yaml_files):
     root, file = yaml_files
     adapter = YamlHomeKitAdapter(root)

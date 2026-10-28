@@ -22,7 +22,7 @@ import sys
 import threading
 import uuid
 from types import SimpleNamespace
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from ruamel.yaml import YAML
 
@@ -204,13 +204,23 @@ class YamlHomeKitAdapter:
         self.root = Path(config_dir).resolve(strict=True)
 
     def _backup_dir(self) -> Path:
-        if (self.root / ".storage").is_symlink():
+        storage = self.root / ".storage"
+        if storage.is_symlink():
             raise YamlAdapterBlocked(".storage-Symlink ist nicht als Backup-Ziel zulässig")
+        storage.mkdir(mode=0o700, exist_ok=True)
+        storage_info = storage.stat(follow_symlinks=False)
+        if (not stat.S_ISDIR(storage_info.st_mode) or storage_info.st_uid != os.geteuid()
+                or stat.S_IMODE(storage_info.st_mode) & 0o022):
+            raise YamlAdapterBlocked("HomeKit-Backup-Verzeichnis hat unsicheren Besitzer oder Berechtigungen")
         backup_dir = self.root / ".storage" / "homekit_manager_backups"
-        backup_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-        if backup_dir.is_symlink():
-            raise YamlAdapterBlocked("Backup-Verzeichnis ist ein Symlink")
-        os.chmod(backup_dir, 0o700)
+        backup_dir.mkdir(mode=0o700, exist_ok=True)
+        for directory, private in ((storage, False), (backup_dir, True)):
+            info = directory.stat(follow_symlinks=False)
+            if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid():
+                raise YamlAdapterBlocked("HomeKit-Backup-Verzeichnis hat unsicheren Besitzer oder Dateityp")
+            mode = stat.S_IMODE(info.st_mode)
+            if mode & 0o022 or (private and mode != 0o700):
+                raise YamlAdapterBlocked("HomeKit-Backup-Verzeichnis hat unsichere Berechtigungen")
         return backup_dir
 
     def _record(self, plan: YamlFilterPlan, state: str) -> None:
@@ -223,6 +233,10 @@ class YamlHomeKitAdapter:
         journal = directory / "journal.jsonl"
         descriptor = os.open(journal, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600)
         try:
+            info = os.fstat(descriptor)
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o600):
+                raise YamlAdapterBlocked("HomeKit-Journal ist keine private reguläre Datei")
             if os.write(descriptor, content) != len(content):
                 raise OSError("Audit-Journal wurde nur teilweise geschrieben")
             os.fsync(descriptor)
@@ -268,7 +282,10 @@ class YamlHomeKitAdapter:
         def write_with_grant_check():
             if production_grant is not None:
                 production_grant.verify_sync(hass, plan.entry_id, "import")
-            return self.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
+            return self.apply(plan, expected_revision=plan.source_revision,
+                              isolated_authority=True,
+                              pre_commit_check=(lambda: production_grant.verify_sync(
+                                  hass, plan.entry_id, "import")) if production_grant is not None else None)
         result = await hass.async_add_executor_job(write_with_grant_check)
         try:
             from homeassistant.config import async_hass_config_yaml
@@ -375,7 +392,8 @@ class YamlHomeKitAdapter:
             raise YamlAdapterBlocked("Keine Änderung")
         return YamlFilterPlan(uuid.uuid4().hex, entry_id, path, _digest(before), _digest(after), bridge_name, bridge_port, old_filter, dict(new_filter), before, after)
 
-    def apply(self, plan: YamlFilterPlan, *, expected_revision: str, isolated_authority: bool = False) -> YamlApplyResult:
+    def apply(self, plan: YamlFilterPlan, *, expected_revision: str, isolated_authority: bool = False,
+              pre_commit_check: Callable[[], None] | None = None) -> YamlApplyResult:
         """Apply only in an explicit isolated harness; production API has no route here."""
         if not isolated_authority:
             raise YamlAdapterBlocked("Produktiver HomeKit-YAML-Writer ist gesperrt")
@@ -396,12 +414,13 @@ class YamlHomeKitAdapter:
                 locked = os.fstat(descriptor)
                 if (locked.st_dev, locked.st_ino) != _writable_metadata(plan.source_path)[:2]:
                     raise YamlAdapterConflict("YAML-Dateiknoten wurde vor der Sperre ersetzt")
-                return self._apply_locked(plan, expected_revision)
+                return self._apply_locked(plan, expected_revision, pre_commit_check)
             finally:
                 fcntl.flock(descriptor, fcntl.LOCK_UN)
                 os.close(descriptor)
 
-    def _apply_locked(self, plan: YamlFilterPlan, expected_revision: str) -> YamlApplyResult:
+    def _apply_locked(self, plan: YamlFilterPlan, expected_revision: str,
+                      pre_commit_check: Callable[[], None] | None) -> YamlApplyResult:
         if self._source_path() != plan.source_path or expected_revision != plan.source_revision:
             raise YamlAdapterConflict("Quelle oder Revision weicht vom Plan ab")
         source_metadata = _writable_metadata(plan.source_path)
@@ -473,6 +492,11 @@ class YamlHomeKitAdapter:
                 raise YamlAdapterConflict("YAML-Dateiknoten wurde während Apply ersetzt")
             if _digest(_read_regular(plan.source_path)) != plan.source_revision:
                 raise YamlAdapterConflict("YAML-Datei wurde während Apply geändert")
+            # No await or executor handoff separates this grant recheck from
+            # the atomic source replacement. Revocation during backup/parse
+            # must still prevent changing the HomeKit source.
+            if pre_commit_check is not None:
+                pre_commit_check()
             os.replace(temporary, plan.source_path)
             _sync_dir(plan.source_path.parent)
         finally:

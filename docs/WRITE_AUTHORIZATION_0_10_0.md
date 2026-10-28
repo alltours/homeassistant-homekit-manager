@@ -37,7 +37,11 @@ Entry, falsche Quelle und breitere Feldlisten werden abgewiesen. Der Grant wird
 vor jedem Apply erneut gelesen; Löschen oder Ersetzen widerruft künftige
 Applies, auch wenn die Ersatzdatei inhaltlich gleich ist. Der Native-Writer
 prüft ihn nach dem Warten auf die Bridge-Sperre unmittelbar vor dem Core-Update;
-der YAML-Writer prüft ihn nochmals im Executor unmittelbar vor dem Dateiersatz.
+der YAML-Writer prüft ihn beim Executor-Eintritt und erneut synchron direkt
+vor dem atomaren Quellersatz. Ein Widerruf während Backup oder Validierung
+blockiert damit die Quelländerung. Der Native-Writer vergleicht unter der
+Bridge-Sperre zusätzlich die vollständige erwartete Config-Entry-Revision
+einschließlich unbekannter Optionen direkt vor dem Core-Update.
 Ein bereits vollzogener Core- oder Dateischreibvorgang kann durch Widerruf nicht
 zurückgenommen werden.
 
@@ -72,8 +76,10 @@ nicht als UI-Operation freigegeben.
 Isolierte Tests belegen native und YAML-Filteränderungen mit Core-Reload sowie
 lokaler HAP-Testcontroller-Kopplung und stabilen MAC/AID/IIDs. Ein zweiter
 frischer Core-Harness-Prozess lud den Config Entry aus temporärem Core-Storage
-und der Testcontroller verband sich erneut. Diese Tests belegen weder einen
-vollständigen HA-Dienstneustart noch die Sichtbarkeit oder den
-Pairing-Erhalt in einem echten Apple Home. Bis zum GO der Gesamtversion ist
+und der Testcontroller verband sich erneut. Ein weiterer isolierter Test
+führte zwei vollständige HA-Bootstrap-Prozesse mit automatisch geladenem
+Test-Config-Entry und stabiler HAP-Identität aus. Diese Tests belegen weder
+die Sichtbarkeit noch den Pairing-Erhalt in einem echten Apple Home. Bis zum
+GO der Gesamtversion ist
 dieser Grant-Mechanismus ein geprüfter Entwicklungsstand, keine
 Produktivfreigabe.

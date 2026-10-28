@@ -108,7 +108,8 @@ class NativeHomeKitAdapter:
             try:
                 result = await HomeKitWriter(self.hass, test_environment=self._isolated_test_authority,
                                              apply_enabled=self._isolated_test_authority,
-                                             production_grant=self._production_grant).async_apply(plan.diff)
+                                             production_grant=self._production_grant,
+                                             expected_source_revision=plan.source_revision).async_apply(plan.diff)
                 if self.reconcile(plan) != "verified_options":
                     raise HomeKitWriteBlocked("Native Nachverifikation fehlgeschlagen")
             except Exception:

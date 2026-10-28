@@ -16,6 +16,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.homekit_manager import homekit_writer as writer_module
 from custom_components.homekit_manager.homekit_writer import HomeKitWriteBlocked, HomeKitWriteDisabled, HomeKitWriter, OptionsDiff
 from custom_components.homekit_manager.operations import HomeKitOperationService
+from custom_components.homekit_manager.source_model import native_source
 from custom_components.homekit_manager.write_grant import GRANT_FILENAME, GrantBlocked, ProductionWriteGrant, read_production_grant
 from custom_components.homekit_manager.yaml_adapter import YamlHomeKitAdapter
 
@@ -143,7 +144,8 @@ async def test_native_grant_revoked_while_waiting_for_bridge_lock(hass, tmp_path
     monkeypatch.setattr(ProductionWriteGrant, "verify", observe_verify)
     lock = writer_module._locks.setdefault(entry.entry_id, asyncio.Lock())
     await lock.acquire()
-    task = asyncio.create_task(HomeKitWriter(hass, production_grant=grant).async_apply(diff))
+    task = asyncio.create_task(HomeKitWriter(hass, production_grant=grant,
+                                            expected_source_revision=native_source(entry, "2026.10.4").revision).async_apply(diff))
     try:
         await asyncio.wait_for(first_check.wait(), 5)
         (tmp_path / GRANT_FILENAME).unlink()
@@ -151,6 +153,42 @@ async def test_native_grant_revoked_while_waiting_for_bridge_lock(hass, tmp_path
         lock.release()
     with pytest.raises(GrantBlocked, match="widerrufen"):
         await task
+    assert entry.options["filter"] == before
+
+    save_grant(tmp_path, grant_data(entry.entry_id))
+    fresh_grant = await read_production_grant(hass)
+    with pytest.raises(HomeKitWriteBlocked, match="vollständige Entry-Revision"):
+        await HomeKitWriter(hass, production_grant=fresh_grant).async_apply(diff)
+    expected_revision = native_source(entry, "2026.10.4").revision
+    first_check.clear()
+    await lock.acquire()
+    task = asyncio.create_task(HomeKitWriter(hass, production_grant=fresh_grant,
+                                            expected_source_revision=expected_revision).async_apply(diff))
+    try:
+        await asyncio.wait_for(first_check.wait(), 5)
+        hass.config_entries.async_update_entry(entry, options=dict(entry.options) | {"future_option": "concurrent change"})
+    finally:
+        lock.release()
+    with pytest.raises(HomeKitWriteBlocked, match="seit der Vorschau"):
+        await task
+    assert entry.options["filter"] == before
+
+    save_grant(tmp_path, grant_data(entry.entry_id))
+    replacement_grant = await read_production_grant(hass)
+    current_revision = native_source(entry, "2026.10.4").revision
+    original_get_entry = hass.config_entries.async_get_entry
+    calls = 0
+
+    def replaced_entry(entry_id):
+        nonlocal calls
+        calls += 1
+        return original_get_entry(entry_id) if calls == 1 else object()
+
+    with monkeypatch.context() as patcher:
+        patcher.setattr(hass.config_entries, "async_get_entry", replaced_entry)
+        with pytest.raises(HomeKitWriteBlocked, match="ersetzt"):
+            await HomeKitWriter(hass, production_grant=replacement_grant,
+                                expected_source_revision=current_revision).async_apply(diff)
     assert entry.options["filter"] == before
 
 
@@ -218,6 +256,22 @@ async def test_yaml_grant_applies_only_to_isolated_import(hass, tmp_path, monkey
         await adapter.async_apply_with_core(hass, entry, queued_plan, production_grant=queued_grant)
     assert source.read_bytes() == before
     monkeypatch.setattr(hass, "async_add_executor_job", original_executor)
+
+    save_grant(tmp_path, grant_data(entry.entry_id, "import"))
+    mid_apply_grant = await read_production_grant(hass)
+    original_record = adapter._record
+
+    def revoke_during_backup(plan, state):
+        original_record(plan, state)
+        if state == "applying":
+            (tmp_path / GRANT_FILENAME).unlink()
+
+    monkeypatch.setattr(adapter, "_record", revoke_during_backup)
+    with pytest.raises(GrantBlocked, match="widerrufen"):
+        await adapter.async_apply_with_core(hass, entry, queued_plan, production_grant=mid_apply_grant)
+    assert source.read_bytes() == before
+    monkeypatch.setattr(adapter, "_record", original_record)
+
     save_grant(tmp_path, grant_data(entry.entry_id, "import"))
     service = HomeKitOperationService(hass)
     bridge = {"entry_id": entry.entry_id, "source": "import", "filter": dict(entry.options["filter"])}

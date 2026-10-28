@@ -92,8 +92,11 @@ async def test_loopback_hap_server_survives_native_filter_reload(hass, monkeypat
 
     controller = Controller()
     discovery = IpDiscovery(controller, HomeKitService.from_service_info(first.driver.mdns_service_info))
-    finish_pairing = await asyncio.wait_for(discovery.async_start_pairing("isolated"), 10)
-    pairing = await asyncio.wait_for(finish_pairing(first.driver.state.pincode.decode()), 10)
+    try:
+        finish_pairing = await asyncio.wait_for(discovery.async_start_pairing("isolated"), 10)
+        pairing = await asyncio.wait_for(finish_pairing(first.driver.state.pincode.decode()), 10)
+    finally:
+        await discovery.close()
     await hass.async_add_executor_job(first.driver.persist)
     before_accessories = await asyncio.wait_for(pairing.list_accessories_and_characteristics(), 10)
     assert any(item["aid"] == before_aid for item in before_accessories)

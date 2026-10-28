@@ -188,7 +188,7 @@ class HomeKitManagerTests(unittest.TestCase):
         self.assertEqual(evaluate_filter("switch.explicit", config=config).reason, "explicit_include")
         self.assertFalse(evaluate_filter("light.bad", config=config).configured)
         self.assertTrue(evaluate_filter("light.good", config=config).configured)
-        diagnostic = evaluate_filter("sensor.diag", entity_category="diagnostic", config={})
+        diagnostic = evaluate_filter("sensor.diag", entity_category="diagnostic", config={}, state_present=True)
         self.assertTrue(diagnostic.configured)
         self.assertFalse(diagnostic.runtime_candidate)
         self.assertIsNone(evaluate_filter("light.x").configured)
@@ -196,14 +196,14 @@ class HomeKitManagerTests(unittest.TestCase):
     def test_filter_matches_core_category_and_explicit_include_semantics(self):
         core_filter = build_core_filter({})
         diagnostic = evaluate_filter(
-            "sensor.diag", entity_category="diagnostic", config={}, core_filter=core_filter,
+            "sensor.diag", entity_category="diagnostic", config={}, core_filter=core_filter, state_present=True,
         )
         self.assertTrue(diagnostic.configured)
         self.assertFalse(diagnostic.runtime_candidate)
         explicit = build_core_filter({"include_entities": ["sensor.diag"]})
         explicitly_selected = evaluate_filter(
             "sensor.diag", entity_category="diagnostic",
-            config={"include_entities": ["sensor.diag"]}, core_filter=explicit,
+            config={"include_entities": ["sensor.diag"]}, core_filter=explicit, state_present=True,
         )
         self.assertTrue(explicitly_selected.configured)
         self.assertTrue(explicitly_selected.runtime_candidate)

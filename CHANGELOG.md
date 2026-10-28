@@ -7,6 +7,7 @@
 - Restricted the isolated native writer to Core-validated filter lists; forged or unsupported option diffs are rejected before touching a Config Entry.
 - Separated missing device references from current State availability, and aligned UI status counts with active search and filters.
 - Kept Core filter selection separate from the later hidden/category registry gate and its runtime candidacy; the panel shows both pieces of evidence.
+- Runtime candidacy now also requires a current State-machine entry; unknown State evidence stays unknown instead of implying publication.
 - Added isolated direct `configuration.yaml` HomeKit filter editing with byte-preserving plans, backups, Core import/reload tests and inode-swap refusal. Mixed native/YAML installations remain read-only for YAML apply.
 - Blocked YAML replacement for read-only or shared-writable sources and for extended attributes that cannot be preserved; normal macOS provenance metadata remains supported.
 - Verified that corrupted YAML backups and inode swaps during restore fail without replacing the current source.

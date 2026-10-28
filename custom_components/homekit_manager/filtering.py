@@ -31,7 +31,8 @@ def build_core_filter(config: Mapping[str, Any] | None):
 def evaluate_filter(entity_id: str, entity_category: str | None = None,
                     hidden_by: str | None = None,
                     config: Mapping[str, Any] | None = None,
-                    core_filter: Any = None) -> FilterResult:
+                    core_filter: Any = None,
+                    state_present: bool | None = None) -> FilterResult:
     """Mirror Core 2026.10.4's six filter cases and HomeKit registry gate.
 
     In particular, an entity-only include combined with a domain/glob exclude
@@ -95,7 +96,7 @@ def evaluate_filter(entity_id: str, entity_category: str | None = None,
     else:
         result = FilterResult(False, "not_in_include")
     return _apply_core_result(entity_id, result, entity_category, hidden_by, core_filter,
-                              entity_id in includes or include_glob)
+                              entity_id in includes or include_glob, state_present)
 
 
 def _apply_core_result(
@@ -105,6 +106,7 @@ def _apply_core_result(
     hidden_by: str | None,
     core_filter: Any,
     explicitly_included: bool,
+    state_present: bool | None,
 ) -> FilterResult:
     """Use the Core's predicate when available, preserving an audit reason."""
     if core_filter is not None:
@@ -119,6 +121,8 @@ def _apply_core_result(
     # Core's explicitly_included() accepts an exact ID or include glob.
     registry_eligible = (entity_category is None and hidden_by is None) or explicitly_included
     registry_reason = "category_or_hidden_exclude" if not registry_eligible else "explicit_override" if (entity_category is not None or hidden_by is not None) else "registry_allowed"
+    runtime_candidate = (False if not result.configured or not registry_eligible else
+                         None if state_present is None else bool(state_present))
     return FilterResult(result.configured, result.reason, registry_eligible,
-                        bool(result.configured and registry_eligible), registry_reason)
+                        runtime_candidate, registry_reason)
 

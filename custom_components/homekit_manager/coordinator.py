@@ -219,7 +219,7 @@ class HomeKitManagerCoordinator:
                     item["compatibility"] = classify_entity(record, "bridge", (selected.entity_config or {}).get(record.entity_id, {}) if selected else {}, core_version=CORE_VERSION).as_dict()
                     item["homekit"] = {"configured_by_filter": None, "current_status": "unknown", "filter_reason": "filter_unavailable", "published": "unknown", "apple_home_visible": "unknown"}
                     if bridge_filter is not None:
-                        item["homekit"].update(evaluate_filter(record.entity_id, record.entity_category, record.hidden_by, bridge_filter, core_filter).as_dict())
+                        item["homekit"].update(evaluate_filter(record.entity_id, record.entity_category, record.hidden_by, bridge_filter, core_filter, state_present=record.state_present).as_dict())
                     configured = item["homekit"]["configured_by_filter"]
                     item["homekit"]["current_status"] = "included" if configured is True else "excluded" if configured is False else "unknown"
                     inventory.append(item)

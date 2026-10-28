@@ -31,7 +31,7 @@ def test_all_six_filter_dimensions_against_core_and_homekit_registry_gate():
                 (category is None and hidden is None)
                 or core.explicitly_included(entity_id)
             )
-            actual = evaluate_filter(entity_id, category, hidden, config=config)
+            actual = evaluate_filter(entity_id, category, hidden, config=config, state_present=True)
             assert actual.configured == selected, (config, entity_id, category, hidden, actual)
             assert actual.runtime_candidate == expected, (config, entity_id, category, hidden, actual)
 
@@ -41,6 +41,22 @@ def test_entity_include_plus_domain_exclude_preserves_core_default_include():
     assert evaluate_filter("switch.other", config=config).configured is True
     assert evaluate_filter("sensor.other", config=config).configured is False
     assert evaluate_filter("light.explicit", config=config).reason == "explicit_include"
-    hidden = evaluate_filter("switch.other", hidden_by="user", config=config)
+    hidden = evaluate_filter("switch.other", hidden_by="user", config=config, state_present=True)
     assert hidden.configured is True
     assert hidden.runtime_candidate is False
+
+
+def test_filter_selected_entity_without_state_is_not_a_runtime_candidate():
+    result = evaluate_filter("sensor.without_state", config={}, state_present=False)
+    assert result.configured is True
+    assert result.registry_eligible is True
+    assert result.runtime_candidate is False
+
+
+def test_runtime_candidacy_is_unknown_without_state_evidence():
+    result = evaluate_filter("light.unobserved", config={})
+    assert result.configured is True
+    assert result.runtime_candidate is None
+    blocked = evaluate_filter("light.hidden", hidden_by="user", config={})
+    assert blocked.configured is True
+    assert blocked.runtime_candidate is False

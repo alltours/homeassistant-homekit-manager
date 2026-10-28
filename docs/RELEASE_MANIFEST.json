@@ -199,8 +199,8 @@
     },
     {
       "path": "websocket.py",
-      "sha256": "dd587a32159f9c34d3822671fda892adc2b1bc9afaea74f0aac20fe8c7933cd9",
-      "size": 24853
+      "sha256": "3b4f28c9bf5a51901aa95ae33c51062390d61b833f857f475ac1d8b6b34d4c4c",
+      "size": 24861
     },
     {
       "path": "write_grant.py",

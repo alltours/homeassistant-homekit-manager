@@ -2,7 +2,7 @@
 
 Only plain ``homekit:`` in ``configuration.yaml`` or a direct
 ``homekit: !include <single file>`` is editable. Other includes and packages
-remain read-only. The production coordinator never constructs this writer.
+remain read-only. Production use requires a separate local write grant.
 """
 from __future__ import annotations
 
@@ -244,14 +244,16 @@ class YamlHomeKitAdapter:
         path = self._source_path()
         return path.name, _digest(_read_regular(path))
 
-    async def async_apply_with_core(self, hass: Any, entry: Any, plan: YamlFilterPlan, *, isolated_authority: bool = False, timeout: float = 30.0) -> YamlApplyResult:
+    async def async_apply_with_core(self, hass: Any, entry: Any, plan: YamlFilterPlan, *, isolated_authority: bool = False, production_grant: Any = None, timeout: float = 30.0) -> YamlApplyResult:
         """Apply and verify in isolation using Core's actual YAML reload.
 
         Core 2026.10.4 reloads *all* HomeKit entries for homekit.reload.  This
         path therefore refuses mixed native/YAML installations even in tests.
         """
-        if not isolated_authority:
+        if not isolated_authority and production_grant is None:
             raise YamlAdapterBlocked("Produktiver HomeKit-YAML-Writer ist gesperrt")
+        if production_grant is not None:
+            await production_grant.verify(hass, plan.entry_id, "import")
         from homeassistant.const import __version__
         from homeassistant.config_entries import SOURCE_IMPORT
         if __version__ != "2026.10.4" or entry.source != SOURCE_IMPORT or entry.entry_id != plan.entry_id:
@@ -261,6 +263,8 @@ class YamlHomeKitAdapter:
             raise YamlAdapterBlocked("Core-Reload würde auch native HomeKit-Entries betreffen")
         if not any(item.entry_id == plan.entry_id for item in all_entries):
             raise YamlAdapterBlocked("Ziel-Entry ist nicht mehr vorhanden")
+        if production_grant is not None:
+            await production_grant.verify(hass, plan.entry_id, "import")
         result = await hass.async_add_executor_job(lambda: self.apply(plan, expected_revision=plan.source_revision, isolated_authority=True))
         try:
             from homeassistant.config import async_hass_config_yaml

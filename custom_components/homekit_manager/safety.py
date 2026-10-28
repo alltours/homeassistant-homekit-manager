@@ -1,12 +1,12 @@
-"""Release policy: production HomeKit writes remain unavailable in 0.9.24."""
+"""Fail-closed policy for legacy writes and ungranted operations."""
 
 WRITE_LOCK_REASON = (
-    "HomeKit-Änderungen sind in Version 0.9.24 gesperrt. "
-    "Entwürfe, Vorschau und Export bleiben verfügbar. "
-    "Ein unbekannter Aktivierungsstatus wird nicht automatisch wiederholt oder bestätigt."
+    "HomeKit-Änderungen benötigen eine lokale, befristete und Bridge-gebundene Schreibfreigabe. "
+    "Ohne diese Freigabe bleiben nur Entwurf, Vorschau und Export verfügbar. "
+    "Ein unbekannter Apply-Ausgang wird niemals automatisch wiederholt."
 )
 
 
 def write_policy() -> dict:
-    """Expose the same immutable policy to every backend and frontend caller."""
-    return {"enabled": False, "reason": WRITE_LOCK_REASON, "automatic_retry": False}
+    """The legacy direct apply route is always disabled; use operation policy."""
+    return {"enabled": False, "reason": "Direkter Options-Apply-Pfad ist gesperrt; nur validierte Operationen mit lokaler Freigabe sind möglich.", "automatic_retry": False}

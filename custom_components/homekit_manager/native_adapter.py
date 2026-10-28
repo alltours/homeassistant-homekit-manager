@@ -1,7 +1,7 @@
 """A narrowly scoped native adapter over Core's config-entry update contract.
 
-Only filter-list changes are supported.  The production coordinator does not
-instantiate an enabled writer; apply and recovery remain isolated operations.
+Only filter-list changes are supported. Production apply requires a local grant;
+automatic recovery and rollback remain unavailable.
 """
 from __future__ import annotations
 
@@ -36,9 +36,10 @@ class NativeFilterPlan:
 
 
 class NativeHomeKitAdapter:
-    def __init__(self, hass: Any, *, isolated_test_authority: bool = False):
+    def __init__(self, hass: Any, *, isolated_test_authority: bool = False, production_grant: Any = None):
         self.hass = hass
         self._isolated_test_authority = isolated_test_authority
+        self._production_grant = production_grant
         self._store = Store(hass, 1, "homekit_manager.native_operations")
 
     async def _records(self) -> dict[str, Any]:
@@ -90,10 +91,12 @@ class NativeHomeKitAdapter:
         return "unknown_outcome"
 
     async def apply(self, plan: NativeFilterPlan) -> dict[str, Any]:
-        if not self._isolated_test_authority:
+        if not self._isolated_test_authority and self._production_grant is None:
             from .homekit_writer import HomeKitWriteDisabled
             from .safety import WRITE_LOCK_REASON
             raise HomeKitWriteDisabled(WRITE_LOCK_REASON)
+        if self._production_grant is not None:
+            await self._production_grant.verify(self.hass, plan.entry_id, "user")
         lock = _OPERATION_LOCKS.setdefault(plan.entry_id, asyncio.Lock())
         async with lock:
             records = await self._records()
@@ -103,7 +106,9 @@ class NativeHomeKitAdapter:
                 raise HomeKitWriteBlocked("Native Config-Entry-Revision ist veraltet")
             await self._record(plan, "applying")
             try:
-                result = await HomeKitWriter(self.hass, test_environment=True, apply_enabled=True).async_apply(plan.diff)
+                result = await HomeKitWriter(self.hass, test_environment=self._isolated_test_authority,
+                                             apply_enabled=self._isolated_test_authority,
+                                             production_grant=self._production_grant).async_apply(plan.diff)
                 if self.reconcile(plan) != "verified_options":
                     raise HomeKitWriteBlocked("Native Nachverifikation fehlgeschlagen")
             except Exception:

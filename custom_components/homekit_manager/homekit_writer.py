@@ -163,24 +163,27 @@ def build_options_diff(
 
 
 class HomeKitWriter:
-    """Disabled for production; explicit isolated tests can exercise Core options.
+    """Core options writer gated by an isolated fixture or a local narrow grant.
 
     The retained allow_production argument deliberately rejects former callers.
-    No normal coordinator endpoint enables this test adapter in 0.9.24.
+    A production grant is verified against its local file at write time.
     """
 
-    def __init__(self, hass: Any, *, test_environment: bool = False, apply_enabled: bool = False, allow_production: bool = False):
+    def __init__(self, hass: Any, *, test_environment: bool = False, apply_enabled: bool = False, allow_production: bool = False, production_grant: Any = None):
         self.hass = hass
         self.test_environment = test_environment
         self.apply_enabled = bool(apply_enabled)
         self.allow_production = bool(allow_production)
+        self.production_grant = production_grant
 
     async def async_apply(self, diff: OptionsDiff) -> dict[str, Any]:
-        """Exercise only explicitly enabled isolated fixtures."""
-        if self.allow_production or not (self.test_environment and self.apply_enabled):
+        """Apply a Core-validated filter diff only after backend authorization."""
+        if self.allow_production or not ((self.test_environment and self.apply_enabled) or self.production_grant is not None):
             raise HomeKitWriteDisabled(WRITE_LOCK_REASON)
         if not isinstance(diff, OptionsDiff):
             raise HomeKitWriteBlocked("Ungültiger Options-Diff")
+        if self.production_grant is not None:
+            await self.production_grant.verify(self.hass, diff.entry_id, "user")
         if not diff.changed_keys:
             raise HomeKitWriteBlocked("Options-Diff enthält keine Änderung")
         from homeassistant.const import __version__
@@ -250,7 +253,7 @@ class HomeKitWriter:
         return {
             "applied": True,
             "options_saved": True,
-            "activation": "isolated_options_adapter",
+            "activation": "filter_options_adapter",
             "production_verified": False,
             "activation_status": "active" if state == "loaded" else "unknown",
             "entry_id": diff.entry_id,

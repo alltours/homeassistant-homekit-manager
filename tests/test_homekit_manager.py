@@ -391,7 +391,7 @@ class HomeKitManagerTests(unittest.TestCase):
         )
         result = asyncio.run(HomeKitWriter(hass, test_environment=True, apply_enabled=True).async_apply(diff))
         self.assertTrue(result["applied"])
-        self.assertEqual(result["activation"], "isolated_options_adapter")
+        self.assertEqual(result["activation"], "filter_options_adapter")
         self.assertEqual(updates[0]["filter"]["include_entities"], ["light.a", "light.b"])
 
     def test_isolated_writer_blocks_stale_options_diff(self):

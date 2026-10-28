@@ -129,7 +129,7 @@ class HomeKitManagerPanel extends HTMLElement {
   async applyToSelection(value) { await this.planSelection([...this.selected], value); }
   discard() { this.draft.clear(); this.selected.clear(); this.draftFingerprint = null; this.conflict = false; this.serverPreview = null; this.operationPlan = null; this.operationStatus = null; this.statusMessage = "Entwurf verworfen"; this.statusTone = "neutral"; this.render(); }
   async enableManagement() {
-    if (!await this.requestConfirmation("Verwaltung übernehmen", `HomeKit Manager speichert die Verwaltungszuordnung für ${this.bridge?.title || "diese Bridge"}. Die native Konfigurationsquelle bleibt erhalten. HomeKit-Änderungen bleiben in 0.9.24 gesperrt.`, "Verwaltung übernehmen")) return;
+    if (!await this.requestConfirmation("Verwaltung übernehmen", `HomeKit Manager speichert die Verwaltungszuordnung für ${this.bridge?.title || "diese Bridge"}. Die native Konfigurationsquelle bleibt erhalten. HomeKit-Änderungen benötigen eine separate lokale Schreibfreigabe.`, "Verwaltung übernehmen")) return;
     await this.runAction("Verwaltung prüfen", async () => {
       const status = await this._hass.callWS({ type: WS.managementEnable, confirmed: true, expected_entry_id: this.bridge?.entry_id });
       if (status.state !== "active") throw new Error(status.message || "Verwaltung nicht bestätigt");
@@ -175,6 +175,7 @@ class HomeKitManagerPanel extends HTMLElement {
       const result = await this._hass.callWS({ type: WS.operationPlan, document: this.desiredDocument(), entry_id: this.bridge.entry_id, expected_fingerprint: this.fingerprint });
       this.operationPlan = { ...result, inventory_fingerprint: this.fingerprint };
       this.operationStatus = result;
+      this.overview.operation_policy = result.operation_policy || this.overview.operation_policy;
       this.statusMessage = "Änderungsplan validiert · Quelle und Revision gebunden";
     });
   }
@@ -305,7 +306,7 @@ class HomeKitManagerPanel extends HTMLElement {
   managementCard() {
     const status = this.managementStatus, active = status.active === true && !this.overview.snapshot_stale;
     const label = this.overview.snapshot_stale ? "Unbekannt" : status.management_surface_label || "Unbekannt";
-    return `<div class="management-row"><div><small>Verwaltungsoberfläche</small><strong>${this.escape(label)}</strong><p class="muted">Die Zuordnung im Manager verschiebt keine HomeKit-Daten.</p></div><span class="state ${active ? "state-confirmed" : "state-neutral"}">${active ? "Bestätigt" : status.state === "unknown" ? "Unbekannt" : "Native Verwaltung"}</span></div><p class="muted">${this.escape(status.message || "Verwaltungsstatus noch nicht bestätigt.")}</p>${status.supported ? `<div class="actions"><button ${active ? "data-management-disable" : "data-management-enable"}>${active ? "An Home Assistant zurückgeben" : "Verwaltung übernehmen"}</button></div>` : `<p class="muted">Ein Verwaltungswechsel ist für diesen Zustand gesperrt.</p>`}<p class="lock-note">HomeKit-Anwendung bleibt in 0.9.24 gesperrt.</p>`;
+    return `<div class="management-row"><div><small>Verwaltungsoberfläche</small><strong>${this.escape(label)}</strong><p class="muted">Die Zuordnung im Manager verschiebt keine HomeKit-Daten.</p></div><span class="state ${active ? "state-confirmed" : "state-neutral"}">${active ? "Bestätigt" : status.state === "unknown" ? "Unbekannt" : "Native Verwaltung"}</span></div><p class="muted">${this.escape(status.message || "Verwaltungsstatus noch nicht bestätigt.")}</p>${status.supported ? `<div class="actions"><button ${active ? "data-management-disable" : "data-management-enable"}>${active ? "An Home Assistant zurückgeben" : "Verwaltung übernehmen"}</button></div>` : `<p class="muted">Ein Verwaltungswechsel ist für diesen Zustand gesperrt.</p>`}<p class="lock-note">HomeKit-Anwendung ist ohne separate lokale Schreibfreigabe gesperrt.</p>`;
   }
   homeTemplate() {
     const bridge = this.bridge, stale = this.overview.snapshot_stale || !this.lastFetchAt;

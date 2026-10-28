@@ -1,6 +1,6 @@
 {
   "integration_version": "0.9.24",
-  "file_count": 43,
+  "file_count": 44,
   "files": [
     {
       "path": "__init__.py",
@@ -49,8 +49,8 @@
     },
     {
       "path": "coordinator.py",
-      "sha256": "38e71554b5c6bcfd46bbc0c7fbac3fe570034c3d6e94cd8245c0aba2c3257115",
-      "size": 39183
+      "sha256": "5b96cdd7ec52e118e37d8f63db600fa1007c1ae6a0a37f221eae963e753d240f",
+      "size": 39783
     },
     {
       "path": "device_config.py",
@@ -109,8 +109,8 @@
     },
     {
       "path": "homekit_writer.py",
-      "sha256": "d854c584262f4f965b4cf5f624e2c26011ad37d44d2fb073f8bacd5d63b7ec7b",
-      "size": 12099
+      "sha256": "69630cfbf6fa092e5bddb30e2aeb815f11f69935cda38637002b70f4ef00ca0e",
+      "size": 12358
     },
     {
       "path": "inventory.py",
@@ -144,13 +144,13 @@
     },
     {
       "path": "native_adapter.py",
-      "sha256": "da89dde15e34750d73628759775398d7944e7b037e218568e9994b99e20d662b",
-      "size": 7430
+      "sha256": "550979588e4410e6cac809a0368012f87183705b25ba8de790d9bf578656a705",
+      "size": 7833
     },
     {
       "path": "operations.py",
-      "sha256": "6383bc5502b25acfb3c156e498dfbe007f28b5705a94ac3f4d017ea4e32b6a54",
-      "size": 11933
+      "sha256": "7a1848dbcee0c4571b604534ad927c90674e63716f95f693d4b87cf226e87c94",
+      "size": 13764
     },
     {
       "path": "panel.py",
@@ -174,8 +174,8 @@
     },
     {
       "path": "safety.py",
-      "sha256": "da4cdf28ff167687fd6c627f25b67f06e5494587b1ce373767c6cf254e504e8d",
-      "size": 509
+      "sha256": "da54869650d881d146f36a9db2f403b46dbeb011746f95dfb28b409e5d91c5b1",
+      "size": 633
     },
     {
       "path": "source_model.py",
@@ -203,14 +203,19 @@
       "size": 22722
     },
     {
+      "path": "write_grant.py",
+      "sha256": "0a8c188cbfab182ee70b3b8eee59a1b9ab715daaec5451afa6413d71d5aac5bf",
+      "size": 5684
+    },
+    {
       "path": "www/homekit-manager.js",
-      "sha256": "1b2db81764ef23b0d732a9379f3d979c6bf8ab94dd9a1e7dae91b4bf88c68994",
-      "size": 75823
+      "sha256": "35d365286b56ff63b18f988cc40d29a1893e4a1828f9a3cd4806bb47d51f37e5",
+      "size": 75966
     },
     {
       "path": "yaml_adapter.py",
-      "sha256": "00e902eec249482cd1670139ec90f16c8e46871aabf91737df66a5615887c012",
-      "size": 26972
+      "sha256": "99eebec456b9c7eb52328cdfafbbfcad1a823862982ec9f0fcd800b090814a9a",
+      "size": 27256
     },
     {
       "path": "yaml_store.py",

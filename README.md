@@ -5,6 +5,12 @@
 > verified changes and unresolved release gates. It is not an installable
 > 0.10.0 release.
 
+The development branch contains a narrowly scoped local filter write grant;
+see [authorization and recovery](docs/WRITE_AUTHORIZATION_0_10_0.md). It has
+only been exercised against isolated Home Assistant Core instances. No grant
+was placed on the existing production installation, and this branch is not
+approved for installation.
+
 > Release source for HomeKit Manager 0.9.24. This work did not install the
 > integration in the production Home Assistant environment. See
 > [development status](docs/DEVELOPMENT_0_9_24.md) for tested paths and release

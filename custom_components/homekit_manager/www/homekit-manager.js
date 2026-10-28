@@ -2,7 +2,7 @@ const PAGE_SIZE = 80;
 const INVENTORY_BATCH_SIZE = 500;
 const WS = {
   inventory: "homekit_manager/inventory", bridges: "homekit_manager/bridges", selectBridge: "homekit_manager/select_bridge",
-  devices: "homekit_manager/devices", areas: "homekit_manager/areas", diagnostics: "homekit_manager/diagnostics",
+  diagnostics: "homekit_manager/diagnostics",
   history: "homekit_manager/history", historyRestore: "homekit_manager/history_restore", rules: "homekit_manager/rules_preview",
   yaml: "homekit_manager/yaml_status", mode: "homekit_manager/mode_status", activation: "homekit_manager/activation_status",
   validate: "homekit_manager/validate_draft", preview: "homekit_manager/preview",
@@ -17,7 +17,7 @@ class HomeKitManagerPanel extends HTMLElement {
   constructor() {
     super(); this.attachShadow({ mode: "open" });
     Object.assign(this, { _hass: null, _loaded: false, _narrow: false, renderCount: 0, entities: [], bridges: [], bridge: null,
-      overview: {}, devices: [], areas: [], diagnostics: { findings: [], summary: {} }, historyEntries: [], rulesPreview: null,
+      overview: {}, diagnostics: { findings: [], summary: {} }, historyEntries: [], rulesPreview: null,
       performance: null, devicePreview: null, yamlStatus: {}, modeStatus: {}, activationStatus: { state: "unknown" }, managementStatus: { state: "unknown" }, migrationPlan: null, migrationStatus: { state: "unknown", stale: true },
       view: "home", settingsView: "configuration", groupMode: "areas", selectionMode: false, expanded: new Set(), query: "", page: 0,
       filters: { status: "", compatibility: "", domain: "", integration: "", area: "", availability: "", published: "", changed: "" },
@@ -63,12 +63,12 @@ class HomeKitManagerPanel extends HTMLElement {
         }
         entities.push(...page.entities);
       }
-      const [bridges, devices, areas, diagnostics, history, yaml, mode, activation, migrationPlan, migrationStatus, managementStatus] = inventory.context || await Promise.all(
-        [WS.bridges, WS.devices, WS.areas, WS.diagnostics, WS.history, WS.yaml, WS.mode, WS.activation, WS.migrationPlan, WS.migrationStatus, WS.managementStatus].map(type => this._hass.callWS({ type }))
+      const [bridges, diagnostics, history, yaml, mode, activation, migrationPlan, migrationStatus, managementStatus] = inventory.context || await Promise.all(
+        [WS.bridges, WS.diagnostics, WS.history, WS.yaml, WS.mode, WS.activation, WS.migrationPlan, WS.migrationStatus, WS.managementStatus].map(type => this._hass.callWS({ type }))
       );
       if (this.draft.size && this.draftFingerprint && this.draftFingerprint !== inventory.overview?.fingerprint) this.conflict = true;
       if (this.operationPlan && this.operationPlan.inventory_fingerprint !== inventory.overview?.fingerprint) this.conflict = true;
-      Object.assign(this, { entities, overview: inventory.overview || {}, bridges: bridges.bridges || [], devices: devices.devices || [], areas: areas.areas || [], diagnostics, historyEntries: history.entries || [], yamlStatus: yaml, modeStatus: mode, activationStatus: activation || { state: "unknown" }, migrationPlan, migrationStatus, managementStatus });
+      Object.assign(this, { entities, overview: inventory.overview || {}, bridges: bridges.bridges || [], diagnostics, historyEntries: history.entries || [], yamlStatus: yaml, modeStatus: mode, activationStatus: activation || { state: "unknown" }, migrationPlan, migrationStatus, managementStatus });
       this._seenRevision = Math.max(this._seenRevision, Number(this.overview.refresh_count) || 0);
       this.fingerprint = yaml.fingerprint || this.overview.fingerprint || null;
       this.bridge = this.bridges.find(item => item.entry_id === this.overview.selected_bridge_id) || (this.bridges.length === 1 ? this.bridges[0] : null);

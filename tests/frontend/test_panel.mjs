@@ -37,7 +37,7 @@ for (const section of ['general', 'configuration', 'diagnostics', 'rules', 'hist
 const before = panel.renderCount; panel.hass = { callWS: async () => ({}) }; assert.equal(panel.renderCount, before, 'unrelated hass setters do not rebuild the UI');
 assert.equal(panel.escape('<script>'), '&lt;script&gt;');
 let resolveFirst, updateReads = 0;
-const context = [{ bridges: [] }, { devices: [] }, { areas: [] }, { findings: [] }, { entries: [] }, {}, {}, {}, {}, {}, {}];
+const context = [{ bridges: [] }, { findings: [] }, { entries: [] }, {}, {}, {}, {}, {}, {}];
 panel._hass = { callWS: async () => {
   updateReads++;
   return updateReads === 1 ? new Promise(resolve => { resolveFirst = resolve; }) : { entities: [], overview: { refresh_count: 2 }, context };

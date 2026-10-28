@@ -220,9 +220,9 @@ async def test_frontend_snapshot_has_one_bridge_and_fingerprint(hass, enable_cus
     response = await client.receive_json()
     assert response["success"]
     data = response["result"]
-    assert len(data["context"]) == 11
+    assert len(data["context"]) == 9
     assert data["context"][0]["bridges"][0]["entry_id"] == data["overview"]["selected_bridge_id"]
-    assert data["context"][5]["fingerprint"] == data["overview"]["fingerprint"]
+    assert data["context"][3]["fingerprint"] == data["overview"]["fingerprint"]
 
 
 @pytest.mark.parametrize("rules,manual", [([None], None), ([{"action": []}], None), ([{"action": "include", "priority": []}], None), ([{"action": "include", "match": []}], None), ([], {"light.one": []})])

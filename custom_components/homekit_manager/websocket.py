@@ -50,7 +50,6 @@ async def websocket_inventory(hass, connection, msg):
         # One event-loop turn, no awaits: every section has the same bridge context.
         result["context"] = [
             {"bridges": coordinator.bridges, "accessories": coordinator.accessories},
-            {"devices": coordinator.devices}, {"areas": coordinator.areas},
             coordinator.diagnostics(), coordinator.history(),
             coordinator._yaml_status_payload(coordinator.yaml_snapshot),
             coordinator.mode_status(), coordinator.activation_status(),
@@ -80,21 +79,33 @@ async def websocket_select_bridge(hass, connection, msg):
 
 
 @websocket_api.require_admin
-@websocket_api.websocket_command({probatio.Required("type"): DEVICES_COMMAND})
+@websocket_api.websocket_command({probatio.Required("type"): DEVICES_COMMAND, probatio.Optional("offset", default=0): int, probatio.Optional("limit", default=500): int})
 @websocket_api.async_response
 async def websocket_devices(hass, connection, msg):
     """Return aggregated device views; this endpoint never writes registries."""
     coordinator = hass.data["homekit_manager"]["coordinator"]
-    connection.send_result(msg["id"], {"devices": coordinator.devices})
+    offset, limit = msg["offset"], msg["limit"]
+    if type(offset) is not int or type(limit) is not int or offset < 0 or not 1 <= limit <= 500:
+        connection.send_error(msg["id"], "invalid_pagination", "Geräteseiten benötigen offset >= 0 und 1 <= limit <= 500")
+        return
+    connection.send_result(msg["id"], {"devices": coordinator.devices[offset:offset + limit],
+                                        "total": len(coordinator.devices), "offset": offset, "limit": limit,
+                                        "snapshot_revision": coordinator.refresh_count, "fingerprint": coordinator.fingerprint})
 
 
 @websocket_api.require_admin
-@websocket_api.websocket_command({probatio.Required("type"): AREAS_COMMAND})
+@websocket_api.websocket_command({probatio.Required("type"): AREAS_COMMAND, probatio.Optional("offset", default=0): int, probatio.Optional("limit", default=500): int})
 @websocket_api.async_response
 async def websocket_areas(hass, connection, msg):
     """Return aggregated area views; this endpoint never writes registries."""
     coordinator = hass.data["homekit_manager"]["coordinator"]
-    connection.send_result(msg["id"], {"areas": coordinator.areas})
+    offset, limit = msg["offset"], msg["limit"]
+    if type(offset) is not int or type(limit) is not int or offset < 0 or not 1 <= limit <= 500:
+        connection.send_error(msg["id"], "invalid_pagination", "Bereichsseiten benötigen offset >= 0 und 1 <= limit <= 500")
+        return
+    connection.send_result(msg["id"], {"areas": coordinator.areas[offset:offset + limit],
+                                        "total": len(coordinator.areas), "offset": offset, "limit": limit,
+                                        "snapshot_revision": coordinator.refresh_count, "fingerprint": coordinator.fingerprint})
 
 
 @websocket_api.require_admin

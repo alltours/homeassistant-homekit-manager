@@ -13,6 +13,7 @@
 - Verified that corrupted YAML backups and inode swaps during restore fail without replacing the current source.
 - Added a local, entry-bound, source-bound and maximum 24-hour filter grant for a later controlled production apply. Missing, revoked, expired, symlinked or overly permissive grants fail closed. The existing production installation was not changed or authorized.
 - Verified YAML Core reload with a loopback HAP testcontroller pairing and stable MAC/AID/IIDs, in addition to the native loopback test. A full HA process restart and physical Apple Home remain untested.
+- Reconnected an isolated HAP testcontroller across two fresh Python interpreters using the same temporary Core/HAP storage and fixed test Entry-ID; this is distinct from a full Home Assistant service restart with persisted Config Entry loading.
 - Exercised all 32 WebSocket routes with an authenticated non-admin account; every route rejected the request.
 - Added an isolated Core/HAP driver test for MAC and AID/IID stability across a filter options reload; network advertisement and pairing remain untested.
 - Paired an isolated `aiohomekit` controller to the real HAP TCP server on loopback; it reconnected after a Core options reload and observed stable AID/IIDs loaded from real temporary storage files. mDNS was replaced by a test advertiser; Apple Home remains untested.

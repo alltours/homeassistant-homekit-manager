@@ -1,6 +1,7 @@
 """Exercise local production authority only in isolated Core fixtures."""
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 import json
 import os
@@ -10,10 +11,13 @@ import pytest
 from homeassistant import config_entries
 from homeassistant.config import async_hass_config_yaml
 from homeassistant.setup import async_setup_component
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.homekit_manager import homekit_writer as writer_module
 from custom_components.homekit_manager.homekit_writer import HomeKitWriteBlocked, HomeKitWriteDisabled, HomeKitWriter, OptionsDiff
 from custom_components.homekit_manager.operations import HomeKitOperationService
-from custom_components.homekit_manager.write_grant import GRANT_FILENAME, GrantBlocked, read_production_grant
+from custom_components.homekit_manager.write_grant import GRANT_FILENAME, GrantBlocked, ProductionWriteGrant, read_production_grant
+from custom_components.homekit_manager.yaml_adapter import YamlHomeKitAdapter
 
 
 def grant_data(entry_id: str, source: str = "user") -> dict:
@@ -118,6 +122,38 @@ async def test_replacing_grant_with_identical_bytes_revokes_existing_plan(hass, 
         await grant.verify(hass, "isolated-entry", "user")
 
 
+async def test_native_grant_revoked_while_waiting_for_bridge_lock(hass, tmp_path, monkeypatch):
+    entry = MockConfigEntry(domain="homekit", entry_id="isolated-lock-revocation", source="user",
+                            data={"name": "Lock test", "port": 21096},
+                            options={"mode": "bridge", "filter": {"include_entities": ["light.before"]}})
+    entry.add_to_hass(hass)
+    save_grant(tmp_path, grant_data(entry.entry_id))
+    grant = await read_production_grant(hass)
+    before = dict(entry.options["filter"])
+    diff = OptionsDiff(entry.entry_id, {"filter": before},
+                       {"filter": {"include_entities": ["light.after"]}},
+                       ("filter",), ("light.after",), {"summary": {"blocked": False}})
+    first_check = asyncio.Event()
+    original_verify = ProductionWriteGrant.verify
+
+    async def observe_verify(self, *args):
+        await original_verify(self, *args)
+        first_check.set()
+
+    monkeypatch.setattr(ProductionWriteGrant, "verify", observe_verify)
+    lock = writer_module._locks.setdefault(entry.entry_id, asyncio.Lock())
+    await lock.acquire()
+    task = asyncio.create_task(HomeKitWriter(hass, production_grant=grant).async_apply(diff))
+    try:
+        await asyncio.wait_for(first_check.wait(), 5)
+        (tmp_path / GRANT_FILENAME).unlink()
+    finally:
+        lock.release()
+    with pytest.raises(GrantBlocked, match="widerrufen"):
+        await task
+    assert entry.options["filter"] == before
+
+
 async def test_native_grant_is_bound_revocable_and_single_use(hass, tmp_path, monkeypatch):
     async def no_network_start(_self):
         return None
@@ -165,6 +201,23 @@ async def test_yaml_grant_applies_only_to_isolated_import(hass, tmp_path, monkey
     assert await async_setup_component(hass, "homekit", await async_hass_config_yaml(hass))
     await hass.async_block_till_done()
     entry = hass.config_entries.async_entries("homekit")[0]
+    save_grant(tmp_path, grant_data(entry.entry_id, "import"))
+    adapter = YamlHomeKitAdapter(tmp_path)
+    queued_plan = adapter.plan_filter(entry, {"include_entities": ["light.before", "light.after"]})
+    queued_grant = await read_production_grant(hass)
+    before = source.read_bytes()
+    original_executor = hass.async_add_executor_job
+
+    async def revoke_before_queued_write(job, *args):
+        if getattr(job, "__name__", "") == "write_with_grant_check":
+            (tmp_path / GRANT_FILENAME).unlink()
+        return await original_executor(job, *args)
+
+    monkeypatch.setattr(hass, "async_add_executor_job", revoke_before_queued_write)
+    with pytest.raises(GrantBlocked, match="widerrufen"):
+        await adapter.async_apply_with_core(hass, entry, queued_plan, production_grant=queued_grant)
+    assert source.read_bytes() == before
+    monkeypatch.setattr(hass, "async_add_executor_job", original_executor)
     save_grant(tmp_path, grant_data(entry.entry_id, "import"))
     service = HomeKitOperationService(hass)
     bridge = {"entry_id": entry.entry_id, "source": "import", "filter": dict(entry.options["filter"])}

@@ -65,14 +65,24 @@ async def test_worker(hass, monkeypatch, socket_enabled):
         port = json.loads((shared / "public_identity.json").read_text())["port"]
     hass.states.async_set("light.restart", "on")
     await hass.async_block_till_done()
-    entry = config_entries.ConfigEntry(
-        version=1, minor_version=1, domain="homekit", title="Restart HAP",
-        data={"name": "Restart HAP", "port": port, "ip_address": "127.0.0.1", "advertise_ip": ["127.0.0.1"]},
-        options={"mode": "bridge", "filter": {"include_entities": ["light.restart"]}},
-        source=config_entries.SOURCE_USER, entry_id="isolated-hap-process-restart", unique_id=None,
-        discovery_keys={}, subentries_data=None,
-    )
-    await hass.config_entries.async_add(entry)
+    if phase == "pair":
+        entry = config_entries.ConfigEntry(
+            version=1, minor_version=1, domain="homekit", title="Restart HAP",
+            data={"name": "Restart HAP", "port": port, "ip_address": "127.0.0.1", "advertise_ip": ["127.0.0.1"]},
+            options={"mode": "bridge", "filter": {"include_entities": ["light.restart"]}},
+            source=config_entries.SOURCE_USER, entry_id="isolated-hap-process-restart", unique_id=None,
+            discovery_keys={}, subentries_data=None,
+        )
+        await hass.config_entries.async_add(entry)
+        await hass.config_entries._store.async_save(hass.config_entries._data_to_save())
+        assert (shared / ".storage" / "core.config_entries").is_file()
+    else:
+        hass.config_entries = config_entries.ConfigEntries(hass, {"_": "isolated restart"})
+        await hass.config_entries.async_initialize()
+        entry = hass.config_entries.async_get_entry("isolated-hap-process-restart")
+        assert entry is not None and entry.source == config_entries.SOURCE_USER
+        assert entry.options["filter"]["include_entities"] == ["light.restart"]
+        assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     assert entry.state.value == "loaded"
     homekit = entry.runtime_data.homekit

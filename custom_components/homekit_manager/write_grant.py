@@ -41,6 +41,12 @@ class ProductionWriteGrant:
         if current != self or entry_id != self.entry_id or source != self.source:
             raise GrantBlocked("Lokale HomeKit-Schreibfreigabe wurde geändert oder widerrufen")
 
+    def verify_sync(self, hass: Any, entry_id: str, source: str) -> None:
+        """Recheck inside an executor job immediately before a file mutation."""
+        current = _read(Path(hass.config.config_dir) / GRANT_FILENAME)
+        if current != self or entry_id != self.entry_id or source != self.source:
+            raise GrantBlocked("Lokale HomeKit-Schreibfreigabe wurde geändert oder widerrufen")
+
 
 def _unique_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     value: dict[str, Any] = {}

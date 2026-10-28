@@ -214,6 +214,10 @@ class HomeKitWriter:
             raise HomeKitWriteBlocked("HomeKit-Core-Filter-Schema lehnt den Diff ab") from err
         lock = _locks.setdefault(diff.entry_id, asyncio.Lock())
         async with lock:
+            # The grant may have expired or been revoked while another apply
+            # held this bridge lock. Recheck before the Core mutation.
+            if self.production_grant is not None:
+                await self.production_grant.verify(self.hass, diff.entry_id, "user")
             current_options = dict(entry.options)
             current_data = dict(entry.data)
             for key in diff.changed_keys:

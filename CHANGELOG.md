@@ -9,12 +9,14 @@
 - Kept Core filter selection separate from the later hidden/category registry gate and its runtime candidacy; the panel shows both pieces of evidence.
 - Runtime candidacy now also requires a current State-machine entry; unknown State evidence stays unknown instead of implying publication.
 - Bounded inventory WebSocket responses to 500 entities per page after a 5,000-entity response exceeded the 4-MiB test-client limit. The panel now assembles only matching snapshot revisions and declines partial results; arbitrary State attributes stay server-side.
+- Bounded device and area WebSocket responses after a 5,000-device inventory context also exceeded the client limit. The panel groups its complete paged inventory locally.
 - Added isolated direct `configuration.yaml` HomeKit filter editing with byte-preserving plans, backups, Core import/reload tests and inode-swap refusal. Mixed native/YAML installations remain read-only for YAML apply.
 - Blocked YAML replacement for read-only or shared-writable sources and for extended attributes that cannot be preserved; normal macOS provenance metadata remains supported.
 - Verified that corrupted YAML backups and inode swaps during restore fail without replacing the current source.
 - Added a local, entry-bound, source-bound and maximum 24-hour filter grant for a later controlled production apply. Missing, revoked, expired, symlinked or overly permissive grants fail closed. The existing production installation was not changed or authorized.
+- Closed grant-revocation races while a native apply waits for its bridge lock or a YAML apply waits for an executor worker; both writers recheck immediately before their mutation.
 - Verified YAML Core reload with a loopback HAP testcontroller pairing and stable MAC/AID/IIDs, in addition to the native loopback test. A full HA process restart and physical Apple Home remain untested.
-- Reconnected an isolated HAP testcontroller across two fresh Python interpreters using the same temporary Core/HAP storage and fixed test Entry-ID; this is distinct from a full Home Assistant service restart with persisted Config Entry loading.
+- Reconnected an isolated HAP testcontroller across two fresh Python interpreters. The second Core harness loads the test Config Entry from its temporary `.storage/core.config_entries` file and uses the same temporary HAP storage. This is distinct from a full Home Assistant service restart.
 - Exercised all 32 WebSocket routes with an authenticated non-admin account; every route rejected the request.
 - Added an isolated Core/HAP driver test for MAC and AID/IID stability across a filter options reload; network advertisement and pairing remain untested.
 - Paired an isolated `aiohomekit` controller to the real HAP TCP server on loopback; it reconnected after a Core options reload and observed stable AID/IIDs loaded from real temporary storage files. mDNS was replaced by a test advertiser; Apple Home remains untested.

@@ -35,9 +35,11 @@ nicht für Gruppe oder andere Benutzer schreibbar oder selbst ein Symlink sein.
 Unbekannte oder doppelte JSON-Felder, falsche Core-Version, falscher
 Entry, falsche Quelle und breitere Feldlisten werden abgewiesen. Der Grant wird
 vor jedem Apply erneut gelesen; Löschen oder Ersetzen widerruft künftige
-Applies, auch wenn die Ersatzdatei inhaltlich gleich ist. Ein bereits laufender
-Dateiersatz kann nicht zuverlässig zurückgerufen
-werden.
+Applies, auch wenn die Ersatzdatei inhaltlich gleich ist. Der Native-Writer
+prüft ihn nach dem Warten auf die Bridge-Sperre unmittelbar vor dem Core-Update;
+der YAML-Writer prüft ihn nochmals im Executor unmittelbar vor dem Dateiersatz.
+Ein bereits vollzogener Core- oder Dateischreibvorgang kann durch Widerruf nicht
+zurückgenommen werden.
 
 Der Manager bietet absichtlich keinen UI- oder WebSocket-Endpunkt zum Erstellen
 der Freigabedatei. Die separate Administrationshandlung und der spätere
@@ -68,8 +70,10 @@ Apple-Home-Pairings nicht garantieren. Die produktive Rücknahme ist derzeit
 nicht als UI-Operation freigegeben.
 
 Isolierte Tests belegen native und YAML-Filteränderungen mit Core-Reload sowie
-lokaler HAP-Testcontroller-Kopplung und stabilen MAC/AID/IIDs. Sie belegen
-weder einen vollständigen HA-Prozessneustart noch die Sichtbarkeit oder den
+lokaler HAP-Testcontroller-Kopplung und stabilen MAC/AID/IIDs. Ein zweiter
+frischer Core-Harness-Prozess lud den Config Entry aus temporärem Core-Storage
+und der Testcontroller verband sich erneut. Diese Tests belegen weder einen
+vollständigen HA-Dienstneustart noch die Sichtbarkeit oder den
 Pairing-Erhalt in einem echten Apple Home. Bis zum GO der Gesamtversion ist
 dieser Grant-Mechanismus ein geprüfter Entwicklungsstand, keine
 Produktivfreigabe.

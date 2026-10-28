@@ -265,7 +265,11 @@ class YamlHomeKitAdapter:
             raise YamlAdapterBlocked("Ziel-Entry ist nicht mehr vorhanden")
         if production_grant is not None:
             await production_grant.verify(hass, plan.entry_id, "import")
-        result = await hass.async_add_executor_job(lambda: self.apply(plan, expected_revision=plan.source_revision, isolated_authority=True))
+        def write_with_grant_check():
+            if production_grant is not None:
+                production_grant.verify_sync(hass, plan.entry_id, "import")
+            return self.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
+        result = await hass.async_add_executor_job(write_with_grant_check)
         try:
             from homeassistant.config import async_hass_config_yaml
             parsed = await async_hass_config_yaml(hass)

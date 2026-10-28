@@ -9,6 +9,7 @@
 - Added isolated direct `configuration.yaml` HomeKit filter editing with byte-preserving plans, backups, Core import/reload tests and inode-swap refusal. Mixed native/YAML installations remain read-only for YAML apply.
 - Exercised all 32 WebSocket routes with an authenticated non-admin account; every route rejected the request.
 - Added an isolated Core/HAP driver test for MAC and AID/IID stability across a filter options reload; network advertisement and pairing remain untested.
+- Exercised the real HAP TCP server on loopback before and after a Core options reload, with mDNS replaced by a test advertiser.
 - Recorded verified baseline evidence, exact capability limits and remaining release gates in `docs/DEVELOPMENT_0_10_0.md`. Production writing remains disabled.
 
 ## 0.9.24 (2026-10-27)

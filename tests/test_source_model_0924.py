@@ -29,3 +29,12 @@ def test_yaml_model_requires_provenance_for_write_capability():
     assert not yaml_source(imported, "2026.11.0", provenance="bridges.yaml:0", file_revision="abc").capabilities.filter_write
     with pytest.raises(ValueError):
         yaml_source(entry("user"), "2026.10.4", provenance="bridges.yaml:0", file_revision="abc")
+
+
+def test_accessory_mode_is_read_only_for_both_sources():
+    native = entry("user")
+    native.options["mode"] = "accessory"
+    assert not native_source(native, "2026.10.4").capabilities.filter_write
+    imported = entry("import")
+    imported.options["mode"] = "accessory"
+    assert not yaml_source(imported, "2026.10.4", provenance="bridges.yaml:0", file_revision="abc").capabilities.filter_write

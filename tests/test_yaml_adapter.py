@@ -1,7 +1,11 @@
-"""Real filesystem exercises of the narrowly supported YAML writer."""
+"""Real filesystem exercises of the supported YAML sources."""
 from __future__ import annotations
 
 from hashlib import sha256
+import ctypes
+import os
+import subprocess
+import sys
 from types import SimpleNamespace
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
@@ -39,6 +43,21 @@ def yaml_files(tmp_path):
     return tmp_path, bridge_file
 
 
+def test_yaml_accessory_entry_and_source_are_read_only(yaml_files):
+    root, file = yaml_files
+    before = file.read_bytes()
+    adapter = YamlHomeKitAdapter(root)
+    accessory = imported_entry()
+    accessory.options = {"mode": "accessory"}
+    with pytest.raises(YamlAdapterBlocked, match="Bridge-Modus"):
+        adapter.plan_filter(accessory, {"include_entities": ["camera.front"]})
+    accessory.options = {"mode": "bridge"}
+    file.write_bytes(before.replace(b"- name: Bridge One\n", b"- name: Bridge One\n  mode: accessory\n"))
+    with pytest.raises(YamlAdapterBlocked, match="Accessory-Modus"):
+        adapter.plan_filter(accessory, {"include_entities": ["camera.front"]})
+    assert b"mode: accessory" in file.read_bytes()
+
+
 def test_real_file_apply_backup_and_restore_preserve_other_bridge(yaml_files):
     root, file = yaml_files
     before = file.read_bytes()
@@ -65,6 +84,67 @@ def test_real_file_apply_backup_and_restore_preserve_other_bridge(yaml_files):
     assert adapter.operation_state(plan) == "not_applied"
 
 
+def test_yaml_apply_rejects_shared_backup_directory_without_changing_its_mode(yaml_files):
+    root, source = yaml_files
+    adapter = YamlHomeKitAdapter(root)
+    plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+    before = source.read_bytes()
+    backup_dir = root / ".storage" / "homekit_manager_backups"
+    backup_dir.mkdir(parents=True)
+    backup_dir.chmod(0o755)
+    with pytest.raises(YamlAdapterBlocked, match="Backup-Verzeichnis"):
+        adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
+    assert backup_dir.stat().st_mode & 0o777 == 0o755
+    assert source.read_bytes() == before
+
+
+def test_yaml_apply_rejects_shared_writable_storage_before_backup_creation(yaml_files):
+    root, source = yaml_files
+    adapter = YamlHomeKitAdapter(root)
+    plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+    before = source.read_bytes()
+    storage = root / ".storage"
+    storage.mkdir()
+    storage.chmod(0o777)
+    with pytest.raises(YamlAdapterBlocked, match="Backup-Verzeichnis"):
+        adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
+    assert not (storage / "homekit_manager_backups").exists()
+    assert source.read_bytes() == before
+
+
+def test_yaml_apply_rejects_hardlinked_journal(yaml_files):
+    root, source = yaml_files
+    adapter = YamlHomeKitAdapter(root)
+    plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+    before = source.read_bytes()
+    backup_dir = root / ".storage" / "homekit_manager_backups"
+    backup_dir.mkdir(parents=True, mode=0o700)
+    other = root / "unrelated-private-file"
+    other.write_text("keep")
+    other.chmod(0o600)
+    os.link(other, backup_dir / "journal.jsonl")
+    with pytest.raises(YamlAdapterBlocked, match="Journal"):
+        adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
+    assert other.read_text() == "keep"
+    assert source.read_bytes() == before
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS ACL semantics")
+def test_macos_source_acl_is_read_only(yaml_files):
+    root, source = yaml_files
+    adapter = YamlHomeKitAdapter(root)
+    plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+    before = source.read_bytes()
+    applied = subprocess.run(["/bin/chmod", "+a", "everyone allow write", str(source)],  # noqa: S603 - fixed argv, isolated temp path
+                             capture_output=True, check=False)
+    if applied.returncode:
+        pytest.skip("Testdateisystem unterstützt keine macOS-ACL")
+    with pytest.raises(YamlAdapterBlocked, match="ACL"):
+        adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
+    assert source.read_bytes() == before
+    assert not (root / ".storage").exists()
+
+
 def test_conflict_blocks_stale_file_and_restore(yaml_files):
     root, file = yaml_files
     adapter = YamlHomeKitAdapter(root)
@@ -74,6 +154,180 @@ def test_conflict_blocks_stale_file_and_restore(yaml_files):
         adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
     assert adapter.operation_state(plan) == "unknown_outcome"
     assert not (root / ".storage").exists()
+
+
+def test_direct_configuration_yaml_preserves_unrelated_bytes_and_restores(tmp_path):
+    root = tmp_path / "configuration.yaml"
+    before = (
+        "default_config:\n"
+        "# Keep this unrelated comment exactly\n"
+        "homekit:\n"
+        "  - name: Bridge One\n"
+        "    port: 21070\n"
+        "    filter:\n"
+        "      include_entities:\n"
+        "        - light.one\n"
+        "  - name: Bridge Two\n"
+        "    port: 21071\n"
+        "    filter:\n"
+        "      include_entities:\n"
+        "        - light.two\n"
+        "logger:\n"
+        "  default: warning\n"
+    ).encode()
+    root.write_bytes(before)
+    adapter = YamlHomeKitAdapter(tmp_path)
+    plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.one", "light.new"]})
+    assert plan.source_path == root
+    assert plan.after_bytes.startswith(b"default_config:\n# Keep this unrelated comment exactly\n")
+    assert plan.after_bytes.endswith(b"logger:\n  default: warning\n")
+    assert b"- light.two\n" in plan.after_bytes
+    result = adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
+    assert result.state == "verified_file"
+    assert result.backup_path.read_bytes() == before
+    assert adapter.recover(result, isolated_authority=True) == "verified_file_restore"
+    assert root.read_bytes() == before
+
+
+def test_direct_source_rejects_forged_unrelated_comment_edit(tmp_path):
+    root = tmp_path / "configuration.yaml"
+    root.write_text("# preserved\nhomekit:\n  name: Bridge One\n  port: 21070\n  filter:\n    include_entities:\n    - light.one\n")
+    adapter = YamlHomeKitAdapter(tmp_path)
+    plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+    tampered = plan.after_bytes.replace(b"# preserved", b"# altered")
+    forged = replace(plan, after_bytes=tampered, target_revision=sha256(tampered).hexdigest())
+    with pytest.raises(YamlAdapterBlocked, match="unbeteiligte YAML-Bytes"):
+        adapter.apply(forged, expected_revision=plan.source_revision, isolated_authority=True)
+    assert root.read_bytes() == plan.before_bytes
+
+
+def test_direct_source_with_external_tag_or_symlink_is_read_only(tmp_path):
+    root = tmp_path / "configuration.yaml"
+    root.write_text(
+        "homekit:\n  name: Bridge One\n  port: 21070\n  filter:\n    include_entities:\n    - light.one\n"
+        "logger: !secret log_config\n"
+    )
+    adapter = YamlHomeKitAdapter(tmp_path)
+    with pytest.raises(YamlAdapterBlocked):
+        adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+    root.unlink()
+    external = tmp_path / "external.yaml"
+    external.write_text("homekit:\n  name: Bridge One\n  port: 21070\n")
+    root.symlink_to(external)
+    with pytest.raises(YamlAdapterBlocked, match="Symlink"):
+        adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+
+
+def test_direct_source_hardlink_is_not_atomically_replaced(tmp_path):
+    root = tmp_path / "configuration.yaml"
+    root.write_text("homekit:\n  name: Bridge One\n  port: 21070\n  filter:\n    include_entities:\n    - light.one\n")
+    adapter = YamlHomeKitAdapter(tmp_path)
+    plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+    os.link(root, tmp_path / "other-link.yaml")
+    with pytest.raises(YamlAdapterBlocked, match="Dateiknoten"):
+        adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
+    assert root.read_bytes() == plan.before_bytes
+    assert not (tmp_path / ".storage").exists()
+
+
+def test_source_inode_swap_after_open_is_blocked(yaml_files, monkeypatch):
+    from custom_components.homekit_manager import yaml_adapter
+
+    root, source = yaml_files
+    adapter = YamlHomeKitAdapter(root)
+    plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+    before = source.read_bytes()
+    real_flock = yaml_adapter.fcntl.flock
+    swapped = False
+
+    def replace_before_lock(descriptor, operation):
+        nonlocal swapped
+        if operation == yaml_adapter.fcntl.LOCK_EX and not swapped:
+            replacement = root / "replacement.yaml"
+            replacement.write_bytes(before)
+            os.replace(replacement, source)
+            swapped = True
+        return real_flock(descriptor, operation)
+
+    monkeypatch.setattr(yaml_adapter.fcntl, "flock", replace_before_lock)
+    with pytest.raises(YamlAdapterConflict, match="Dateiknoten"):
+        adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
+    assert swapped and source.read_bytes() == before
+    assert not (root / ".storage").exists()
+
+
+@pytest.mark.parametrize("mode", [0o444, 0o664])
+def test_read_only_or_shared_writable_source_is_blocked_before_backup(yaml_files, mode):
+    root, source = yaml_files
+    adapter = YamlHomeKitAdapter(root)
+    plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+    before = source.read_bytes()
+    os.chmod(source, mode)
+    with pytest.raises(YamlAdapterBlocked, match="schreibgeschützt|andere Benutzer"):
+        adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
+    assert source.read_bytes() == before
+    assert not (root / ".storage").exists()
+
+
+def test_extended_attributes_are_not_silently_dropped(yaml_files):
+    root, source = yaml_files
+    adapter = YamlHomeKitAdapter(root)
+    plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+    before = source.read_bytes()
+    try:
+        if sys.platform == "darwin":
+            libc = ctypes.CDLL(None, use_errno=True)
+            setxattr = libc.setxattr
+            setxattr.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_void_p,
+                                 ctypes.c_size_t, ctypes.c_uint32, ctypes.c_int]
+            setxattr.restype = ctypes.c_int
+            value = ctypes.create_string_buffer(b"keep")
+            if setxattr(os.fsencode(source), b"user.homekit_manager_test", value, 4, 0, 0x0001) != 0:
+                raise OSError(ctypes.get_errno(), "setxattr failed")
+        else:
+            os.setxattr(source, "user.homekit_manager_test", b"keep")
+    except (AttributeError, OSError):
+        pytest.skip("Testdateisystem unterstützt keine benutzerdefinierten Dateiattribute")
+    with pytest.raises(YamlAdapterBlocked, match="Dateiattribute"):
+        adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
+    assert source.read_bytes() == before
+    assert not (root / ".storage").exists()
+
+
+def test_corrupted_yaml_backup_refuses_recovery(yaml_files):
+    root, source = yaml_files
+    adapter = YamlHomeKitAdapter(root)
+    plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+    result = adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
+    result.backup_path.write_bytes(b"corrupted backup")
+    with pytest.raises(YamlAdapterBlocked, match="Backup-Integrität"):
+        adapter.recover(result, isolated_authority=True)
+    assert source.read_bytes() == plan.after_bytes
+
+
+def test_restore_source_inode_swap_after_open_is_blocked(yaml_files, monkeypatch):
+    from custom_components.homekit_manager import yaml_adapter
+
+    root, source = yaml_files
+    adapter = YamlHomeKitAdapter(root)
+    plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+    result = adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
+    real_flock = yaml_adapter.fcntl.flock
+    swapped = False
+
+    def replace_before_lock(descriptor, operation):
+        nonlocal swapped
+        if operation == yaml_adapter.fcntl.LOCK_EX and not swapped:
+            replacement = root / "restore-replacement.yaml"
+            replacement.write_bytes(plan.after_bytes)
+            os.replace(replacement, source)
+            swapped = True
+        return real_flock(descriptor, operation)
+
+    monkeypatch.setattr(yaml_adapter.fcntl, "flock", replace_before_lock)
+    with pytest.raises(YamlAdapterConflict, match="Dateiknoten"):
+        adapter.recover(result, isolated_authority=True)
+    assert swapped and source.read_bytes() == plan.after_bytes
 
 
 @pytest.mark.parametrize("root_yaml", [

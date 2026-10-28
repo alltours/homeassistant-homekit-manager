@@ -56,7 +56,7 @@ def native_source(entry: Any, core_version: str) -> HomeKitSource:
     data, options = dict(entry.data), dict(entry.options)
     effective = data | options
     source = str(entry.source)
-    writable = source == SOURCE_USER and core_version == "2026.10.4"
+    writable = source == SOURCE_USER and core_version == "2026.10.4" and effective.get("mode", "bridge") == "bridge"
     return HomeKitSource(
         entry_id=entry.entry_id,
         source=source,
@@ -68,7 +68,7 @@ def native_source(entry: Any, core_version: str) -> HomeKitSource:
         options=_freeze(options),
         provenance=None,
         revision=revision({"entry_id": entry.entry_id, "source": source, "data": data, "options": options}),
-        capabilities=SourceCapabilities(True, writable, True, None if writable else "Native Options nur für SOURCE_USER auf Core 2026.10.4"),
+        capabilities=SourceCapabilities(True, writable, True, None if writable else "Native Filter nur für SOURCE_USER im Bridge-Modus auf Core 2026.10.4"),
     )
 
 
@@ -80,7 +80,7 @@ def yaml_source(entry: Any, core_version: str, *, provenance: str | None, file_r
         raise ValueError("Entry ist keine YAML-importierte HomeKit-Quelle")
     data, options = dict(entry.data), dict(entry.options)
     effective = data | options
-    writable = bool(provenance and file_revision and core_version == "2026.10.4")
+    writable = bool(provenance and file_revision and core_version == "2026.10.4" and effective.get("mode", "bridge") == "bridge")
     return HomeKitSource(
         entry_id=entry.entry_id,
         source=str(entry.source),
@@ -93,5 +93,5 @@ def yaml_source(entry: Any, core_version: str, *, provenance: str | None, file_r
         provenance=provenance,
         revision=revision({"entry_id": entry.entry_id, "source": entry.source,
                            "data": data, "options": options, "file_revision": file_revision}),
-        capabilities=SourceCapabilities(True, writable, True, None if writable else "YAML-Provenienz oder Core-Version nicht verifiziert"),
+        capabilities=SourceCapabilities(True, writable, True, None if writable else "YAML-Provenienz, Bridge-Modus oder Core-Version nicht verifiziert"),
     )

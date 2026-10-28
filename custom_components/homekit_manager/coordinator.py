@@ -66,9 +66,10 @@ class HomeKitManagerCoordinator:
         self.migration_store = MigrationStore(hass)
         self.management_store = ManagementStore(hass)
         self.activation_store = ActivationStore(hass)
-        # No production configuration path grants write authority in this
-        # release. Tests may inject an isolated service after setup.
+        # No writer authority exists by default. A separate, local grant is
+        # evaluated by the service and rechecked at the writer boundary.
         self.operation_service = HomeKitOperationService(hass)
+        self.operation_policy: dict[str, Any] = {"enabled": False, "reason": WRITE_LOCK_REASON, "automatic_retry": False}
         self.management_statuses: dict[str, dict[str, Any]] = {}
         self.migration_status: dict[str, Any] = {
             "state": "unknown",
@@ -219,7 +220,7 @@ class HomeKitManagerCoordinator:
                     item["compatibility"] = classify_entity(record, "bridge", (selected.entity_config or {}).get(record.entity_id, {}) if selected else {}, core_version=CORE_VERSION).as_dict()
                     item["homekit"] = {"configured_by_filter": None, "current_status": "unknown", "filter_reason": "filter_unavailable", "published": "unknown", "apple_home_visible": "unknown"}
                     if bridge_filter is not None:
-                        item["homekit"].update(evaluate_filter(record.entity_id, record.entity_category, record.hidden_by, bridge_filter, core_filter).as_dict())
+                        item["homekit"].update(evaluate_filter(record.entity_id, record.entity_category, record.hidden_by, bridge_filter, core_filter, state_present=record.state_present).as_dict())
                     configured = item["homekit"]["configured_by_filter"]
                     item["homekit"]["current_status"] = "included" if configured is True else "excluded" if configured is False else "unknown"
                     inventory.append(item)
@@ -240,6 +241,9 @@ class HomeKitManagerCoordinator:
                 mark_phase("source_io")
                 findings = build_diagnostics(inventory, bridge_data, {"valid": snapshot.valid, "error": snapshot.error})
                 fingerprint = build_fingerprint(bridge_data, inventory, snapshot.document)
+                operation_policy = await self.operation_service.authority_status(selected_id, selected.source) if selected else {"enabled": False, "reason": "Keine Bridge ausgewählt", "automatic_retry": False}
+                if selected and selected.source == "import" and any(entry.source != "import" for entry in entries):
+                    operation_policy = {"enabled": False, "reason": "Core homekit.reload würde auch native HomeKit-Entries neu laden", "automatic_retry": False}
                 mark_phase("diagnostics_fingerprint")
                 # No await beyond this point: readers see one consistent snapshot.
                 self.inventory, self.bridges = inventory, bridge_data
@@ -250,6 +254,7 @@ class HomeKitManagerCoordinator:
                 self.selected_bridge_id = selected_id
                 self.yaml_snapshot, self.configuration_sources = snapshot, sources
                 self.diagnostic_findings, self.fingerprint = findings, fingerprint
+                self.operation_policy = operation_policy
                 self.last_error = None
                 self.last_updated = datetime.now(timezone.utc).isoformat()
                 self.refresh_count += 1
@@ -275,7 +280,7 @@ class HomeKitManagerCoordinator:
             "unavailable_entities": sum(not item["available"] for item in self.inventory),
             "device_count": len({item["device_id"] for item in self.inventory if item["device_id"]}),
             "device_reconciliation": self.device_reconciliation,
-            "availability_counts": {status: sum(item.get("availability_status") == status for item in self.inventory) for status in ("available", "unavailable", "unknown", "no_state", "disabled", "orphaned")},
+            "availability_counts": {status: sum(item.get("availability_status") == status for item in self.inventory) for status in ("available", "unavailable", "unknown", "no_state", "disabled")},
             "area_count": len({item["area_id"] for item in self.inventory if item["area_id"]}),
             "compatible_entities": compatible,
             "configured_entities": configured if filter_known else None,
@@ -295,9 +300,8 @@ class HomeKitManagerCoordinator:
             "core_version": CORE_VERSION,
             "accessories": len(self.accessories),
             "write_policy": write_policy(),
-            "operation_policy": {"enabled": self.operation_service._isolated_write_authority,
-                                 "reason": "Nur isolierte Testinstanz" if self.operation_service._isolated_write_authority else WRITE_LOCK_REASON,
-                                 "automatic_retry": False},
+            "operation_policy": {"enabled": True, "reason": "Nur isolierte Testinstanz", "automatic_retry": False}
+                                if self.operation_service._isolated_write_authority else self.operation_policy,
             "refresh_count": self.refresh_count,
             "refresh_duration_ms": self.refresh_duration_ms,
             "refresh_cpu_ms": self.refresh_cpu_ms,
@@ -572,18 +576,19 @@ class HomeKitManagerCoordinator:
         if bridge is None or bridge.get("entry_id") != entry_id:
             raise ValueError("Ziel-Bridge stimmt nicht mit der Auswahl überein")
         validated = self.validate_draft(document)
-        return await self.operation_service.plan_filter(entry_id=entry_id, bridge=bridge,
-                                                        document=validated["document"], inventory=self.inventory)
+        result = await self.operation_service.plan_filter(entry_id=entry_id, bridge=bridge,
+                                                          document=validated["document"], inventory=self.inventory)
+        self.operation_policy = result["operation_policy"]
+        return result
 
     async def async_apply_operation(self, operation_id: str, entry_id: str, source_revision: str,
                                     expected_fingerprint: str, confirmed_operation_id: str) -> dict[str, Any]:
-        # The production service is constructed without authority. Keep a
-        # second explicit boundary before any plan/status lookup or mutation.
-        if not self.operation_service._isolated_write_authority:
-            raise HomeKitWriteDisabled(WRITE_LOCK_REASON)
         bridge = self.selected_bridge()
         if self.last_error or not bridge or bridge.get("entry_id") != entry_id or self.fingerprint != expected_fingerprint:
             raise HomeKitWriteBlocked("Bridge-Kontext oder Inventar-Fingerprint wurde geändert")
+        policy = await self.operation_service.authority_status(entry_id, bridge.get("source", ""))
+        if not policy["enabled"]:
+            raise HomeKitWriteDisabled(policy["reason"])
         return await self.operation_service.apply(operation_id, entry_id=entry_id,
                                                   expected_revision=source_revision,
                                                   confirmed_operation_id=confirmed_operation_id, admin=True)

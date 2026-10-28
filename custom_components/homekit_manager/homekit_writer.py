@@ -1,8 +1,7 @@
-"""Diff preparation and an explicitly isolated native Core options adapter.
+"""Diff preparation and a tightly authorized native Core filter writer.
 
-The coordinator rejects production writes in 0.9.24. This module rejects
-allow_production=True independently. Only an explicitly enabled test fixture
-can exercise ConfigEntry options; it cannot establish Apple Home compatibility.
+Production use requires a local grant plus a complete expected Entry revision.
+The retained ``allow_production`` shortcut rejects legacy callers.
 """
 from __future__ import annotations
 
@@ -15,6 +14,7 @@ from .change_planner import plan_changes
 from .const import SUPPORTED_CORE_VERSION
 from .filtering import evaluate_filter
 from .safety import WRITE_LOCK_REASON
+from .source_model import revision
 
 
 class HomeKitWriteError(Exception):
@@ -95,8 +95,30 @@ def _candidate_filter(current: Mapping[str, Any], desired: Mapping[str, str]) ->
     return result
 
 
+def _unlisted_entity_default(config: Mapping[str, Any]) -> bool:
+    """Core 2026.10.4's selection of an entity matching no listed rule.
+
+    Entity-only edits must not switch the default for unobserved entities.
+    Inventory comparison alone cannot detect that future or unloaded entities
+    would suddenly be published after a filter-case transition.
+    """
+    has_include = any(config.get(key) for key in ("include_entities", "include_domains", "include_entity_globs"))
+    has_exclude = any(config.get(key) for key in ("exclude_entities", "exclude_domains", "exclude_entity_globs"))
+    if not has_include:
+        return True
+    if not has_exclude:
+        return False
+    if config.get("include_domains") or config.get("include_entity_globs"):
+        return False
+    if config.get("exclude_domains") or config.get("exclude_entity_globs"):
+        return True
+    return False
+
+
 def _verify_scope(before: Mapping[str, Any], after: Mapping[str, Any], inventory: list[Mapping[str, Any]], desired: Mapping[str, str]) -> None:
     """Ensure non-targeted entities keep the exact effective filter result."""
+    if _unlisted_entity_default(before) != _unlisted_entity_default(after):
+        raise HomeKitWriteBlocked("Filteränderung würde die Standardauswahl unbekannter Entitäten verändern")
     for item in inventory:
         entity_id = item.get("entity_id")
         if not entity_id or entity_id in desired:
@@ -129,6 +151,11 @@ def build_options_diff(
     after = copy.deepcopy(options)
     after["filter"] = _candidate_filter(current_filter, desired)
     _verify_scope(current_filter, after["filter"], inventory, desired)
+    from homeassistant.helpers.entityfilter import FILTER_SCHEMA
+    try:
+        FILTER_SCHEMA(after["filter"])
+    except Exception as err:
+        raise HomeKitWriteBlocked("HomeKit-Core-Filter-Schema lehnt den Entwurf ab") from err
     if core_options_validator is not None:
         core_options_validator(copy.deepcopy(after))
     changed_keys = tuple(sorted(key for key in set(options) | set(after) if options.get(key) != after.get(key)))
@@ -136,24 +163,30 @@ def build_options_diff(
 
 
 class HomeKitWriter:
-    """Disabled for production; explicit isolated tests can exercise Core options.
+    """Core options writer gated by an isolated fixture or a local narrow grant.
 
     The retained allow_production argument deliberately rejects former callers.
-    No normal coordinator endpoint enables this test adapter in 0.9.24.
+    A production grant is verified against its local file at write time.
     """
 
-    def __init__(self, hass: Any, *, test_environment: bool = False, apply_enabled: bool = False, allow_production: bool = False):
+    def __init__(self, hass: Any, *, test_environment: bool = False, apply_enabled: bool = False, allow_production: bool = False, production_grant: Any = None, expected_source_revision: str | None = None):
         self.hass = hass
         self.test_environment = test_environment
         self.apply_enabled = bool(apply_enabled)
         self.allow_production = bool(allow_production)
+        self.production_grant = production_grant
+        self.expected_source_revision = expected_source_revision
 
     async def async_apply(self, diff: OptionsDiff) -> dict[str, Any]:
-        """Exercise only explicitly enabled isolated fixtures."""
-        if self.allow_production or not (self.test_environment and self.apply_enabled):
+        """Apply a Core-validated filter diff only after backend authorization."""
+        if self.allow_production or not ((self.test_environment and self.apply_enabled) or self.production_grant is not None):
             raise HomeKitWriteDisabled(WRITE_LOCK_REASON)
         if not isinstance(diff, OptionsDiff):
             raise HomeKitWriteBlocked("Ungültiger Options-Diff")
+        if self.production_grant is not None:
+            await self.production_grant.verify(self.hass, diff.entry_id, "user")
+            if self.expected_source_revision is None:
+                raise HomeKitWriteBlocked("Produktiver Native-Apply benötigt eine vollständige Entry-Revision")
         if not diff.changed_keys:
             raise HomeKitWriteBlocked("Options-Diff enthält keine Änderung")
         from homeassistant.const import __version__
@@ -169,11 +202,34 @@ class HomeKitWriter:
             raise HomeKitWriteBlocked(
                 "Nur reguläre HomeKit-Config-Entries vom Typ SOURCE_USER werden unterstützt"
             )
-        allowed = {"filter", "entity_config", "homekit_mode", "devices"}
-        if any(key not in allowed for key in diff.changed_keys):
-            raise HomeKitWriteBlocked("Options-Diff enthält nicht freigegebene Schlüssel")
+        if (dict(entry.data) | dict(entry.options)).get("mode", "bridge") != "bridge":
+            raise HomeKitWriteBlocked("Nur HomeKit-Entries im Bridge-Modus dürfen geändert werden")
+        if diff.changed_keys != ("filter",):
+            raise HomeKitWriteBlocked("Nur geprüfte HomeKit-Filterlisten sind für Apply freigegeben")
+        candidate_filter = diff.after.get("filter")
+        if not isinstance(candidate_filter, Mapping) or set(candidate_filter) - set(_FILTER_LIST_KEYS):
+            raise HomeKitWriteBlocked("Filter enthält unbekannte oder ungültige Felder")
+        if any(not isinstance(value, list) or any(not isinstance(item, str) for item in value)
+               for value in candidate_filter.values()):
+            raise HomeKitWriteBlocked("Filter muss String-Listen enthalten")
+        from homeassistant.helpers.entityfilter import FILTER_SCHEMA
+        try:
+            FILTER_SCHEMA(dict(candidate_filter))
+        except Exception as err:
+            raise HomeKitWriteBlocked("HomeKit-Core-Filter-Schema lehnt den Diff ab") from err
         lock = _locks.setdefault(diff.entry_id, asyncio.Lock())
         async with lock:
+            # The grant may have expired or been revoked while another apply
+            # held this bridge lock. Recheck before the Core mutation.
+            if self.production_grant is not None:
+                await self.production_grant.verify(self.hass, diff.entry_id, "user")
+            if self.hass.config_entries.async_get_entry(diff.entry_id) is not entry:
+                raise HomeKitWriteBlocked("HomeKit-Config-Entry wurde seit der Vorschau ersetzt")
+            if self.expected_source_revision is not None:
+                current_revision = revision({"entry_id": entry.entry_id, "source": str(entry.source),
+                                             "data": dict(entry.data), "options": dict(entry.options)})
+                if current_revision != self.expected_source_revision:
+                    raise HomeKitWriteBlocked("HomeKit-Config-Entry wurde seit der Vorschau verändert")
             current_options = dict(entry.options)
             current_data = dict(entry.data)
             for key in diff.changed_keys:
@@ -213,7 +269,7 @@ class HomeKitWriter:
         return {
             "applied": True,
             "options_saved": True,
-            "activation": "isolated_options_adapter",
+            "activation": "filter_options_adapter",
             "production_verified": False,
             "activation_status": "active" if state == "loaded" else "unknown",
             "entry_id": diff.entry_id,

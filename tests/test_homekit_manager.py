@@ -188,28 +188,25 @@ class HomeKitManagerTests(unittest.TestCase):
         self.assertEqual(evaluate_filter("switch.explicit", config=config).reason, "explicit_include")
         self.assertFalse(evaluate_filter("light.bad", config=config).configured)
         self.assertTrue(evaluate_filter("light.good", config=config).configured)
-        self.assertFalse(evaluate_filter("sensor.diag", entity_category="diagnostic", config={}).configured)
+        diagnostic = evaluate_filter("sensor.diag", entity_category="diagnostic", config={}, state_present=True)
+        self.assertTrue(diagnostic.configured)
+        self.assertFalse(diagnostic.runtime_candidate)
         self.assertIsNone(evaluate_filter("light.x").configured)
 
     def test_filter_matches_core_category_and_explicit_include_semantics(self):
         core_filter = build_core_filter({})
-        self.assertFalse(
-            evaluate_filter(
-                "sensor.diag",
-                entity_category="diagnostic",
-                config={},
-                core_filter=core_filter,
-            ).configured
+        diagnostic = evaluate_filter(
+            "sensor.diag", entity_category="diagnostic", config={}, core_filter=core_filter, state_present=True,
         )
+        self.assertTrue(diagnostic.configured)
+        self.assertFalse(diagnostic.runtime_candidate)
         explicit = build_core_filter({"include_entities": ["sensor.diag"]})
-        self.assertTrue(
-            evaluate_filter(
-                "sensor.diag",
-                entity_category="diagnostic",
-                config={"include_entities": ["sensor.diag"]},
-                core_filter=explicit,
-            ).configured
+        explicitly_selected = evaluate_filter(
+            "sensor.diag", entity_category="diagnostic",
+            config={"include_entities": ["sensor.diag"]}, core_filter=explicit, state_present=True,
         )
+        self.assertTrue(explicitly_selected.configured)
+        self.assertTrue(explicitly_selected.runtime_candidate)
 
     def test_large_inventory(self):
         for count in (1500, 2500, 5000):
@@ -394,7 +391,7 @@ class HomeKitManagerTests(unittest.TestCase):
         )
         result = asyncio.run(HomeKitWriter(hass, test_environment=True, apply_enabled=True).async_apply(diff))
         self.assertTrue(result["applied"])
-        self.assertEqual(result["activation"], "isolated_options_adapter")
+        self.assertEqual(result["activation"], "filter_options_adapter")
         self.assertEqual(updates[0]["filter"]["include_entities"], ["light.a", "light.b"])
 
     def test_isolated_writer_blocks_stale_options_diff(self):

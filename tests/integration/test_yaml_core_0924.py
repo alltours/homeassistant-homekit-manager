@@ -55,3 +55,43 @@ async def test_isolated_yaml_file_apply_is_imported_by_core(hass, tmp_path, monk
     with pytest.raises(YamlAdapterBlocked, match="native HomeKit"):
         await adapter.async_apply_with_core(hass, updated, next_plan, isolated_authority=True)
     assert source.read_bytes() == before
+
+
+async def test_direct_configuration_yaml_apply_is_imported_by_core(hass, tmp_path, monkeypatch):
+    async def no_network_start(_self):
+        return None
+
+    monkeypatch.setattr("homeassistant.components.homekit.HomeKit.async_start", no_network_start)
+    monkeypatch.setattr("homeassistant.components.homekit.async_port_is_available", lambda _port: True)
+    source = tmp_path / "configuration.yaml"
+    before = (
+        "# outside comment retained\n"
+        "homekit:\n"
+        "  - name: Direct YAML Bridge\n"
+        "    port: 21089\n"
+        "    filter:\n"
+        "      include_entities:\n"
+        "        - light.before\n"
+        "logger:\n"
+        "  default: warning\n"
+    ).encode()
+    source.write_bytes(before)
+    config = await async_hass_config_yaml(hass)
+    assert await async_setup_component(hass, "homekit", config)
+    await hass.async_block_till_done()
+    entries = hass.config_entries.async_entries("homekit")
+    assert len(entries) == 1
+    entry = entries[0]
+    assert entry.source == config_entries.SOURCE_IMPORT
+    original_id = entry.entry_id
+    adapter = YamlHomeKitAdapter(tmp_path)
+    plan = adapter.plan_filter(entry, {"include_entities": ["light.before", "light.after"]})
+    result = await adapter.async_apply_with_core(hass, entry, plan, isolated_authority=True)
+    assert result.state == "verified_core"
+    assert result.backup_path.read_bytes() == before
+    assert source.read_bytes().startswith(b"# outside comment retained\n")
+    assert source.read_bytes().endswith(b"logger:\n  default: warning\n")
+    updated = hass.config_entries.async_get_entry(original_id)
+    assert updated.entry_id == original_id and updated.source == config_entries.SOURCE_IMPORT
+    assert updated.state.value == "loaded"
+    assert updated.options["filter"]["include_entities"] == ["light.before", "light.after"]

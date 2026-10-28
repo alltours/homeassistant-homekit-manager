@@ -49,8 +49,8 @@ def _availability_status(entry: Any, device: Any, device_status: str, state: str
     """Return one exclusive user-facing status, with evidence-first priority."""
     if _value(entry, "disabled_by") is not None or _value(device, "disabled_by") is not None:
         return "disabled"
-    if device_status == "missing":
-        return "orphaned"
+    # An unresolved device reference is evidence about the registry, not
+    # proof that the entity is orphaned. A valid runtime state can still exist.
     if state is None:
         return "no_state"
     if state == "unavailable":
@@ -79,6 +79,10 @@ class InventoryEntity:
     state: str | None
     attributes: dict[str, Any]
     config_entry_id: str | None
+    registry_entry_present: bool
+    state_present: bool
+    area_source: str
+    device_disabled_by: str | None
     def as_dict(self) -> dict[str, Any]:
         # Only the attributes container may hold nested mutable values. Deep
         # copying every scalar through dataclasses.asdict dominated the measured
@@ -108,6 +112,7 @@ def build_inventory(entity_registry: Any, device_registry: Any = None,
         device = device_cache.get(device_id)
         device_status = _device_status(device_registry, device_id, device)
         area_id = _value(entry, "area_id") or _value(device, "area_id")
+        area_source = "entity" if _value(entry, "area_id") else "device" if _value(device, "area_id") else "none"
         area = areas.get(area_id) if isinstance(areas, Mapping) else None
         state_obj = state_map.get(entity_id)
         state = _value(state_obj, "state")
@@ -124,6 +129,8 @@ def build_inventory(entity_registry: Any, device_registry: Any = None,
             entity_category=_value(entry, "entity_category"), disabled_by=_value(entry, "disabled_by"),
             hidden_by=_value(entry, "hidden_by"), available=available, state=state,
             attributes=attributes, config_entry_id=_value(entry, "config_entry_id"),
+            registry_entry_present=True, state_present=state_obj is not None,
+            area_source=area_source, device_disabled_by=_value(device, "disabled_by"),
         ))
     for entity_id, state_obj in state_map.items():
         if entity_id in seen_entity_ids or "." not in entity_id:
@@ -150,6 +157,8 @@ def build_inventory(entity_registry: Any, device_registry: Any = None,
             state=state,
             attributes=attributes,
             config_entry_id=None,
+            registry_entry_present=False, state_present=True, area_source="none",
+            device_disabled_by=None,
         ))
     return sorted(result, key=lambda item: item.entity_id)
 

@@ -92,6 +92,19 @@ async def test_yaml_operation_is_verified_by_core_only_in_isolation(hass, tmp_pa
     assert (await reopened.reconcile(plan["operation_id"]))["state"] == "verified"
     assert "target_filter" not in (await reopened.status(plan["operation_id"]))
     assert "light.after" in hass.config_entries.async_get_entry(entry.entry_id).options["filter"]["include_entities"]
+    neighbor = config_entries.ConfigEntry(
+        version=1, minor_version=1, domain="homekit", title="Native Neighbor",
+        data={"name": "Native Neighbor", "port": 21084},
+        options={"mode": "bridge", "filter": {}}, source=config_entries.SOURCE_USER,
+        entry_id="native-neighbor-operation", unique_id=None, discovery_keys={}, subentries_data=None,
+    )
+    await hass.config_entries.async_add(neighbor)
+    await hass.async_block_till_done()
+    yaml_bytes = (tmp_path / "bridges.yaml").read_bytes()
+    with pytest.raises(HomeKitWriteBlocked, match="native HomeKit-Entries"):
+        await service.plan_filter(entry_id=entry.entry_id, bridge=bridge,
+                                  document=desired(entry.entry_id), inventory=inventory())
+    assert (tmp_path / "bridges.yaml").read_bytes() == yaml_bytes
 
 
 async def test_reconcile_waits_for_running_native_apply(hass, monkeypatch):

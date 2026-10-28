@@ -1,6 +1,6 @@
-"""Common isolated operation state machine for native and YAML writers.
+"""Common operation state machine for native and YAML filter writers.
 
-The production coordinator does not instantiate this with write authority.
+The normal coordinator has no authority without a separate local grant.
 Only secret-free metadata is persisted. An interrupted apply is unknown until a
 separate read-only reconcile; it is never retried automatically.
 """
@@ -17,6 +17,7 @@ from .homekit_writer import HomeKitWriteBlocked, HomeKitWriteDisabled, build_opt
 from .native_adapter import NativeFilterPlan, NativeHomeKitAdapter
 from .safety import WRITE_LOCK_REASON
 from .yaml_adapter import YamlFilterPlan, YamlHomeKitAdapter
+from .write_grant import GrantBlocked, ProductionWriteGrant, read_production_grant
 
 
 @dataclass(frozen=True)
@@ -39,19 +40,44 @@ class HomeKitOperationService:
         self._plans: dict[str, OperationPlan] = {}
         self._lock = asyncio.Lock()
 
+    async def authority_status(self, entry_id: str, source: str) -> dict[str, Any]:
+        if self._isolated_write_authority:
+            return {"enabled": True, "reason": "Nur isolierte Testinstanz", "automatic_retry": False}
+        try:
+            grant = await read_production_grant(self.hass)
+            if grant is None:
+                raise GrantBlocked(WRITE_LOCK_REASON)
+            await grant.verify(self.hass, entry_id, source)
+        except GrantBlocked as err:
+            return {"enabled": False, "reason": str(err), "automatic_retry": False}
+        return {"enabled": True, "reason": "Lokale, befristete Filter-Schreibfreigabe aktiv", "automatic_retry": False,
+                "grant_id": grant.grant_id, "expires_at": grant.expires_at.isoformat()}
+
+    async def _production_grant(self, entry_id: str, source: str) -> ProductionWriteGrant:
+        grant = await read_production_grant(self.hass)
+        if grant is None:
+            raise HomeKitWriteDisabled(WRITE_LOCK_REASON)
+        await grant.verify(self.hass, entry_id, source)
+        return grant
+
     async def _records(self) -> dict[str, dict[str, Any]]:
         data = await self._store.async_load() or {}
         records = data.get("operations", {}) if isinstance(data, dict) else {}
         return dict(records) if isinstance(records, dict) else {}
 
-    async def _set_state(self, plan: OperationPlan, state: str, *, detail: str | None = None) -> None:
+    async def _set_state(self, plan: OperationPlan, state: str, *, detail: str | None = None, grant_id: str | None = None) -> None:
         records = await self._records()
+        previous = records.get(plan.operation_id, {})
+        if not isinstance(previous, dict):
+            raise HomeKitWriteBlocked("Gespeichertes Operation-Journal ist beschädigt")
         records[plan.operation_id] = {
             "operation_id": plan.operation_id,
             "entry_id": plan.entry_id,
             "source": plan.source,
             "source_revision": plan.source_revision,
             "changed_entities": list(plan.changed_entities),
+            "change_type": "filter",
+            "grant_id": grant_id or previous.get("grant_id"),
             "target_revision": plan.payload.target_revision if isinstance(plan.payload, YamlFilterPlan) else None,
             "target_filter": dict(plan.payload.after_filter) if isinstance(plan.payload, YamlFilterPlan) else None,
             "source_file": plan.payload.source_path.name if isinstance(plan.payload, YamlFilterPlan) else None,
@@ -70,11 +96,18 @@ class HomeKitOperationService:
         entry = self.hass.config_entries.async_get_entry(entry_id)
         if entry is None or entry.domain != "homekit" or bridge.get("entry_id") != entry_id:
             raise HomeKitWriteBlocked("Ziel-Bridge ist nicht eindeutig")
+        if (dict(entry.data) | dict(entry.options)).get("mode", "bridge") != "bridge":
+            raise HomeKitWriteBlocked("Nur HomeKit-Entries im Bridge-Modus dürfen geändert werden")
         if entry.source == "user":
             adapter = NativeHomeKitAdapter(self.hass)
             payload = adapter.plan_filter(bridge, document, inventory)
             entities = payload.diff.changed_entities
         elif entry.source == "import":
+            from homeassistant.const import __version__
+            if __version__ != "2026.10.4":
+                raise HomeKitWriteBlocked("YAML-Apply ist für diese Core-Version nicht verifiziert")
+            if any(item.source != "import" for item in self.hass.config_entries.async_entries("homekit")):
+                raise HomeKitWriteBlocked("Core homekit.reload würde auch native HomeKit-Entries neu laden")
             current = dict(bridge) | {"data": dict(entry.data), "options": dict(entry.options)}
             diff = build_options_diff(current, document, inventory)
             if not diff.changed_keys:
@@ -88,10 +121,11 @@ class HomeKitOperationService:
         async with self._lock:
             self._plans[plan.operation_id] = plan
             await self._set_state(plan, "validated")
+        policy = await self.authority_status(entry_id, plan.source)
         return {"operation_id": plan.operation_id, "entry_id": entry_id, "source": plan.source,
                 "source_revision": plan.source_revision, "changed_entities": list(plan.changed_entities),
-                "state": "validated", "apply_enabled": self._isolated_write_authority,
-                "reason": "Nur isolierte Testinstanz" if self._isolated_write_authority else WRITE_LOCK_REASON}
+                "state": "validated", "apply_enabled": policy["enabled"], "reason": policy["reason"],
+                "operation_policy": policy}
 
     async def status(self, operation_id: str) -> dict[str, Any] | None:
         record = (await self._records()).get(operation_id)
@@ -100,9 +134,7 @@ class HomeKitOperationService:
         return self._public(record) if record else None
 
     async def apply(self, operation_id: str, *, entry_id: str, expected_revision: str, confirmed_operation_id: str, admin: bool = False) -> dict[str, Any]:
-        """Execute only in an explicit isolated harness after every backend gate."""
-        if not self._isolated_write_authority:
-            raise HomeKitWriteDisabled(WRITE_LOCK_REASON)
+        """Execute once after admin, confirmation, revision and write-grant gates."""
         if not admin or not operation_id or confirmed_operation_id != operation_id:
             raise HomeKitWriteBlocked("Adminberechtigung und Bestätigung der konkreten Operation erforderlich")
         async with self._lock:
@@ -115,14 +147,18 @@ class HomeKitOperationService:
             entry = self.hass.config_entries.async_get_entry(entry_id)
             if entry is None or entry.domain != "homekit" or entry.source != plan.source:
                 raise HomeKitWriteBlocked("Config-Entry-Quelle wurde geändert")
-            await self._set_state(plan, "applying")
+            grant = None if self._isolated_write_authority else await self._production_grant(entry_id, plan.source)
+            await self._set_state(plan, "applying", grant_id=grant.grant_id if grant else None)
             try:
                 if isinstance(plan.payload, NativeFilterPlan):
-                    result = await NativeHomeKitAdapter(self.hass, isolated_test_authority=True).apply(plan.payload)
+                    result = await NativeHomeKitAdapter(self.hass, isolated_test_authority=self._isolated_write_authority,
+                                                        production_grant=grant).apply(plan.payload)
                     verified = result.get("verification") == "verified_options"
                 else:
                     adapter = YamlHomeKitAdapter(self.hass.config.config_dir)
-                    result = await adapter.async_apply_with_core(self.hass, entry, plan.payload, isolated_authority=True)
+                    result = await adapter.async_apply_with_core(self.hass, entry, plan.payload,
+                                                                 isolated_authority=self._isolated_write_authority,
+                                                                 production_grant=grant)
                     verified = result.state == "verified_core"
                 if not verified:
                     raise HomeKitWriteBlocked("Nachverifikation nicht bestätigt")

@@ -16,7 +16,6 @@ for (const [name,width,height] of viewports) {
       element.entities=data.entities;element.overview=data.overview;element.draft=new Map([[data.presenceId,'excluded']]);
       element.bridge.title='Referenz-Bridge';element.bridges[0].title='Referenz-Bridge';
       element.activationStatus={state:'unknown',has_operation:true,persistent:false,message:'Der Ausgang des früheren Vorgangs ist nicht bestätigt.',automatic_retry:false,observations:{bridge_state:'loaded'}};
-      element.managementStatus={...element.managementStatus,active:true,state:'active',write_status:'locked',supported:false,management_surface:'homekit_manager',management_surface_label:'HomeKit Manager'};
       element.statusMessage='1 Änderung als Entwurf vorgemerkt';element.render();
       const note=document.createElement('aside');note.textContent='Isolierte Referenzdaten – keine Live-Daten';note.setAttribute('data-reference-note','');
       note.style.cssText='padding:8px 14px;font:12px system-ui;background:#272f38;color:#eef2f6';document.body.prepend(note);
@@ -24,7 +23,7 @@ for (const [name,width,height] of viewports) {
     for (const [view,label] of [['home','HomeKit'],['devices','Geräte'],['changes','Änderungen'],['settings','Einstellungen']]) {
       await panel.getByRole('tab',{name:label,exact:true}).click();
       if (view==='home') {
-        await expect(panel.locator('.status-grid')).toContainText('HomeKit Manager');
+        await expect(panel.locator('.status-grid')).toContainText('Schreiben');
         await expect(panel.locator('.status-grid')).toContainText('1');
         await expect(panel.locator('.lock-note')).toContainText('gesperrt');
       }
@@ -58,7 +57,7 @@ for (const [name,width,height] of viewports) {
       }
       if (view==='settings') {
         await expect(panel.locator('.settings-nav button')).toHaveCount(6);
-        await expect(panel.locator('.settings-content')).toContainText('0.9.24');
+        await expect(panel.locator('.settings-content')).toContainText('0.10.0');
       }
       const geometry=await panel.evaluate(element=>{const nav=element.shadowRoot.querySelector('.main-nav');return {page:document.documentElement.scrollWidth-innerWidth,nav:nav.scrollWidth-nav.clientWidth};});
       expect(geometry.page).toBeLessThanOrEqual(1);expect(geometry.nav).toBeLessThanOrEqual(1);

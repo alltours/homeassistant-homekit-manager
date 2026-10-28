@@ -12,6 +12,7 @@
 - Added an isolated Core/HAP driver test for MAC and AID/IID stability across a filter options reload; network advertisement and pairing remain untested.
 - Paired an isolated `aiohomekit` controller to the real HAP TCP server on loopback; it reconnected after a Core options reload and observed stable AID/IIDs loaded from real temporary storage files. mDNS was replaced by a test advertiser; Apple Home remains untested.
 - Recorded verified baseline evidence, exact capability limits and remaining release gates in `docs/DEVELOPMENT_0_10_0.md`. Production writing remains disabled.
+- Added a fresh extraction check for release archive structure, Python syntax and JSON validity; the final 0.10.0 archive still requires its own check.
 
 ## 0.9.24 (2026-10-27)
 

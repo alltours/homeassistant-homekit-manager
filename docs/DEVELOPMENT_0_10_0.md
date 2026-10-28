@@ -50,10 +50,10 @@ Die sechs von Core 2026.10.4 geprüften Filterlisten sind `include_entities`, `e
 
 ## Lokale Verifikation
 
-- Python 3.14.9 / Core 2026.10.4: `pytest -q tests` **171 bestanden**. Darin enthalten sind isolierte echte Core-Config-Entry-/YAML-Import/Reload-Tests, alle 32 Nicht-Admin-WebSocket-Routen und HAP-Identität/TCP mit Testcontroller auf Loopback. Der zuvor übersprungene Browser-Backend-Test wurde nach `npm ci` ausgeführt.
+- Python 3.14.9 / Core 2026.10.4: `pytest -q tests` **172 bestanden**. Darin enthalten sind isolierte echte Core-Config-Entry-/YAML-Import/Reload-Tests, alle 32 Nicht-Admin-WebSocket-Routen, HAP-Identität/TCP mit Testcontroller auf Loopback und ein frischer Archiv-Extrakt mit Python-/JSON-Prüfung. Der zuvor übersprungene Browser-Backend-Test wurde nach `npm ci` ausgeführt.
 - Chromium + WebKit: **46 Browserfälle bestanden**, einschließlich 320/430-px-Mobile, Light/Dark, Entwurf, gesperrtem Apply, Filter-/Statuszahlen und 5.000-Entity-Seite. Das ist eine Browser-Fixture, kein produktives iPhone.
 - `ruff 0.17.3` für die CI-Modulliste, `pip check`, JS-Syntaxtest, Frontend-Unit-Test und `npm audit --audit-level=high`: bestanden. Die Commits `cc09b6a` und `113182b` bestanden [CI](https://github.com/alltours/homeassistant-homekit-manager/actions/runs/40639338687) und [HACS](https://github.com/alltours/homeassistant-homekit-manager/actions/runs/40639338677); spätere Änderungen brauchen neue CI-Nachweise.
-- Der lokale Build nach Aktualisierung des Dateimanifests ist nur ein unveröffentlichtes Entwicklungsartefakt mit der bisherigen Manifest-Version 0.9.24. Er ist **kein** 0.10.0-Release-Kandidat und darf nicht installiert oder veröffentlicht werden.
+- Der lokale Build nach Aktualisierung des Dateimanifests ist nur ein unveröffentlichtes Entwicklungsartefakt mit der bisherigen Manifest-Version 0.9.24. Wiederholter Build und frischer Extrakt wurden geprüft. Er ist **kein** 0.10.0-Release-Kandidat und darf nicht installiert oder veröffentlicht werden.
 - Der erste CI-Lauf nach Hinzunahme des HAP-Testcontrollers scheiterte schon beim Test-Import, weil `aiohomekit` in der Test-Requirements-Datei fehlte ([Run 40640141496](https://github.com/alltours/homeassistant-homekit-manager/actions/runs/40640141496)). Version 4.0.1 ist jetzt explizit als Testabhängigkeit gepinnt; der neue CI-Nachweis steht noch aus.
 
 ## Offene Gates

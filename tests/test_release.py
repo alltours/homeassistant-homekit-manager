@@ -1,5 +1,7 @@
 """Check release completeness and deterministic bytes, not just listed hashes."""
+import compileall
 import importlib.util
+import json
 from pathlib import Path
 import shutil
 import zipfile
@@ -19,6 +21,23 @@ def test_release_archive_matches_every_source_byte_and_is_reproducible(tmp_path)
     release.verify_archive(first, manifest)
     with zipfile.ZipFile(first) as archive:
         assert all(item.date_time == (1980, 1, 1, 0, 0, 0) for item in archive.infolist())
+
+
+def test_fresh_release_extraction_has_installable_structure_and_compiles(tmp_path):
+    archive_path = release.build(tmp_path / "build")
+    extracted = tmp_path / "fresh-extract"
+    with zipfile.ZipFile(archive_path) as archive:
+        assert all(name.startswith("custom_components/homekit_manager/") or name == "RELEASE_MANIFEST.json"
+                   for name in archive.namelist())
+        archive.extractall(extracted)
+    extracted_manifest = json.loads((extracted / "RELEASE_MANIFEST.json").read_text())
+    component = extracted / "custom_components" / "homekit_manager"
+    assert extracted_manifest["integration_version"] == json.loads((component / "manifest.json").read_text())["version"]
+    assert len(list(component.rglob("*.py"))) > 10
+    assert (component / "www" / "homekit-manager.js").is_file()
+    assert compileall.compile_dir(component, quiet=1)
+    for item in component.rglob("*.json"):
+        json.loads(item.read_text())
 
 
 def test_release_rejects_stale_manifest_and_unexpected_source_files(tmp_path):

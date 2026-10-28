@@ -28,3 +28,4 @@ secrets.yaml
 
 test-results/
 playwright-report/
+.audit/

@@ -23,7 +23,8 @@
 - Rechecked the complete native Config Entry revision under the bridge lock immediately before mutation; unrelated concurrent option changes now block apply.
 - Rechecked the YAML grant immediately before atomic source replacement, and rejected unsafe backup-directory permissions and hardlinked journals.
 - Rejected macOS extended ACLs on write grants, writable YAML source files, backup directories and journals; mode bits alone do not capture these permissions.
-- Added a fail-closed Python dependency audit to CI. Core 2026.10.4 pins vulnerable Pillow 12.3.0, so this branch remains a NO-GO development checkpoint until a compatible fixed Core target is verified.
+- The full Python dependency audit remains visible in CI. Its 39 reviewed Pillow 12.3.0 findings are documented as a Core platform risk outside the Manager's Bridge-filter path; a new advisory, changed Core pin or Manager Pillow import fails the gate. The Core platform risk remains until a compatible patched Core version is tested.
+- Restricted all filter planning and writing boundaries to HomeKit Bridge mode. Accessory-mode entries, including cameras, remain read-only even through direct adapter calls.
 - Exercised all 32 WebSocket routes with an authenticated non-admin account; every route rejected the request.
 - Added an isolated Core/HAP driver test for MAC and AID/IID stability across a filter options reload; network advertisement and pairing remain untested.
 - Paired an isolated `aiohomekit` controller to the real HAP TCP server on loopback; it reconnected after a Core options reload and observed stable AID/IIDs loaded from real temporary storage files. mDNS was replaced by a test advertiser; Apple Home remains untested.

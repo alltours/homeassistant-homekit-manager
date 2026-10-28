@@ -1,9 +1,27 @@
 """The actual Core 2026.10.4 config-entry lifecycle, with HAP network off."""
 import pytest
+from types import SimpleNamespace
 from homeassistant import config_entries
 
 from custom_components.homekit_manager.homekit_writer import HomeKitWriter, OptionsDiff, HomeKitWriteBlocked, HomeKitWriteDisabled
 from custom_components.homekit_manager.native_adapter import NativeHomeKitAdapter
+
+
+async def test_direct_native_writer_refuses_accessory_mode_before_mutation():
+    entry = SimpleNamespace(entry_id="camera-entry", domain="homekit", source="user",
+                            data={"name": "Camera"}, options={"mode": "accessory", "filter": {}})
+    class Entries:
+        def async_get_entry(self, _entry_id):
+            return entry
+
+        def async_update_entry(self, *_args, **_kwargs):
+            raise AssertionError("Accessory entry must never be mutated")
+
+    hass = SimpleNamespace(config_entries=Entries())
+    diff = OptionsDiff("camera-entry", {"filter": {}}, {"filter": {"include_entities": ["camera.front"]}},
+                       ("filter",), ("camera.front",), {"summary": {"blocked": False}})
+    with pytest.raises(HomeKitWriteBlocked, match="Bridge-Modus"):
+        await HomeKitWriter(hass, test_environment=True, apply_enabled=True).async_apply(diff)
 
 
 async def test_isolated_native_options_write_through_loaded_core_entry(hass, monkeypatch):

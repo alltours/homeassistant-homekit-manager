@@ -202,6 +202,8 @@ class HomeKitWriter:
             raise HomeKitWriteBlocked(
                 "Nur reguläre HomeKit-Config-Entries vom Typ SOURCE_USER werden unterstützt"
             )
+        if (dict(entry.data) | dict(entry.options)).get("mode", "bridge") != "bridge":
+            raise HomeKitWriteBlocked("Nur HomeKit-Entries im Bridge-Modus dürfen geändert werden")
         if diff.changed_keys != ("filter",):
             raise HomeKitWriteBlocked("Nur geprüfte HomeKit-Filterlisten sind für Apply freigegeben")
         candidate_filter = diff.after.get("filter")

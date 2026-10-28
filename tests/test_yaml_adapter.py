@@ -43,6 +43,21 @@ def yaml_files(tmp_path):
     return tmp_path, bridge_file
 
 
+def test_yaml_accessory_entry_and_source_are_read_only(yaml_files):
+    root, file = yaml_files
+    before = file.read_bytes()
+    adapter = YamlHomeKitAdapter(root)
+    accessory = imported_entry()
+    accessory.options = {"mode": "accessory"}
+    with pytest.raises(YamlAdapterBlocked, match="Bridge-Modus"):
+        adapter.plan_filter(accessory, {"include_entities": ["camera.front"]})
+    accessory.options = {"mode": "bridge"}
+    file.write_bytes(before.replace(b"- name: Bridge One\n", b"- name: Bridge One\n  mode: accessory\n"))
+    with pytest.raises(YamlAdapterBlocked, match="Accessory-Modus"):
+        adapter.plan_filter(accessory, {"include_entities": ["camera.front"]})
+    assert b"mode: accessory" in file.read_bytes()
+
+
 def test_real_file_apply_backup_and_restore_preserve_other_bridge(yaml_files):
     root, file = yaml_files
     before = file.read_bytes()

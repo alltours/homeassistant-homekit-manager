@@ -300,6 +300,8 @@ class YamlHomeKitAdapter:
         from homeassistant.config_entries import SOURCE_IMPORT
         if __version__ != "2026.10.4" or entry.source != SOURCE_IMPORT or entry.entry_id != plan.entry_id:
             raise YamlAdapterBlocked("Core-Version, Quelle oder Entry weicht vom Plan ab")
+        if (dict(entry.data) | dict(getattr(entry, "options", {}))).get("mode", "bridge") != "bridge":
+            raise YamlAdapterBlocked("Nur HomeKit-Entries im Bridge-Modus dürfen geändert werden")
         all_entries = hass.config_entries.async_entries("homekit")
         if not all_entries or any(item.source != SOURCE_IMPORT for item in all_entries):
             raise YamlAdapterBlocked("Core-Reload würde auch native HomeKit-Entries betreffen")
@@ -389,6 +391,8 @@ class YamlHomeKitAdapter:
 
         if getattr(entry, "domain", None) != "homekit" or getattr(entry, "source", None) != SOURCE_IMPORT:
             raise YamlAdapterBlocked("Nur importierte HomeKit-Config-Entries sind YAML-Quellen")
+        if (dict(entry.data) | dict(getattr(entry, "options", {}))).get("mode", "bridge") != "bridge":
+            raise YamlAdapterBlocked("Nur HomeKit-Entries im Bridge-Modus dürfen geändert werden")
         entry_id = getattr(entry, "entry_id", None)
         bridge_name = entry.data.get("name")
         bridge_port = entry.data.get("port")
@@ -404,6 +408,8 @@ class YamlHomeKitAdapter:
         if set(new_filter) - _FILTER_KEYS or any(not isinstance(value, list) or any(not isinstance(entry, str) for entry in value) for value in new_filter.values()):
             raise YamlAdapterBlocked("Nur HomeKit-Filterlisten sind schreibbar")
         target = matches[0]
+        if target.get("mode", "bridge") != "bridge":
+            raise YamlAdapterBlocked("YAML-Accessory-Modus bleibt schreibgeschützt")
         old_filter = _plain(target.get("filter", {}))
         if not isinstance(old_filter, Mapping) or set(old_filter) - _FILTER_KEYS:
             raise YamlAdapterBlocked("Unbekannte Filterfelder bleiben schreibgeschützt")

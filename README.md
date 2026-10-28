@@ -11,11 +11,11 @@ only been exercised against isolated Home Assistant Core instances. No grant
 was placed on the existing production installation, and this branch is not
 approved for installation.
 
-The dependency audit currently blocks release: Core 2026.10.4 pins Pillow
-12.3.0, for which upstream lists critical and high security advisories fixed
-in 13.0.0. The CI dependency gate is intentionally fail-closed; see the
-[development findings](docs/DEVELOPMENT_0_10_0.md). This is an upstream Core
-dependency and is not changed by installing HomeKit Manager.
+Core 2026.10.4 pins Pillow 12.3.0, for which upstream lists security
+advisories fixed in 13.0.0. The [Python dependency decision](docs/SECURITY_PYTHON_DEPENDENCIES_0_10_0.md)
+records the exact platform risk and the CI boundary: all advisories remain
+visible, while new or manager-reachable findings block the release. Installing
+HomeKit Manager does not change Core's Pillow dependency.
 
 The inventory WebSocket API is paginated at 500 entities per response in this
 branch. [Isolated performance measurements](docs/PERFORMANCE_0_10_0.md)

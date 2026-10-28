@@ -96,6 +96,8 @@ class HomeKitOperationService:
         entry = self.hass.config_entries.async_get_entry(entry_id)
         if entry is None or entry.domain != "homekit" or bridge.get("entry_id") != entry_id:
             raise HomeKitWriteBlocked("Ziel-Bridge ist nicht eindeutig")
+        if (dict(entry.data) | dict(entry.options)).get("mode", "bridge") != "bridge":
+            raise HomeKitWriteBlocked("Nur HomeKit-Entries im Bridge-Modus dürfen geändert werden")
         if entry.source == "user":
             adapter = NativeHomeKitAdapter(self.hass)
             payload = adapter.plan_filter(bridge, document, inventory)

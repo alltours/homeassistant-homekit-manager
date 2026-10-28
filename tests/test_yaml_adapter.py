@@ -217,6 +217,42 @@ def test_extended_attributes_are_not_silently_dropped(yaml_files):
     assert not (root / ".storage").exists()
 
 
+def test_corrupted_yaml_backup_refuses_recovery(yaml_files):
+    root, source = yaml_files
+    adapter = YamlHomeKitAdapter(root)
+    plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+    result = adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
+    result.backup_path.write_bytes(b"corrupted backup")
+    with pytest.raises(YamlAdapterBlocked, match="Backup-Integrität"):
+        adapter.recover(result, isolated_authority=True)
+    assert source.read_bytes() == plan.after_bytes
+
+
+def test_restore_source_inode_swap_after_open_is_blocked(yaml_files, monkeypatch):
+    from custom_components.homekit_manager import yaml_adapter
+
+    root, source = yaml_files
+    adapter = YamlHomeKitAdapter(root)
+    plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+    result = adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
+    real_flock = yaml_adapter.fcntl.flock
+    swapped = False
+
+    def replace_before_lock(descriptor, operation):
+        nonlocal swapped
+        if operation == yaml_adapter.fcntl.LOCK_EX and not swapped:
+            replacement = root / "restore-replacement.yaml"
+            replacement.write_bytes(plan.after_bytes)
+            os.replace(replacement, source)
+            swapped = True
+        return real_flock(descriptor, operation)
+
+    monkeypatch.setattr(yaml_adapter.fcntl, "flock", replace_before_lock)
+    with pytest.raises(YamlAdapterConflict, match="Dateiknoten"):
+        adapter.recover(result, isolated_authority=True)
+    assert swapped and source.read_bytes() == plan.after_bytes
+
+
 @pytest.mark.parametrize("root_yaml", [
     "homekit: !include_dir_list homekit\n",
     "homekit: !include ../other.yaml\n",

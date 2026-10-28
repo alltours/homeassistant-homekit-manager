@@ -9,6 +9,7 @@
 - Kept Core filter selection separate from the later hidden/category registry gate and its runtime candidacy; the panel shows both pieces of evidence.
 - Added isolated direct `configuration.yaml` HomeKit filter editing with byte-preserving plans, backups, Core import/reload tests and inode-swap refusal. Mixed native/YAML installations remain read-only for YAML apply.
 - Blocked YAML replacement for read-only or shared-writable sources and for extended attributes that cannot be preserved; normal macOS provenance metadata remains supported.
+- Verified that corrupted YAML backups and inode swaps during restore fail without replacing the current source.
 - Exercised all 32 WebSocket routes with an authenticated non-admin account; every route rejected the request.
 - Added an isolated Core/HAP driver test for MAC and AID/IID stability across a filter options reload; network advertisement and pairing remain untested.
 - Paired an isolated `aiohomekit` controller to the real HAP TCP server on loopback; it reconnected after a Core options reload and observed stable AID/IIDs loaded from real temporary storage files. mDNS was replaced by a test advertiser; Apple Home remains untested.

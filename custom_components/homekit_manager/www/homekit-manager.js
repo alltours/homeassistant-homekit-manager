@@ -1,4 +1,5 @@
 const PAGE_SIZE = 80;
+const INVENTORY_BATCH_SIZE = 500;
 const WS = {
   inventory: "homekit_manager/inventory", bridges: "homekit_manager/bridges", selectBridge: "homekit_manager/select_bridge",
   devices: "homekit_manager/devices", areas: "homekit_manager/areas", diagnostics: "homekit_manager/diagnostics",
@@ -51,13 +52,23 @@ class HomeKitManagerPanel extends HTMLElement {
     let succeeded = false;
     this.loading = true; this.error = null; if (force) this.render();
     try {
-      const inventory = await this._hass.callWS({ type: WS.inventory, refresh: force, include_context: true });
+      const inventory = await this._hass.callWS({ type: WS.inventory, refresh: force, include_context: true, offset: 0, limit: INVENTORY_BATCH_SIZE });
+      const entities = [...(inventory.entities || [])];
+      const total = Number.isInteger(inventory.total) ? inventory.total : entities.length;
+      if (total < entities.length) throw new Error("Inventar-Seitenzahl ist ungültig.");
+      for (let offset = entities.length; offset < total; offset = entities.length) {
+        const page = await this._hass.callWS({ type: WS.inventory, offset, limit: INVENTORY_BATCH_SIZE });
+        if (page.fingerprint !== inventory.fingerprint || page.snapshot_revision !== inventory.snapshot_revision || page.total !== total || page.offset !== offset || !page.entities?.length) {
+          throw new Error("Inventar hat sich während des Seitenabrufs geändert. Bitte erneut aktualisieren.");
+        }
+        entities.push(...page.entities);
+      }
       const [bridges, devices, areas, diagnostics, history, yaml, mode, activation, migrationPlan, migrationStatus, managementStatus] = inventory.context || await Promise.all(
         [WS.bridges, WS.devices, WS.areas, WS.diagnostics, WS.history, WS.yaml, WS.mode, WS.activation, WS.migrationPlan, WS.migrationStatus, WS.managementStatus].map(type => this._hass.callWS({ type }))
       );
       if (this.draft.size && this.draftFingerprint && this.draftFingerprint !== inventory.overview?.fingerprint) this.conflict = true;
       if (this.operationPlan && this.operationPlan.inventory_fingerprint !== inventory.overview?.fingerprint) this.conflict = true;
-      Object.assign(this, { entities: inventory.entities || [], overview: inventory.overview || {}, bridges: bridges.bridges || [], devices: devices.devices || [], areas: areas.areas || [], diagnostics, historyEntries: history.entries || [], yamlStatus: yaml, modeStatus: mode, activationStatus: activation || { state: "unknown" }, migrationPlan, migrationStatus, managementStatus });
+      Object.assign(this, { entities, overview: inventory.overview || {}, bridges: bridges.bridges || [], devices: devices.devices || [], areas: areas.areas || [], diagnostics, historyEntries: history.entries || [], yamlStatus: yaml, modeStatus: mode, activationStatus: activation || { state: "unknown" }, migrationPlan, migrationStatus, managementStatus });
       this._seenRevision = Math.max(this._seenRevision, Number(this.overview.refresh_count) || 0);
       this.fingerprint = yaml.fingerprint || this.overview.fingerprint || null;
       this.bridge = this.bridges.find(item => item.entry_id === this.overview.selected_bridge_id) || (this.bridges.length === 1 ? this.bridges[0] : null);

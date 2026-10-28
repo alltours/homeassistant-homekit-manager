@@ -11,6 +11,10 @@ only been exercised against isolated Home Assistant Core instances. No grant
 was placed on the existing production installation, and this branch is not
 approved for installation.
 
+The inventory WebSocket API is paginated at 500 entities per response in this
+branch. [Isolated performance measurements](docs/PERFORMANCE_0_10_0.md)
+separate computation, authenticated transport and browser rendering.
+
 > Release source for HomeKit Manager 0.9.24. This work did not install the
 > integration in the production Home Assistant environment. See
 > [development status](docs/DEVELOPMENT_0_9_24.md) for tested paths and release

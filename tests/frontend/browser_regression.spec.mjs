@@ -184,3 +184,55 @@ test('large inventories render a bounded entity page', async ({page}) => {
   const metrics = await panel.evaluate(element => { element.entities=Array.from({length:5000},(_,i)=>({entity_id:`light.large_${i}`,name:`Lamp ${i}`,domain:'light',available:true,compatibility:{status:'supported'},homekit:{configured_by_filter:true}})); element.view='devices';element.groupMode='entities';const start=performance.now();element.render();return {ms:performance.now()-start,rows:element.shadowRoot.querySelectorAll('.entity-row').length}; });
   expect(metrics.rows).toBe(80); expect(metrics.ms).toBeLessThan(1000); console.log('5000 entity page',metrics);
 });
+
+test('five thousand entities load through bounded WebSocket inventory pages', async ({page}) => {
+  await page.goto('/tests/frontend/browser_fixture.html?paged'); const panel = page.locator('homekit-manager-panel');
+  await expect.poll(() => panel.evaluate(element => element.entities.length)).toBe(5000);
+  expect(await page.evaluate(() => window.fixtureCommands.filter(type => type === 'homekit_manager/inventory').length)).toBe(10);
+  await panel.getByRole('tab', {name:'Geräte', exact:true}).click();
+  await panel.locator('[data-group=entities]').click();
+  await expect(panel.locator('.entity-row')).toHaveCount(80);
+  await expect(panel.locator('.result-count')).toContainText('5000 von 5000');
+});
+
+test('snapshot drift during inventory paging blocks partial publication', async ({page}) => {
+  await page.goto('/tests/frontend/browser_fixture.html?paged&stale-page'); const panel = page.locator('homekit-manager-panel');
+  await expect(panel.getByRole('alert')).toContainText('während des Seitenabrufs');
+  expect(await panel.evaluate(element => element.entities.length)).toBe(0);
+});
+
+test('search, sort, filters and bulk draft span every loaded inventory page', async ({page}) => {
+  await page.goto('/tests/frontend/browser_fixture.html?paged'); const panel = page.locator('homekit-manager-panel');
+  await expect.poll(() => panel.evaluate(element => element.entities.length)).toBe(5000);
+  await panel.getByRole('tab', {name:'Geräte', exact:true}).click();
+  await panel.locator('[data-group=entities]').click();
+  const sorted = await panel.evaluate(element => [element.filtered[0].entity_id, element.filtered.at(-1).entity_id]);
+  expect(sorted).toEqual(['light.paged_0', 'light.paged_4999']);
+  const search = panel.getByRole('searchbox', {name:'Entitäten suchen'});
+  await search.fill('Paged Lamp 4999');
+  await expect(panel.locator('.result-count')).toContainText('1 von 5000');
+  await expect(panel.locator('.entity-row code')).toHaveText('light.paged_4999');
+  await search.fill('');
+  await panel.locator('.filters summary').click();
+  for (const [key, value] of [['domain', 'light'], ['status', 'included'], ['compatibility', 'supported'], ['availability', 'available'], ['integration', 'demo']]) {
+    await panel.locator(`[data-filter=${key}]`).selectOption(value);
+    await expect(panel.locator('.result-count')).toContainText('5000 von 5000');
+    await panel.locator('[data-reset-filters]').click();
+  }
+  await panel.locator('[data-selection]').click();
+  await panel.locator('[data-select="light.paged_0"]').check();
+  await panel.getByRole('button', {name:'Nächste Seite'}).click();
+  await panel.locator('[data-select="light.paged_80"]').check();
+  await search.fill('Paged Lamp 4999');
+  await panel.locator('[data-select="light.paged_4999"]').check();
+  await expect(panel.locator('.selection-bar')).toContainText('3 ausgewählt');
+  await panel.locator('[data-exclude]').click();
+  await expect(panel.locator('dialog')).toContainText('Es entsteht nur ein Entwurf');
+  await panel.locator('[data-confirm-accept]').click();
+  await panel.getByRole('tab', {name:'Änderungen', exact:true}).click();
+  await expect(panel.locator('.change-row')).toHaveCount(3);
+  expect(await panel.locator('.change-row code').allTextContents()).toEqual([
+    'light.paged_0', 'light.paged_80', 'light.paged_4999',
+  ]);
+  await expect(panel.locator('[data-apply]')).toBeDisabled();
+});

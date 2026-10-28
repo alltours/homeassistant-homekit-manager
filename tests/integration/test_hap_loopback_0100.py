@@ -4,6 +4,10 @@ import asyncio
 import socket
 from pathlib import Path
 
+from aiohomekit.controller.controller import Controller
+from aiohomekit.controller.ip.discovery import IpDiscovery
+from aiohomekit.controller.ip.pairing import IpPairing
+from aiohomekit.zeroconf import HomeKitService
 from homeassistant import config_entries
 
 from custom_components.homekit_manager.homekit_writer import HomeKitWriter, OptionsDiff
@@ -19,6 +23,9 @@ class LocalAdvertiser:
 
     async def async_unregister_service(self, _service):
         self.unregistered += 1
+
+    async def async_update_service(self, _service):
+        return None
 
     async def async_close(self):
         return None
@@ -68,6 +75,21 @@ async def test_loopback_hap_server_survives_native_filter_reload(hass, monkeypat
     await writer.wait_closed()
     assert response.startswith(b"HTTP/1.1")
 
+    controller = Controller()
+    discovery = IpDiscovery(controller, HomeKitService.from_service_info(first.driver.mdns_service_info))
+    finish_pairing = await asyncio.wait_for(discovery.async_start_pairing("isolated"), 10)
+    pairing = await asyncio.wait_for(finish_pairing(first.driver.state.pincode.decode()), 10)
+    await hass.async_add_executor_job(first.driver.persist)
+    before_accessories = await asyncio.wait_for(pairing.list_accessories_and_characteristics(), 10)
+    assert any(item["aid"] == before_aid for item in before_accessories)
+    before_accessory = next(item for item in before_accessories if item["aid"] == before_aid)
+    before_iids = sorted(
+        iid for service in before_accessory["services"]
+        for iid in [service["iid"], *(char["iid"] for char in service["characteristics"])]
+    )
+    pairing_data = dict(pairing.pairing_data)
+    await pairing.shutdown()
+
     diff = OptionsDiff(
         entry.entry_id,
         {"filter": {"include_entities": ["light.before"]}},
@@ -80,7 +102,19 @@ async def test_loopback_hap_server_survives_native_filter_reload(hass, monkeypat
     assert advertiser.registered == 2 and advertiser.unregistered == 1
     assert second.driver.state.mac == mac
     assert second.aid_storage.get_allocated_aid_for_entity_id("light.before") == before_aid
-    assert second.aid_storage.get_allocated_aid_for_entity_id("light.after") is not None
+    after_aid = second.aid_storage.get_allocated_aid_for_entity_id("light.after")
+    assert after_aid is not None and after_aid != before_aid
+    assert second.driver.state.paired
+    reopened_pairing = IpPairing(controller, pairing_data)
+    after_accessories = await asyncio.wait_for(reopened_pairing.list_accessories_and_characteristics(), 10)
+    assert {item["aid"] for item in after_accessories} >= {before_aid, after_aid}
+    after_accessory = next(item for item in after_accessories if item["aid"] == before_aid)
+    after_iids = sorted(
+        iid for service in after_accessory["services"]
+        for iid in [service["iid"], *(char["iid"] for char in service["characteristics"])]
+    )
+    assert after_iids == before_iids
+    await reopened_pairing.shutdown()
     reader, writer = await asyncio.open_connection("127.0.0.1", port)
     writer.write(b"GET /accessories HTTP/1.1\r\nHost: localhost\r\n\r\n")
     await writer.drain()

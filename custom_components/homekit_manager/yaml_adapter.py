@@ -7,6 +7,7 @@ remain read-only. The production coordinator never constructs this writer.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import ctypes
 import errno
 import fcntl
 from hashlib import sha256
@@ -17,6 +18,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import sys
 import threading
 import uuid
 from types import SimpleNamespace
@@ -138,6 +140,31 @@ def _digest(content: bytes) -> str:
     return sha256(content).hexdigest()
 
 
+def _extended_attribute_names(path: Path) -> set[str]:
+    if hasattr(os, "listxattr"):
+        return set(os.listxattr(path, follow_symlinks=False))
+    if sys.platform == "darwin":
+        # This Python build omits os.listxattr, although macOS exposes it.
+        # XATTR_NOFOLLOW prevents a swapped symlink from being traversed.
+        libc = ctypes.CDLL(None, use_errno=True)
+        listxattr = libc.listxattr
+        listxattr.argtypes = [ctypes.c_char_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_int]
+        listxattr.restype = ctypes.c_ssize_t
+        size = listxattr(os.fsencode(path), None, 0, 0x0001)
+        if size < 0:
+            code = ctypes.get_errno()
+            raise OSError(code, os.strerror(code), path)
+        if size == 0:
+            return set()
+        buffer = ctypes.create_string_buffer(size)
+        actual = listxattr(os.fsencode(path), buffer, size, 0x0001)
+        if actual < 0:
+            code = ctypes.get_errno()
+            raise OSError(code, os.strerror(code), path)
+        return {os.fsdecode(name) for name in buffer.raw[:actual].split(b"\0") if name}
+    raise OSError(errno.ENOTSUP, "Erweiterte Dateiattribute sind nicht prüfbar", path)
+
+
 def _writable_metadata(path: Path) -> tuple[int, int, int, int, int]:
     """Reject replacement that would silently change owner, group or file type."""
     info = path.stat(follow_symlinks=False)
@@ -145,8 +172,20 @@ def _writable_metadata(path: Path) -> tuple[int, int, int, int, int]:
         raise YamlAdapterBlocked("HomeKit-Quelldatei ist kein eindeutiger regulärer Dateiknoten")
     if info.st_uid != os.geteuid() or info.st_gid != os.getegid():
         raise YamlAdapterBlocked("Dateibesitz würde beim atomaren Ersatz verändert")
+    mode = stat.S_IMODE(info.st_mode)
+    if not mode & stat.S_IWUSR or mode & (stat.S_IWGRP | stat.S_IWOTH):
+        raise YamlAdapterBlocked("HomeKit-Quelldatei ist schreibgeschützt oder für andere Benutzer schreibbar")
     if info.st_mode & (stat.S_ISUID | stat.S_ISGID | stat.S_ISVTX):
         raise YamlAdapterBlocked("Sonderberechtigungen der Quelldatei sind nicht sicher ersetzbar")
+    if getattr(info, "st_flags", 0):
+        raise YamlAdapterBlocked("Dateisystem-Flags der Quelldatei sind nicht sicher ersetzbar")
+    try:
+        # macOS automatically adds com.apple.provenance to newly created files,
+        # including our replacement. Other attributes need an explicit copier.
+        if _extended_attribute_names(path) - {"com.apple.provenance"}:
+            raise YamlAdapterBlocked("Erweiterte Dateiattribute sind nicht sicher ersetzbar")
+    except OSError as err:
+        raise YamlAdapterBlocked("Dateiattribute der Quelldatei konnten nicht geprüft werden") from err
     return info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid
 
 

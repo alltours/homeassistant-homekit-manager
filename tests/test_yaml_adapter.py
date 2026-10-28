@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 from hashlib import sha256
+import ctypes
 import os
+import sys
 from types import SimpleNamespace
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
@@ -174,6 +176,44 @@ def test_source_inode_swap_after_open_is_blocked(yaml_files, monkeypatch):
     with pytest.raises(YamlAdapterConflict, match="Dateiknoten"):
         adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
     assert swapped and source.read_bytes() == before
+    assert not (root / ".storage").exists()
+
+
+@pytest.mark.parametrize("mode", [0o444, 0o664])
+def test_read_only_or_shared_writable_source_is_blocked_before_backup(yaml_files, mode):
+    root, source = yaml_files
+    adapter = YamlHomeKitAdapter(root)
+    plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+    before = source.read_bytes()
+    os.chmod(source, mode)
+    with pytest.raises(YamlAdapterBlocked, match="schreibgeschützt|andere Benutzer"):
+        adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
+    assert source.read_bytes() == before
+    assert not (root / ".storage").exists()
+
+
+def test_extended_attributes_are_not_silently_dropped(yaml_files):
+    root, source = yaml_files
+    adapter = YamlHomeKitAdapter(root)
+    plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+    before = source.read_bytes()
+    try:
+        if sys.platform == "darwin":
+            libc = ctypes.CDLL(None, use_errno=True)
+            setxattr = libc.setxattr
+            setxattr.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_void_p,
+                                 ctypes.c_size_t, ctypes.c_uint32, ctypes.c_int]
+            setxattr.restype = ctypes.c_int
+            value = ctypes.create_string_buffer(b"keep")
+            if setxattr(os.fsencode(source), b"user.homekit_manager_test", value, 4, 0, 0x0001) != 0:
+                raise OSError(ctypes.get_errno(), "setxattr failed")
+        else:
+            os.setxattr(source, "user.homekit_manager_test", b"keep")
+    except (AttributeError, OSError):
+        pytest.skip("Testdateisystem unterstützt keine benutzerdefinierten Dateiattribute")
+    with pytest.raises(YamlAdapterBlocked, match="Dateiattribute"):
+        adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
+    assert source.read_bytes() == before
     assert not (root / ".storage").exists()
 
 

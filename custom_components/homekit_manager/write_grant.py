@@ -16,6 +16,7 @@ import stat
 from typing import Any
 
 from .const import SUPPORTED_CORE_VERSION
+from .safety import has_extended_acl
 
 
 GRANT_FILENAME = ".homekit_manager_write_grant.json"
@@ -71,29 +72,35 @@ def _timestamp(value: Any) -> datetime:
 
 def _read(path: Path) -> ProductionWriteGrant | None:
     try:
-        directory = os.lstat(path.parent)
+        parent = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     except OSError as err:
         raise GrantBlocked("Verzeichnis der HomeKit-Schreibfreigabe ist nicht sicher lesbar") from err
-    if not stat.S_ISDIR(directory.st_mode) or directory.st_uid != os.geteuid() or directory.st_mode & 0o022:
-        raise GrantBlocked("Verzeichnis der HomeKit-Schreibfreigabe muss dem HA-Prozess gehören und darf nicht gemeinsam beschreibbar sein")
     try:
-        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
-    except FileNotFoundError:
-        return None
+        directory = os.fstat(parent)
+        if not stat.S_ISDIR(directory.st_mode) or directory.st_uid != os.geteuid() or directory.st_mode & 0o022 or has_extended_acl(parent):
+            raise GrantBlocked("Verzeichnis der HomeKit-Schreibfreigabe muss dem HA-Prozess gehören und darf nicht gemeinsam beschreibbar sein")
+        try:
+            descriptor = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK, dir_fd=parent)
+        except FileNotFoundError:
+            return None
+        except OSError as err:
+            raise GrantBlocked("HomeKit-Schreibfreigabe kann nicht sicher gelesen werden") from err
+        try:
+            info = os.fstat(descriptor)
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o600 or has_extended_acl(descriptor):
+                raise GrantBlocked("HomeKit-Schreibfreigabe benötigt eine eigene reguläre Datei mit Modus 0600 ohne ACL")
+            if info.st_size < 2 or info.st_size > 4096:
+                raise GrantBlocked("HomeKit-Schreibfreigabe hat eine ungültige Dateigröße")
+            raw = os.read(descriptor, 4097)
+            after = os.fstat(descriptor)
+            if len(raw) != info.st_size or (info.st_dev, info.st_ino, info.st_mtime_ns, info.st_size) != (after.st_dev, after.st_ino, after.st_mtime_ns, after.st_size):
+                raise GrantBlocked("HomeKit-Schreibfreigabe wurde beim Lesen verändert")
+        finally:
+            os.close(descriptor)
     except OSError as err:
-        raise GrantBlocked("HomeKit-Schreibfreigabe kann nicht sicher gelesen werden") from err
-    try:
-        info = os.fstat(descriptor)
-        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o600:
-            raise GrantBlocked("HomeKit-Schreibfreigabe benötigt eine eigene reguläre Datei mit Modus 0600")
-        if info.st_size < 2 or info.st_size > 4096:
-            raise GrantBlocked("HomeKit-Schreibfreigabe hat eine ungültige Dateigröße")
-        raw = os.read(descriptor, 4097)
-        after = os.fstat(descriptor)
-        if len(raw) != info.st_size or (info.st_dev, info.st_ino, info.st_mtime_ns, info.st_size) != (after.st_dev, after.st_ino, after.st_mtime_ns, after.st_size):
-            raise GrantBlocked("HomeKit-Schreibfreigabe wurde beim Lesen verändert")
+        raise GrantBlocked("Dateiberechtigungen der HomeKit-Schreibfreigabe konnten nicht geprüft werden") from err
     finally:
-        os.close(descriptor)
+        os.close(parent)
     try:
         data = json.loads(raw, object_pairs_hook=_unique_pairs)
     except (UnicodeError, json.JSONDecodeError) as err:

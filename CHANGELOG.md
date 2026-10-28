@@ -22,6 +22,7 @@
 - Closed HAP discovery sessions after pairing in the isolated tests, including failure paths, so reconnect tasks do not survive test teardown.
 - Rechecked the complete native Config Entry revision under the bridge lock immediately before mutation; unrelated concurrent option changes now block apply.
 - Rechecked the YAML grant immediately before atomic source replacement, and rejected unsafe backup-directory permissions and hardlinked journals.
+- Rejected macOS extended ACLs on write grants, writable YAML source files, backup directories and journals; mode bits alone do not capture these permissions.
 - Exercised all 32 WebSocket routes with an authenticated non-admin account; every route rejected the request.
 - Added an isolated Core/HAP driver test for MAC and AID/IID stability across a filter options reload; network advertisement and pairing remain untested.
 - Paired an isolated `aiohomekit` controller to the real HAP TCP server on loopback; it reconnected after a Core options reload and observed stable AID/IIDs loaded from real temporary storage files. mDNS was replaced by a test advertiser; Apple Home remains untested.

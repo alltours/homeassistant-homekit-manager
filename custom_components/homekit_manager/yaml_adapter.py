@@ -26,6 +26,8 @@ from typing import Any, Callable, Mapping
 
 from ruamel.yaml import YAML
 
+from .safety import has_extended_acl
+
 class YamlAdapterBlocked(ValueError):
     """The source, structure, or requested change is not provably safe."""
 
@@ -184,6 +186,15 @@ def _writable_metadata(path: Path) -> tuple[int, int, int, int, int]:
         # including our replacement. Other attributes need an explicit copier.
         if _extended_attribute_names(path) - {"com.apple.provenance"}:
             raise YamlAdapterBlocked("Erweiterte Dateiattribute sind nicht sicher ersetzbar")
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            opened = os.fstat(descriptor)
+            if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+                raise YamlAdapterBlocked("HomeKit-Quelldatei wurde während der Berechtigungsprüfung ersetzt")
+            if has_extended_acl(descriptor):
+                raise YamlAdapterBlocked("HomeKit-Quelldatei mit ACL bleibt schreibgeschützt")
+        finally:
+            os.close(descriptor)
     except OSError as err:
         raise YamlAdapterBlocked("Dateiattribute der Quelldatei konnten nicht geprüft werden") from err
     return info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid
@@ -212,6 +223,14 @@ class YamlHomeKitAdapter:
         if (not stat.S_ISDIR(storage_info.st_mode) or storage_info.st_uid != os.geteuid()
                 or stat.S_IMODE(storage_info.st_mode) & 0o022):
             raise YamlAdapterBlocked("HomeKit-Backup-Verzeichnis hat unsicheren Besitzer oder Berechtigungen")
+        storage_fd = os.open(storage, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            opened = os.fstat(storage_fd)
+            if ((opened.st_dev, opened.st_ino) != (storage_info.st_dev, storage_info.st_ino)
+                    or has_extended_acl(storage_fd)):
+                raise YamlAdapterBlocked("HomeKit-Backup-Verzeichnis hat eine ACL oder wurde ersetzt")
+        finally:
+            os.close(storage_fd)
         backup_dir = self.root / ".storage" / "homekit_manager_backups"
         backup_dir.mkdir(mode=0o700, exist_ok=True)
         for directory, private in ((storage, False), (backup_dir, True)):
@@ -221,6 +240,14 @@ class YamlHomeKitAdapter:
             mode = stat.S_IMODE(info.st_mode)
             if mode & 0o022 or (private and mode != 0o700):
                 raise YamlAdapterBlocked("HomeKit-Backup-Verzeichnis hat unsichere Berechtigungen")
+            descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                opened = os.fstat(descriptor)
+                if ((opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino)
+                        or has_extended_acl(descriptor)):
+                    raise YamlAdapterBlocked("HomeKit-Backup-Verzeichnis hat eine ACL oder wurde ersetzt")
+            finally:
+                os.close(descriptor)
         return backup_dir
 
     def _record(self, plan: YamlFilterPlan, state: str) -> None:
@@ -235,7 +262,8 @@ class YamlHomeKitAdapter:
         try:
             info = os.fstat(descriptor)
             if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
-                    or info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o600):
+                    or info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o600
+                    or has_extended_acl(descriptor)):
                 raise YamlAdapterBlocked("HomeKit-Journal ist keine private reguläre Datei")
             if os.write(descriptor, content) != len(content):
                 raise OSError("Audit-Journal wurde nur teilweise geschrieben")

@@ -174,8 +174,8 @@
     },
     {
       "path": "safety.py",
-      "sha256": "da54869650d881d146f36a9db2f403b46dbeb011746f95dfb28b409e5d91c5b1",
-      "size": 633
+      "sha256": "a63b8124942e3bce6fe581098826420106b8ffedcd58e34625beaeea8543513d",
+      "size": 1556
     },
     {
       "path": "source_model.py",
@@ -204,8 +204,8 @@
     },
     {
       "path": "write_grant.py",
-      "sha256": "cee7780ed9746db887af3e2cb449f14c74cd811d2a9b3dc4fcf2e2685c18d9e7",
-      "size": 6090
+      "sha256": "dd438dd61d149330b9e0940c61ce030893a4d947e24f668beb5860500a16d2b6",
+      "size": 6566
     },
     {
       "path": "www/homekit-manager.js",
@@ -214,8 +214,8 @@
     },
     {
       "path": "yaml_adapter.py",
-      "sha256": "f26ba7ef90418275cb1d8d6751c51f005459d498a3ecc8935b4fda9c9440fb7c",
-      "size": 29185
+      "sha256": "9493d485730d260aebc4c8606291cac6421ce1dec03a1532c4409dc0a1fb5455",
+      "size": 30670
     },
     {
       "path": "yaml_store.py",

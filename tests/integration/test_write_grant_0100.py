@@ -5,6 +5,8 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 import json
 import os
+import subprocess
+import sys
 from uuid import uuid4
 
 import pytest
@@ -92,6 +94,19 @@ async def test_grant_file_permissions_and_symlink_fail_closed(hass, tmp_path):
         tmp_path.chmod(original_mode)
     os.link(path, tmp_path / "second-link.json")
     with pytest.raises(GrantBlocked, match="0600"):
+        await read_production_grant(hass)
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS ACL semantics")
+async def test_macos_grant_acl_is_rejected(hass, tmp_path):
+    save_grant(tmp_path, grant_data("isolated-entry"))
+    grant_path = tmp_path / GRANT_FILENAME
+    applied = subprocess.run(["/bin/chmod", "+a", "everyone allow write", str(grant_path)],  # noqa: S603 - fixed argv, isolated temp path
+                             capture_output=True, check=False)
+    if applied.returncode:
+        pytest.skip("Testdateisystem unterstützt keine macOS-ACL")
+    assert grant_path.stat().st_mode & 0o777 == 0o600
+    with pytest.raises(GrantBlocked, match="ACL"):
         await read_production_grant(hass)
 
 

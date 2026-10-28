@@ -32,6 +32,8 @@ Zeitzone; die Laufzeit darf 24 Stunden nicht überschreiten. Die Datei muss
 regulär, nicht verlinkt, allein dem HA-Prozessbenutzer gehören und Modus `0600`
 haben. Das Konfigurationsverzeichnis muss demselben Benutzer gehören und darf
 nicht für Gruppe oder andere Benutzer schreibbar oder selbst ein Symlink sein.
+macOS-ACLs auf Grant, Konfigurationsverzeichnis, YAML-Quelle, Backup-Verzeichnis
+oder Journal blockieren den Writer auch bei scheinbar sicheren Modusbits.
 Unbekannte oder doppelte JSON-Felder, falsche Core-Version, falscher
 Entry, falsche Quelle und breitere Feldlisten werden abgewiesen. Der Grant wird
 vor jedem Apply erneut gelesen; Löschen oder Ersetzen widerruft künftige

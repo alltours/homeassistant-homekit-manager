@@ -4,6 +4,7 @@ from __future__ import annotations
 from hashlib import sha256
 import ctypes
 import os
+import subprocess
 import sys
 from types import SimpleNamespace
 from concurrent.futures import ThreadPoolExecutor
@@ -111,6 +112,22 @@ def test_yaml_apply_rejects_hardlinked_journal(yaml_files):
         adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
     assert other.read_text() == "keep"
     assert source.read_bytes() == before
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS ACL semantics")
+def test_macos_source_acl_is_read_only(yaml_files):
+    root, source = yaml_files
+    adapter = YamlHomeKitAdapter(root)
+    plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
+    before = source.read_bytes()
+    applied = subprocess.run(["/bin/chmod", "+a", "everyone allow write", str(source)],  # noqa: S603 - fixed argv, isolated temp path
+                             capture_output=True, check=False)
+    if applied.returncode:
+        pytest.skip("Testdateisystem unterstützt keine macOS-ACL")
+    with pytest.raises(YamlAdapterBlocked, match="ACL"):
+        adapter.apply(plan, expected_revision=plan.source_revision, isolated_authority=True)
+    assert source.read_bytes() == before
+    assert not (root / ".storage").exists()
 
 
 def test_conflict_blocks_stale_file_and_restore(yaml_files):

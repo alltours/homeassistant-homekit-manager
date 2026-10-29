@@ -165,7 +165,13 @@ def build_options_diff(
     if core_options_validator is not None:
         core_options_validator(copy.deepcopy(after))
     changed_keys = tuple(sorted(key for key in set(options) | set(after) if options.get(key) != after.get(key)))
-    return OptionsDiff(entry_id, options, after, changed_keys, tuple(sorted(desired)), plan)
+    changed_entities = tuple(
+        change["entity_id"] for change in plan["changes"]
+        if change["action"] in {"add", "remove"}
+    )
+    if not changed_entities:
+        raise HomeKitWriteBlocked("Der Entwurf enthält keine tatsächliche Entity-Filteränderung")
+    return OptionsDiff(entry_id, options, after, changed_keys, changed_entities, plan)
 
 
 class HomeKitWriter:

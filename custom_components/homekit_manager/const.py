@@ -1,7 +1,7 @@
 """Constants for HomeKit Manager."""
 from __future__ import annotations
 DOMAIN = "homekit_manager"
-INTEGRATION_VERSION = "0.10.2"
+INTEGRATION_VERSION = "0.10.3"
 INVENTORY_COMMAND = f"{DOMAIN}/inventory"
 BRIDGES_COMMAND = f"{DOMAIN}/bridges"
 SELECT_BRIDGE_COMMAND = f"{DOMAIN}/select_bridge"

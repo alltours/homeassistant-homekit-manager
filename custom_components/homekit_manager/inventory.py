@@ -83,6 +83,8 @@ class InventoryEntity:
     state_present: bool
     area_source: str
     device_disabled_by: str | None
+    device_area_id: str | None = None
+    device_area_name: str | None = None
     def as_dict(self) -> dict[str, Any]:
         # Only the attributes container may hold nested mutable values. Deep
         # copying every scalar through dataclasses.asdict dominated the measured
@@ -111,9 +113,11 @@ def build_inventory(entity_registry: Any, device_registry: Any = None,
             device_cache[device_id] = _lookup(device_registry, device_id)
         device = device_cache.get(device_id)
         device_status = _device_status(device_registry, device_id, device)
-        area_id = _value(entry, "area_id") or _value(device, "area_id")
+        device_area_id = _value(device, "area_id")
+        area_id = _value(entry, "area_id") or device_area_id
         area_source = "entity" if _value(entry, "area_id") else "device" if _value(device, "area_id") else "none"
         area = areas.get(area_id) if isinstance(areas, Mapping) else None
+        device_area = areas.get(device_area_id) if isinstance(areas, Mapping) else None
         state_obj = state_map.get(entity_id)
         state = _value(state_obj, "state")
         attributes = dict(_value(state_obj, "attributes", {}) or {})
@@ -131,6 +135,7 @@ def build_inventory(entity_registry: Any, device_registry: Any = None,
             attributes=attributes, config_entry_id=_value(entry, "config_entry_id"),
             registry_entry_present=True, state_present=state_obj is not None,
             area_source=area_source, device_disabled_by=_value(device, "disabled_by"),
+            device_area_id=device_area_id, device_area_name=_value(device_area, "name"),
         ))
     for entity_id, state_obj in state_map.items():
         if entity_id in seen_entity_ids or "." not in entity_id:

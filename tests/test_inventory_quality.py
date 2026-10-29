@@ -77,6 +77,21 @@ def test_exclusive_availability_and_separate_missing_device_evidence():
                            registry, {}, {"sensor.available": state("42")})[0].availability_status == "disabled"
 
 
+def test_device_area_is_preserved_separately_from_entity_area_override():
+    device = NS(id="d", name="Device", area_id="a", disabled_by=None)
+    item = entry("sensor.test", "d")
+    item.area_id = "b"
+    areas = {"a": NS(name="Device area"), "b": NS(name="Entity area")}
+
+    result = build_inventory({"entities": {item.entity_id: item}}, Registry({"d": device}),
+                             areas, {item.entity_id: state("42")})[0]
+
+    assert result.area_source == "entity"
+    assert result.area_name == "Entity area"
+    assert result.device_area_id == "a"
+    assert result.device_area_name == "Device area"
+
+
 def test_diagnostics_follow_selected_bridge_filter_and_do_not_invent_publication():
     def item(entity_id, configured):
         return {"entity_id": entity_id, "available": True, "availability_status": "available",

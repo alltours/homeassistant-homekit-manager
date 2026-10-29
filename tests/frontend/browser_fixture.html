@@ -61,7 +61,7 @@
                 unavailable_entities: 1,
                 compatible_entities: 1,
                 configured_entities: 1,
-                integration_version: "0.10.1", core_version: params.has("core-beta") ? "2026.11.0b0" : "2026.10.4", last_updated: "2026-10-27T08:00:00Z", refresh_duration_ms: 3.2, refresh_count: 1, unavailable_entities: 1, accessories: 1, write_policy: { enabled: false }, operation_policy: { enabled: isolatedWrite || testModeActive, reason: isolatedWrite ? "Nur isolierte Testinstanz" : testModeActive ? "Befristeter nativer Testmodus aktiv" : "HomeKit-Schreibpfad gesperrt" },
+                integration_version: "0.10.2", core_version: params.has("core-beta") ? "2026.11.0b0" : "2026.10.4", last_updated: "2026-10-27T08:00:00Z", refresh_duration_ms: 3.2, refresh_count: 1, unavailable_entities: 1, accessories: 1, write_policy: { enabled: false }, operation_policy: { enabled: isolatedWrite || testModeActive, reason: isolatedWrite ? "Nur isolierte Testinstanz" : testModeActive ? "Befristeter nativer Testmodus aktiv" : "HomeKit-Schreibpfad gesperrt" },
                 test_write_mode: { enabled: testModeActive, entry_id: testModeActive ? "fixture-bridge" : null, expires_at: testModeActive ? "2026-10-28T23:00:00Z" : null, persistent: false, duration_minutes: 60 },
                 fingerprint: "fixture-fingerprint",
               },
@@ -150,7 +150,7 @@
             return { exists: true, valid: true, document: savedDocument, file_version: "fixture-version-2", fingerprint: "fixture-fingerprint-2", is_applied: false };
           }
           if (message.type === "homekit_manager/apply_options_diff") {
-            throw new Error("HomeKit-Schreibpfad in 0.10.1 gesperrt");
+            throw new Error("HomeKit-Schreibpfad gesperrt");
           }
           if (message.type === "homekit_manager/test_write_mode_enable") {
             if (message.entry_id !== "fixture-bridge" || message.confirmed_entry_id !== "fixture-bridge" || message.expected_fingerprint !== "fixture-fingerprint") throw new Error("Testmodus blockiert");

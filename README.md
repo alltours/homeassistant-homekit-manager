@@ -1,9 +1,8 @@
-# HomeKit Manager 0.10.1 development
+# HomeKit Manager 0.10.2
 
-Version 0.10.0 is already published. This branch prepares a distinct patch
-version with an optional native filter test mode. It is **not installed** by
-publishing or building the branch. Productive installation and the first Apply
-each require separate, explicit authorization.
+Version 0.10.2 fixes native dropdown menus closing during background inventory
+updates. The 0.10.1 filter test mode and all server-side write checks remain
+unchanged. Publishing this version does not install it on Home Assistant.
 
 Home Assistant custom integration for inspecting existing HomeKit Bridges and
 planning changes in one four-tab panel: HomeKit, Devices, Changes and Settings.
@@ -25,7 +24,7 @@ requires confirmation of its concrete diff. The existing local grant remains
 available for the previously supported workflow and YAML cases. See
 [test-mode authorization](docs/TEST_WRITE_MODE_0_10_1.md) and
 [local authorization and recovery](docs/WRITE_AUTHORIZATION_0_10_0.md).
-No test mode or grant has been activated on the existing production installation.
+The release process does not activate a test mode or grant on any installation.
 
 Core 2026.10.4 pins Pillow 12.3.0, for which upstream lists security
 advisories fixed in 13.0.0. The [Python dependency decision](docs/SECURITY_PYTHON_DEPENDENCIES_0_10_0.md)
@@ -57,7 +56,7 @@ Home Assistant custom integration for reading existing HomeKit Bridges, inspecti
 - Admin-protected WebSocket API, consistent snapshot responses and event-driven updates with event/recompute/CPU counters.
 - Side-effect-free compatibility projection for Home Assistant Core 2026.10.4. Eligibility and filter inclusion do not prove Apple Home publication.
 
-## Safety in 0.10.1 development
+## Safety
 
 **Applying HomeKit changes is disabled by default in the backend and visibly disabled in the panel.** Administrative ownership only stores Manager metadata. It does not enable the writer, migrate native HomeKit configuration, reload a bridge or move pairing data. The optional in-memory native test mode is a separate, explicitly confirmed Admin action with a one-hour expiry. Productive installation, test-mode activation and the first Apply are separate decisions.
 
@@ -79,7 +78,7 @@ The authoritative product repository is `https://github.com/alltours/homeassista
 
 Review the [0.10.0 upgrade and rollback guide](docs/UPGRADE_0_10_0.md) before any installation decision. This repository does not prove the currently installed production version or Apple Home behavior. No production installation was performed during this work. Replacing custom-component files does not itself update a running Home Assistant process.
 
-Accessory-mode instances are reported separately and cannot be selected as bridge targets. Cross-source migration and bridge creation/deletion stay blocked. The beta has a verified native filter path, but entity/accessory compatibility continues to report unknown outside Core 2026.10.4. Browser tests cover Chromium and WebKit; physical iPhone and VoiceOver acceptance remains separate. See the [0.10.1 release candidate notes](docs/RELEASE_0_10_1.md) for the exact scope.
+Accessory-mode instances are reported separately and cannot be selected as bridge targets. Cross-source migration and bridge creation/deletion stay blocked. The beta has a verified native filter path, but entity/accessory compatibility continues to report unknown outside Core 2026.10.4. Browser tests cover Chromium and WebKit; physical iPhone and VoiceOver acceptance remains separate. See the [0.10.2 release notes](docs/RELEASE_0_10_2.md) and [0.10.1 test-mode notes](docs/RELEASE_0_10_1.md) for the exact scope.
 
 ## License
 

@@ -48,6 +48,86 @@ test('search keeps focus, supports areas, all filters work, and pagination reach
   await panel.getByRole('button', {name: 'Nächste Seite'}).click(); await expect(panel.locator('.entity-row')).toHaveCount(21);
 });
 
+test('an open filter dropdown survives a backend refresh', async ({ page }) => {
+  await page.goto('/tests/frontend/browser_fixture.html');
+  const panel = page.locator('homekit-manager-panel');
+  await panel.getByRole('tab', { name: 'Geräte', exact: true }).click();
+  await panel.locator('.filters summary').click();
+  const select = panel.locator('[data-filter=domain]');
+  await select.focus();
+  const original = await select.elementHandle();
+  await panel.evaluate(element => element.refresh(false));
+  expect(await original.evaluate(node => node.isConnected)).toBe(true);
+  await expect(select).toBeFocused();
+  const beforeBlur = await panel.evaluate(element => element.renderCount);
+  await panel.getByRole('heading', { name: 'Geräte und Entitäten' }).click();
+  await expect.poll(() => panel.evaluate(element => element.renderCount)).toBeGreaterThan(beforeBlur);
+});
+
+test('filter dropdown supports waiting, selection, keyboard, outside click and another filter', async ({ page }) => {
+  await page.goto('/tests/frontend/browser_fixture.html');
+  const panel = page.locator('homekit-manager-panel');
+  await panel.getByRole('tab', { name: 'Geräte', exact: true }).click();
+  await panel.locator('.filters summary').click();
+  const domain = panel.locator('[data-filter=domain]');
+  await domain.focus();
+  const original = await domain.elementHandle();
+  await page.waitForTimeout(3500);
+  await panel.evaluate(async element => {
+    element.onInventoryUpdated({ data: { revision: 1 } });
+    while (element.loading) await new Promise(resolve => setTimeout(resolve, 5));
+  });
+  expect(await original.evaluate(node => node.isConnected)).toBe(true);
+  await domain.selectOption('light');
+  await expect(domain).toHaveValue('light');
+  await expect(domain).toBeFocused();
+  await domain.press('Tab');
+  const area = panel.locator('[data-filter=area]');
+  await area.focus();
+  await area.press('Escape');
+  await area.press('Tab');
+  await expect(panel.locator('[data-filter=device]')).toBeFocused();
+  await area.focus();
+  await area.selectOption('Kitchen');
+  await expect(area).toHaveValue('Kitchen');
+  await expect(panel.locator('.result-count')).toContainText('1 von 2');
+  await area.click();
+  await expect(area).toBeFocused();
+  await panel.getByRole('heading', { name: 'Geräte und Entitäten' }).click();
+  await expect(area).not.toBeFocused();
+});
+
+test('diagnostic dropdown also survives a backend refresh', async ({ page }) => {
+  await page.goto('/tests/frontend/browser_fixture.html');
+  const panel = page.locator('homekit-manager-panel');
+  await panel.getByRole('tab', { name: 'Einstellungen', exact: true }).click();
+  await panel.getByRole('button', { name: 'Diagnose', exact: true }).click();
+  const select = panel.locator('[data-diagnostic-filter]');
+  await select.focus();
+  const original = await select.elementHandle();
+  await panel.evaluate(element => element.refresh(false));
+  expect(await original.evaluate(node => node.isConnected)).toBe(true);
+  await expect(select).toBeFocused();
+});
+
+test('mobile touch keeps the filter control mounted during refresh', async ({ browser }) => {
+  const context = await browser.newContext({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
+  try {
+    await page.goto('/tests/frontend/browser_fixture.html');
+    const panel = page.locator('homekit-manager-panel');
+    await panel.getByRole('tab', { name: 'Geräte', exact: true }).tap();
+    await panel.locator('.filters summary').tap();
+    const select = panel.locator('[data-filter=domain]');
+    await select.tap();
+    const original = await select.elementHandle();
+    await panel.evaluate(element => element.refresh(false));
+    expect(await original.evaluate(node => node.isConnected)).toBe(true);
+    await select.selectOption('light');
+    await expect(panel.locator('.result-count')).toContainText('1 von 2');
+  } finally { await context.close(); }
+});
+
 test('availability totals follow current hits and missing device is evidence, not orphan proof', async ({ page }) => {
   await page.goto('/tests/frontend/browser_fixture.html');
   const panel = page.locator('homekit-manager-panel');

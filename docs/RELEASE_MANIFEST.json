@@ -1,5 +1,5 @@
 {
-  "integration_version": "0.10.1",
+  "integration_version": "0.10.2",
   "file_count": 45,
   "files": [
     {
@@ -39,7 +39,7 @@
     },
     {
       "path": "const.py",
-      "sha256": "d16080577ee64cd34db6e950702cec73de4570b8a62cce054724afbd1d4e90c0",
+      "sha256": "c86dbf17e23b99b2b2e37f4c203dc9b14892c1b00136eee9756b91eb08373de4",
       "size": 2642
     },
     {
@@ -124,7 +124,7 @@
     },
     {
       "path": "manifest.json",
-      "sha256": "3176058e9da28b1468f82aa5acc9baaa5156a2185f7fd48a7316c9b7bdc401d8",
+      "sha256": "8043e35cae4bc7709c9348e4d1ceff8d78b17cad4a23086b6813e1a23fd9bde9",
       "size": 516
     },
     {
@@ -214,8 +214,8 @@
     },
     {
       "path": "www/homekit-manager.js",
-      "sha256": "1799cb76a5c396193e3585467d792cae3b694db47d92588259afa2cb23008f82",
-      "size": 77197
+      "sha256": "55d8ccf5ebe400cbd84b4321b495da86f2ff104cc0518f80e5ce6de6603ff74c",
+      "size": 78176
     },
     {
       "path": "yaml_adapter.py",

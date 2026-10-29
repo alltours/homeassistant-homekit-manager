@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.4 (2026-10-29)
+
+- Published the documentation-only UX target and prioritized roadmap for separate, directly visible device and area bulk-action buttons.
+- Documented the proposed default exclusions and detailed confirmation counts for unsupported, hidden, categorized and disabled entities. These are future work, not behavior added in 0.10.4.
+- Updated release metadata to 0.10.4. HomeKit filter writers, authorization, pairing and runtime behavior remain unchanged from 0.10.3.
+
 ## 0.10.3 (2026-10-29)
 
 - Added the area → device → entity hierarchy. Device placement uses the actual device area while entity overrides remain visible as entity metadata.

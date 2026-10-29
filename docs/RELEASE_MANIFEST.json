@@ -1,5 +1,5 @@
 {
-  "integration_version": "0.10.3",
+  "integration_version": "0.10.4",
   "file_count": 45,
   "files": [
     {
@@ -39,7 +39,7 @@
     },
     {
       "path": "const.py",
-      "sha256": "82c1599ac9802eb3d84b6cd4df4714563bf2b8464549adc031753021e6e21a98",
+      "sha256": "da63a5c42920107960211f7ebc09ab50f2e820d6b0699eac1ca2beaaa065528b",
       "size": 2642
     },
     {
@@ -124,7 +124,7 @@
     },
     {
       "path": "manifest.json",
-      "sha256": "fc61a5afbf50b583bf002b1edd6134ddbce6cffecf61e24e71bdbb35a4143380",
+      "sha256": "604ec652a642c2d15c89e26e18877cc4ac24f99c426015fc5a0207298124000c",
       "size": 516
     },
     {

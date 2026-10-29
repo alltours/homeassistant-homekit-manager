@@ -23,7 +23,7 @@ class HomeKitManagerPanel extends HTMLElement {
       view: "home", settingsView: "configuration", groupMode: "areas", selectionMode: false, expanded: new Set(), query: "", page: 0,
       filters: { status: "", compatibility: "", domain: "", integration: "", area: "", availability: "", published: "", changed: "" },
       selected: new Set(), draft: new Map(), fingerprint: null, serverPreview: null, error: null, loading: false, statusMessage: "Keine Änderungen", expandedBridges: new Set(), activationMessage: "", actionMenuOpen: false, diagnosticFilter: "", filtersOpen: false });
-    this.operationPlan = null; this.operationStatus = null;
+    this.operationPlan = null; this.operationStatus = null; this.positiveListMigration = false;
     Object.assign(this, { action: "", statusTone: "neutral", expandedAreas: new Set(), areaPages: new Map(), draftFingerprint: null, conflict: false, dialog: null, lastFetchAt: null, _subscription: null, _pendingRevision: 0, _seenRevision: 0, _refreshQueued: false, _passiveRenderPending: false, _passiveRenderControl: null });
     this.filters.device = "";
     this.render();
@@ -67,7 +67,7 @@ class HomeKitManagerPanel extends HTMLElement {
       const [bridges, diagnostics, history, yaml, mode, activation, migrationPlan, migrationStatus, managementStatus] = inventory.context || await Promise.all(
         [WS.bridges, WS.diagnostics, WS.history, WS.yaml, WS.mode, WS.activation, WS.migrationPlan, WS.migrationStatus, WS.managementStatus].map(type => this._hass.callWS({ type }))
       );
-      if (this.draft.size && this.draftFingerprint && this.draftFingerprint !== inventory.overview?.fingerprint) this.conflict = true;
+      if ((this.draft.size || this.positiveListMigration) && this.draftFingerprint && this.draftFingerprint !== inventory.overview?.fingerprint) this.conflict = true;
       if (this.operationPlan && this.operationPlan.inventory_fingerprint !== inventory.overview?.fingerprint) this.conflict = true;
       Object.assign(this, { entities, overview: inventory.overview || {}, bridges: bridges.bridges || [], diagnostics, historyEntries: history.entries || [], yamlStatus: yaml, modeStatus: mode, activationStatus: activation || { state: "unknown" }, migrationPlan, migrationStatus, managementStatus });
       this._seenRevision = Math.max(this._seenRevision, Number(this.overview.refresh_count) || 0);
@@ -86,7 +86,7 @@ class HomeKitManagerPanel extends HTMLElement {
   }
   async selectBridge(entryId) {
     if (!entryId || entryId === this.bridge?.entry_id) return;
-    if (this.draft.size) { this.error = "Bitte den Entwurf zuerst speichern oder verwerfen, bevor du die Bridge wechselst."; this.render(); return; }
+    if (this.draft.size || this.positiveListMigration) { this.error = "Bitte den Entwurf zuerst speichern oder verwerfen, bevor du die Bridge wechselst."; this.render(); return; }
     try { await this._hass.callWS({ type: WS.selectBridge, entry_id: entryId }); this.serverPreview = null; this.operationPlan = null; this.operationStatus = null; await this.refresh(); } catch (error) { this.error = error?.message || String(error); this.render(); }
   }
   async loadSettingsData() {
@@ -94,10 +94,24 @@ class HomeKitManagerPanel extends HTMLElement {
     await this.runAction("Messwerte laden", async () => { this.performance = await this._hass.callWS({ type: WS.performance }); this.statusMessage = "Backend-Messwerte geladen"; });
   }
   async previewEntity(entityId) { try { this.devicePreview = await this._hass.callWS({ type: WS.devicePreview, entity_id: entityId }); this.settingsView = "preview"; this.view = "settings"; } catch (error) { this.error = error?.message || String(error); } this.render(); }
+  restoreDocumentDraft(bridgeDocument) {
+    const entities = bridgeDocument?.entities || {};
+    if (bridgeDocument?.policy === "positive_list") {
+      const active = this.activePositiveList();
+      const baseline = new Set(active ? this.bridge.filter.include_entities : this.entities.filter(item => this.currentStatus(item) === "included").map(item => item.entity_id));
+      const target = new Set(Object.entries(entities).filter(([, value]) => value === "include").map(([id]) => id));
+      this.draft = new Map([...new Set([...baseline, ...target])].filter(id => baseline.has(id) !== target.has(id)).map(id => [id, target.has(id) ? "included" : "excluded"]));
+      this.positiveListMigration = !active && bridgeDocument.migration_acknowledged === true;
+      if (!active && !this.positiveListMigration) this.conflict = true;
+    } else {
+      this.draft = new Map(Object.entries(entities).map(([id, value]) => [id, value === "include" ? "included" : "excluded"]));
+      this.positiveListMigration = false;
+    }
+  }
   async restoreHistory(index) {
-    if (this.draft.size && !await this.requestConfirmation("Historie als Entwurf laden", "Der aktuelle Entwurf wird ersetzt. HomeKit bleibt unverändert.", "Entwurf laden")) return;
+    if ((this.draft.size || this.positiveListMigration) && !await this.requestConfirmation("Historie als Entwurf laden", "Der aktuelle Entwurf wird ersetzt. HomeKit bleibt unverändert.", "Entwurf laden")) return;
     try { const result = await this._hass.callWS({ type: WS.historyRestore, index }); const bridgeId = result.bridge_id || (result.document?.bridges ? Object.keys(result.document.bridges)[0] : null);
-      if (bridgeId && bridgeId === this.bridge?.entry_id) { const entities = result.document.bridges[bridgeId].entities || {}; this.draft = new Map(Object.entries(entities).map(([id, value]) => [id, value === "include" ? "included" : "excluded"])); this.draftFingerprint = this.fingerprint; this.conflict = false; this.serverPreview = null; this.statusMessage = "Historie als Entwurf wiederhergestellt"; this.view = "changes"; }
+      if (bridgeId && bridgeId === this.bridge?.entry_id) { this.conflict = false; this.restoreDocumentDraft(result.document.bridges[bridgeId]); this.draftFingerprint = this.fingerprint; this.serverPreview = null; this.statusMessage = "Historie als Entwurf wiederhergestellt"; this.view = "changes"; }
       else this.error = "Der Historieneintrag gehört zu einer anderen oder nicht mehr vorhandenen Bridge.";
     } catch (error) { this.error = error?.message || String(error); } this.render();
   }
@@ -108,7 +122,24 @@ class HomeKitManagerPanel extends HTMLElement {
   status(entity) { return this.draft.has(entity.entity_id) && this.draft.get(entity.entity_id) !== this.currentStatus(entity) ? "planned" : this.currentStatus(entity); }
   statusLabel(value) { return ({ included: "Eingeschlossen", include: "Eingeschlossen", excluded: "Ausgeschlossen", exclude: "Ausgeschlossen", unknown: "Unbekannt", no_state: "Ohne aktuellen State", disabled: "Deaktiviert", planned: "Vorgemerkt", mixed: "Gemischt", empty: "Keine Entitäten", unknown_only: "Keine auswertbaren Entitäten", supported: "Unterstützt", conditionally_supported: "Bedingt unterstützt", unsupported: "Nicht unterstützt", available: "Verfügbar", unavailable: "Nicht verfügbar", yes: "Ja", no: "Nein" })[value] || value; }
   changes() { const byId = new Map(this.entities.map(item => [item.entity_id, item])); return [...this.draft].map(([entity_id, desired]) => { const entity = byId.get(entity_id); return { entity_id, desired, current: entity ? this.currentStatus(entity) : "unknown", name: entity?.name || entity_id }; }).filter((item) => item.desired !== item.current); }
-  desiredDocument() { const entry = this.bridge?.entry_id; const entities = Object.fromEntries([...this.draft].map(([id, value]) => [id, value === "included" ? "include" : value === "excluded" ? "exclude" : value])); return { schema_version: 1, bridges: entry ? { [entry]: { policy: "explicit_overrides", entities } } : {} }; }
+  activePositiveList() {
+    const filter = this.bridge?.filter;
+    return Array.isArray(filter?.include_entities) && filter.include_entities.length > 0
+      && ["include_domains", "include_entity_globs", "exclude_domains", "exclude_entity_globs"].every(key => !filter[key]?.length);
+  }
+  desiredDocument() {
+    const entry = this.bridge?.entry_id, active = this.activePositiveList(), positive = active || this.positiveListMigration;
+    const baseline = active ? this.bridge.filter.include_entities : this.positiveListMigration ? this.entities.filter(item => this.currentStatus(item) === "included" && item.homekit?.registry_eligible !== false).map(item => item.entity_id) : [];
+    const entities = Object.fromEntries(baseline.map(id => [id, "include"]));
+    for (const [id, value] of this.draft) {
+      if (positive && value === "excluded") delete entities[id];
+      else entities[id] = value === "included" ? "include" : "exclude";
+    }
+    return { schema_version: 1, bridges: entry ? { [entry]: {
+      policy: positive ? "positive_list" : "explicit_overrides", entities,
+      ...(this.positiveListMigration ? { migration_acknowledged: true } : {}),
+    } } : {} };
+  }
   selectView(view) { this.view = view; if (view === "settings") this.settingsView = "general"; this.render(); }
   setSettingsView(view) { this.settingsView = view; this.view = "settings"; this.render(); this.loadSettingsData(); }
   setFilter(key, value) { this.filters[key] = value; this.page = 0; this.filtersOpen = true; this.render(); }
@@ -165,7 +196,18 @@ class HomeKitManagerPanel extends HTMLElement {
     this.selected.clear(); this.render();
   }
   async applyToSelection(value) { await this.planSelection([...this.selected], value); }
-  discard() { this.draft.clear(); this.selected.clear(); this.draftFingerprint = null; this.conflict = false; this.serverPreview = null; this.operationPlan = null; this.operationStatus = null; this.statusMessage = "Entwurf verworfen"; this.statusTone = "neutral"; this.render(); }
+  async preparePositiveListMigration() {
+    if (!this.bridge?.entry_id || !this.fingerprint || this.activePositiveList()) return;
+    const selected = this.entities.filter(item => this.currentStatus(item) === "included").length;
+    if (!selected) { this.error = "Aktuell ist keine sicher bestimmbare eingeschlossene Entität vorhanden."; this.render(); return; }
+    const message = `Für ${this.bridge.title || this.bridge.entry_id} werden ${selected} aktuell durch den Filter ausgewählte Entitäten als Positivlistenentwurf vorgemerkt. Domain- und Glob-Regeln entfallen erst nach einem gesondert bestätigten Apply. Neue Entitäten werden danach nicht automatisch zugelassen. Der Server prüft zusätzlich den vollständigen Registry-, State- und HAP-Umfang und blockiert bei Abweichungen. Bestehende Apple-Home-Szenen können durch entfernte Accessories beeinträchtigt werden.`;
+    if (!await this.requestConfirmation("Positivliste als Entwurf vorbereiten", message, "Positivlistenentwurf vorbereiten")) return;
+    this.positiveListMigration = true; this.draftFingerprint = this.fingerprint;
+    this.serverPreview = null; this.operationPlan = null; this.operationStatus = null;
+    this.statusMessage = "Positivlistenmigration als Entwurf vorgemerkt · HomeKit unverändert";
+    this.view = "changes"; this.render();
+  }
+  discard() { this.draft.clear(); this.selected.clear(); this.positiveListMigration = false; this.draftFingerprint = null; this.conflict = false; this.serverPreview = null; this.operationPlan = null; this.operationStatus = null; this.statusMessage = "Entwurf verworfen"; this.statusTone = "neutral"; this.render(); }
   async validateDraft() { try { return await this._hass.callWS({ type: WS.validate, document: this.desiredDocument() }); } catch (error) { this.error = error?.message || String(error); this.render(); return null; } }
   async previewServer() {
     await this.runAction("Vorschau erstellen", async () => {
@@ -212,14 +254,16 @@ class HomeKitManagerPanel extends HTMLElement {
   async applyDraft() {
     if (!this.supportsApply()) { this.statusMessage = this.overview.operation_policy?.reason || "HomeKit-Anwendung ist serverseitig gesperrt."; this.statusTone = "neutral"; this.render(); return; }
     const plan = this.operationPlan;
-    const exactDiff = this.changes().map(item => `${item.entity_id}: ${this.statusLabel(item.current)} → ${this.statusLabel(item.desired)}`).join("; ");
-    if (!await this.requestConfirmation("HomeKit-Änderung anwenden", `Operation ${plan.operation_id} für ${this.bridge?.title || plan.entry_id} (${plan.entry_id}, Quelle ${plan.source}). Konkreter Diff: ${exactDiff}.`, "Genau diese Änderung anwenden")) return;
+    const exactDiff = (plan.change_details || []).map(item => `${item.entity_id}: ${this.statusLabel(item.current)} → ${this.statusLabel(item.desired)}`).join("; ");
+    if ((plan.change_details || []).length !== plan.changed_entities?.length || (!exactDiff && !plan.migration)) { this.error = "Serverseitiger Diff fehlt oder ist unvollständig. Bitte neu planen."; this.render(); return; }
+    const migrationText = plan.migration ? ` Positivlistenmigration: ${plan.migration.selected_before} bisher ausgewählt, ${plan.migration.hap_published_before} HAP-Accessories nachgewiesen, ${plan.migration.published_removals?.length || 0} aktuell veröffentlichte Entitäten würden entfernt (${(plan.migration.published_removals || []).join(", ") || "keine"}). Künftige neue Entitäten bleiben ausgeschlossen.` : "";
+    if (!await this.requestConfirmation("HomeKit-Änderung anwenden", `Operation ${plan.operation_id} für ${this.bridge?.title || plan.entry_id} (${plan.entry_id}, Quelle ${plan.source}). Konkreter Diff: ${exactDiff || "keine aktuelle Entity-Änderung; Filterregel wird umgestellt"}.${migrationText} Das Entfernen von Accessories kann Apple-Home-Szenen und Automationen beeinträchtigen; ein Pairing-Erhalt in Apple Home ist nicht garantiert.`, "Genau diese Änderung anwenden")) return;
     await this.runAction("HomeKit-Änderung anwenden", async () => {
       try {
         const result = await this._hass.callWS({ type: WS.operationApply, operation_id: plan.operation_id, entry_id: plan.entry_id, source_revision: plan.source_revision, expected_fingerprint: plan.inventory_fingerprint, confirmed_operation_id: plan.operation_id });
         this.operationStatus = result;
         if (result.state !== "verified") throw new Error("Die Nachverifikation wurde nicht bestätigt.");
-        this.operationPlan = null; this.draft.clear(); this.draftFingerprint = null;
+        this.operationPlan = null; this.draft.clear(); this.positiveListMigration = false; this.draftFingerprint = null;
         await this.refresh(false);
         this.statusMessage = "HomeKit-Konfigurationswerte vom Backend verifiziert; Apple Home nicht bestätigt";
       } catch (error) {
@@ -240,14 +284,14 @@ class HomeKitManagerPanel extends HTMLElement {
     });
   }
   async loadSaved() {
-    if (this.draft.size && !await this.requestConfirmation("Gespeicherten Entwurf laden", "Die aktuelle Auswahl wird durch den gespeicherten Entwurf ersetzt.", "Entwurf laden")) return;
+    if ((this.draft.size || this.positiveListMigration) && !await this.requestConfirmation("Gespeicherten Entwurf laden", "Die aktuelle Auswahl wird durch den gespeicherten Entwurf ersetzt.", "Entwurf laden")) return;
     await this.runAction("Entwurf laden", async () => {
       if (!await this.refresh(false)) throw new Error(this.error || "Entwurf konnte nicht gelesen werden");
       if (!this.yamlStatus.valid) throw new Error(this.yamlStatus.error || "Gespeicherter Entwurf ungültig");
-      const saved = this.yamlStatus.document?.bridges?.[this.bridge?.entry_id]?.entities || {};
-      this.draft = new Map(Object.entries(saved).map(([id, value]) => [id, value === "include" ? "included" : "excluded"]));
-      this.draftFingerprint = this.fingerprint; this.conflict = false; this.serverPreview = null;
-      this.statusMessage = this.draft.size ? "Gespeicherten Entwurf geladen" : "Für diese Bridge ist kein Entwurf gespeichert";
+      const saved = this.yamlStatus.document?.bridges?.[this.bridge?.entry_id];
+      this.conflict = false; this.restoreDocumentDraft(saved);
+      this.draftFingerprint = this.fingerprint; this.serverPreview = null;
+      this.statusMessage = this.draft.size || this.positiveListMigration ? "Gespeicherten Entwurf geladen" : "Für diese Bridge ist kein Entwurf gespeichert";
     });
   }
   async runAction(label, callback) {
@@ -365,6 +409,17 @@ class HomeKitManagerPanel extends HTMLElement {
     const policy = this.overview.operation_policy || {};
     return `<p class="lock-note">${this.escape(policy.reason || "HomeKit-Schreiben ist gesperrt.")}</p><p class="muted">HomeKit Manager zeigt und plant Änderungen für die ausgewählte Bridge. Die Konfigurationsquelle bleibt erhalten.</p>`;
   }
+  positiveListCard() {
+    if (!this.bridge) return "";
+    if (this.activePositiveList()) return `<section class="notice"><strong>Positivliste aktiv</strong><p>Neue Entitäten werden durch den bestehenden Filter nicht automatisch eingeschlossen.</p></section>`;
+    const eligible = this.bridge.source === "user" && this.bridge.mode === "bridge" && this.overview.core_version === "2026.10.4" && !this.overview.snapshot_stale && this.fingerprint;
+    return `<section class="notice warning"><strong>Positivliste vorbereiten</strong><p>Die aktuelle Bridge verwendet breitere Filterregeln. Eine Umstellung findet nur nach Prüfung des Live-HAP-Umfangs und gesondertem Apply statt. Die Migration ist derzeit für geladene native Bridges auf Core 2026.10.4 geprüft.</p><button data-positive-migration${eligible ? "" : " disabled"}>Positivliste als Entwurf vorbereiten</button></section>`;
+  }
+  migrationNotice() {
+    if (!this.positiveListMigration) return "";
+    const migration = this.operationPlan?.migration;
+    return `<section class="notice warning"><strong>Positivlistenmigration im Entwurf</strong><p>Bestehende breite Regeln würden erst nach einem gesonderten Apply durch explizite Entitäten ersetzt. Neue Entitäten bleiben danach ausgeschlossen. Der Server muss Registry, States und HAP-Zuordnung vor dem Schreiben erneut bestätigen.</p>${migration ? `<p>Aktuell ausgewählt: ${migration.selected_before}; HAP-Accessories nachgewiesen: ${migration.hap_published_before}; davon zur Entfernung: ${migration.published_removals?.length || 0}.</p>` : `<p>Der HAP-Exportumfang ist noch nicht serverseitig geprüft. Bitte den Plan validieren.</p>`}</section>`;
+  }
   testWriteModeCard() {
     const mode = this.overview.test_write_mode || {};
     const bridge = this.bridge;
@@ -396,8 +451,8 @@ class HomeKitManagerPanel extends HTMLElement {
     const bridge = this.bridge, stale = this.overview.snapshot_stale || !this.lastFetchAt;
     const available = !stale && bridge?.state === "loaded";
     const source = stale ? "Unbekannt" : this.managementStatus.configuration_source_label || "Unbekannt";
-    const writeStatus = this.overview.test_write_mode?.enabled && this.overview.test_write_mode.entry_id === bridge?.entry_id ? "Testmodus aktiv" : this.overview.operation_policy?.enabled ? "Befristet freigegeben" : "Gesperrt";
-    return `${this.pageHeading("HomeKit", "Deine Bridge im Überblick", "Bridge, Konfigurationsquelle und offene Entwürfe auf einen Blick.")}<section class="status-grid" aria-label="Systemübersicht">${this.stateTile("Bridge", available ? "Geladen" : stale || !bridge ? "Unbekannt" : "Nicht geladen", available ? "success" : "neutral")}${this.stateTile("Konfigurationsquelle", source)}${this.stateTile("Schreiben", writeStatus)}${this.stateTile("Offene Änderungen", this.changes().length, this.changes().length ? "warning" : "neutral")}</section><section class="surface"><div class="section-heading"><h3>HomeKit-Bridges</h3><span class="muted">${this.bridges.length} erkannt</span></div>${this.bridges.map(item => this.bridgeCard(item)).join("") || `<div class="empty">Keine Bridge bestätigt. Accessory-Instanzen werden separat erkannt und nicht als Bridge behandelt.</div>`}${this.overview.accessories ? `<p class="muted">${this.overview.accessories} separate Accessory-Instanz(en) · keine Bridge-Ziele</p>` : ""}</section><section class="surface"><h3>Konfigurationsquelle und Schreibstatus</h3><p class="muted">Die Bridge behält ihre bestehende Konfigurationsquelle. Entwürfe ändern diese Quelle nicht.</p><div class="source-options">${this.sourceCard()}</div>${this.managementCard()}</section><section class="surface"><div class="section-heading"><h3>Entitäten und Entwürfe</h3><button data-nav="devices">Geräte öffnen</button></div><dl class="definition-list"><div><dt>Entitäten im Inventar</dt><dd>${this.overview.total_entities ?? this.entities.length}</dd></div><div><dt>Durch Bridge-Filter eingeschlossen</dt><dd>${this.overview.configured_entities ?? "Unbekannt"}</dd></div><div><dt>Ohne verfügbaren Status</dt><dd>${this.overview.unavailable_entities ?? "Unbekannt"}</dd></div></dl><p class="muted">Geräte-IDs aus Entitäten: ${this.overview.device_reconciliation?.referenced_device_count ?? "Unbekannt"} · davon in der nativen Registry gelistet: ${this.overview.device_reconciliation?.registered_referenced_device_count ?? "Unbekannt"}. Synthetische Composite-IDs: ${this.overview.device_reconciliation?.composite_reference_ids?.length ?? "Unbekannt"}; fehlende Referenzen: ${this.overview.device_reconciliation?.missing_reference_ids?.length ?? "Unbekannt"}.</p><p class="muted">Ein Filtertreffer ist kein Nachweis der Veröffentlichung in Apple Home.</p>${this.changes().length ? `<button class="primary" data-nav="changes">${this.changes().length} Änderung(en) prüfen</button>` : `<p class="muted">Keine offenen Änderungen.</p>`}</section>`;
+    const writeStatus = this.overview.operation_policy?.enabled ? "Bereit zur Bestätigung" : "Gesperrt";
+    return `${this.pageHeading("HomeKit", "Deine Bridge im Überblick", "Bridge, Konfigurationsquelle und offene Entwürfe auf einen Blick.")}<section class="status-grid" aria-label="Systemübersicht">${this.stateTile("Bridge", available ? "Geladen" : stale || !bridge ? "Unbekannt" : "Nicht geladen", available ? "success" : "neutral")}${this.stateTile("Konfigurationsquelle", source)}${this.stateTile("Schreiben", writeStatus)}${this.stateTile("Offene Änderungen", this.changes().length, this.changes().length ? "warning" : "neutral")}</section><section class="notice${this.activePositiveList() ? "" : " warning"}"><strong>${this.activePositiveList() ? "Positivliste aktiv" : "Keine Positivliste nachgewiesen"}</strong><p>${this.activePositiveList() ? "Nur explizit eingeschlossene Entitäten sind durch den Bridge-Filter zugelassen; neue Entitäten bleiben zunächst ausgeschlossen." : "Bestehende Domain-, Glob- oder Ausschlussregeln können auch neue Entitäten erfassen. Eine Umstellung benötigt eine gesonderte Prüfung des bisherigen Exportumfangs und erfolgt nicht automatisch."}</p></section><section class="surface"><div class="section-heading"><h3>HomeKit-Bridges</h3><span class="muted">${this.bridges.length} erkannt</span></div>${this.bridges.map(item => this.bridgeCard(item)).join("") || `<div class="empty">Keine Bridge bestätigt. Accessory-Instanzen werden separat erkannt und nicht als Bridge behandelt.</div>`}${this.overview.accessories ? `<p class="muted">${this.overview.accessories} separate Accessory-Instanz(en) · keine Bridge-Ziele</p>` : ""}</section><section class="surface"><h3>Konfigurationsquelle und Schreibstatus</h3><p class="muted">Die Bridge behält ihre bestehende Konfigurationsquelle. Entwürfe ändern diese Quelle nicht.</p><div class="source-options">${this.sourceCard()}</div>${this.managementCard()}</section><section class="surface"><div class="section-heading"><h3>Entitäten und Entwürfe</h3><button data-nav="devices">Geräte öffnen</button></div><dl class="definition-list"><div><dt>Entitäten im Inventar</dt><dd>${this.overview.total_entities ?? this.entities.length}</dd></div><div><dt>Durch Bridge-Filter eingeschlossen</dt><dd>${this.overview.configured_entities ?? "Unbekannt"}</dd></div><div><dt>Ohne verfügbaren Status</dt><dd>${this.overview.unavailable_entities ?? "Unbekannt"}</dd></div></dl><p class="muted">Geräte-IDs aus Entitäten: ${this.overview.device_reconciliation?.referenced_device_count ?? "Unbekannt"} · davon in der nativen Registry gelistet: ${this.overview.device_reconciliation?.registered_referenced_device_count ?? "Unbekannt"}. Synthetische Composite-IDs: ${this.overview.device_reconciliation?.composite_reference_ids?.length ?? "Unbekannt"}; fehlende Referenzen: ${this.overview.device_reconciliation?.missing_reference_ids?.length ?? "Unbekannt"}.</p><p class="muted">Ein Filtertreffer ist kein Nachweis der Veröffentlichung in Apple Home.</p>${this.changes().length ? `<button class="primary" data-nav="changes">${this.changes().length} Änderung(en) prüfen</button>` : `<p class="muted">Keine offenen Änderungen.</p>`}</section>`;
   }
   changesTemplate() {
     const changes = this.changes(), state = this.activationStatus.state || "unknown";
@@ -406,12 +461,12 @@ class HomeKitManagerPanel extends HTMLElement {
       ? "Keine Anwendung protokolliert" : labels[state] || "Unbekannt";
     const tone = state === "active" && this.activationStatus.has_operation ? "success" : state === "failed" ? "error" : "neutral";
     const previewById = new Map((this.serverPreview?.changes || []).map(item => [item.entity_id, item]));
-    return `${this.pageHeading("Änderungen", "Dein geplanter Zustand", "Vorschau und Entwurfsspeicherung verändern keine produktive HomeKit-Konfiguration.")}<section class="surface activation-card"><div class="section-heading"><h3>Anwendungsstatus</h3><span class="state tone-${tone}" data-activation-state="${this.escape(state)}">${this.escape(stateLabel)}</span></div><p>${this.escape(this.activationStatus.message || (this.activationStatus.has_operation ? "Gespeicherter Vorgangsstatus" : "Es liegt kein persistenter Nachweis einer früheren Anwendung vor."))}</p><p class="muted">Eine geladene Bridge allein bestätigt keine frühere Anwendung. Unbekannte Vorgänge werden nicht automatisch wiederholt.</p><button data-refresh>Status lesend prüfen</button><details class="technical"><summary>Vorgangsdaten</summary><dl class="definition-list"><div><dt>Request-ID</dt><dd><code>${this.escape(this.activationStatus.request_id || "Nicht vorhanden")}</code></dd></div><div><dt>Letzte Meldung</dt><dd>${this.formatTime(this.activationStatus.updated_at)}</dd></div><div><dt>Aktueller Bridge-Zustand</dt><dd>${this.escape(this.activationStatus.observations?.bridge_state || "Unbekannt")}</dd></div></dl></details></section>${this.conflict ? `<aside class="notice warning" role="alert">Der aktuelle Zustand oder die Vorschau enthält einen Konflikt. Bitte die Vorschau erneut prüfen.</aside>` : ""}<section class="surface changes-surface"><div class="section-heading"><h3>Geplante Änderungen</h3><span class="muted">${changes.length}</span></div>${changes.length ? changes.map(item => { const planned = previewById.get(item.entity_id); return `<article class="change-row"><div class="entity-copy"><strong>${this.escape(item.name)}</strong><code>${this.escape(item.entity_id)}</code><small>Bridge: ${this.escape(this.bridge?.title || "Nicht ausgewählt")}</small></div><dl class="change-states"><div><dt>Bisher</dt><dd>${this.statusLabel(item.current)}</dd></div><div><dt>Geplant</dt><dd>${this.statusLabel(item.desired)}</dd></div></dl>${planned?.blocked || planned?.risk === "high" ? `<p class="text-warning">${this.escape(planned.reason || "Zusätzliche Prüfung erforderlich")}</p>` : ""}</article>`; }).join("") : `<div class="empty"><strong>Keine Änderungen vorgemerkt</strong><p>Wähle unter Geräte die gewünschten Entitäten aus.</p><button data-nav="devices">Geräte öffnen</button></div>`}</section><section class="surface operation-card"><div class="section-heading"><h3>Validierter Änderungsplan</h3><span class="state">${this.escape(this.operationStatus?.state || "Noch nicht geplant")}</span></div><p class="muted">Der Plan bindet Bridge, Quelle und Revision. Sicherung und Nachverifikation erfolgen erst beim erlaubten Apply; Apple Home bleibt ungeprüft.</p>${this.operationPlan ? `<dl class="definition-list"><div><dt>Operation-ID</dt><dd><code>${this.escape(this.operationPlan.operation_id)}</code></dd></div><div><dt>Quelle</dt><dd>${this.escape(this.operationPlan.source)}</dd></div><div><dt>Betroffene Entitäten</dt><dd>${this.operationPlan.changed_entities?.length || 0}</dd></div></dl>` : ""}<button data-operation-plan${changes.length && !this.conflict ? "" : " disabled"}>Plan validieren</button>${this.operationPlan?.operation_id ? `<button data-operation-reconcile>Vorgang lesend abgleichen</button>` : ""}</section><section class="notice lock-note"><button data-apply${this.supportsApply() ? "" : " disabled"} title="${this.escape(this.overview.operation_policy?.reason || "HomeKit-Schreibpfad gesperrt")}">${this.supportsApply() ? "Änderung anwenden" : "Änderung anwenden · gesperrt"}</button><p>${this.escape(this.overview.operation_policy?.reason || "Der Schreibpfad ist im Backend gesperrt. Verwaltung und Vorschau heben diese Sperre nicht auf.")}</p></section><footer class="sticky-actions" aria-label="Änderungsaktionen"><span class="footer-count">${changes.length} vorgemerkt</span><button class="primary" data-save${changes.length ? "" : " disabled"}>Entwurf speichern</button><button data-preview${changes.length ? "" : " disabled"}>Vorschau</button><button data-action-menu aria-expanded="${this.actionMenuOpen}">Weitere</button>${this.actionMenuOpen ? `<div class="action-menu"><button data-export>YAML exportieren</button><button data-load>Entwurf laden</button><button data-discard${changes.length ? "" : " disabled"}>Verwerfen</button></div>` : ""}</footer>`;
+    return `${this.pageHeading("Änderungen", "Dein geplanter Zustand", "Vorschau und Entwurfsspeicherung verändern keine produktive HomeKit-Konfiguration.")}<section class="surface activation-card"><div class="section-heading"><h3>Anwendungsstatus</h3><span class="state tone-${tone}" data-activation-state="${this.escape(state)}">${this.escape(stateLabel)}</span></div><p>${this.escape(this.activationStatus.message || (this.activationStatus.has_operation ? "Gespeicherter Vorgangsstatus" : "Es liegt kein persistenter Nachweis einer früheren Anwendung vor."))}</p><p class="muted">Eine geladene Bridge allein bestätigt keine frühere Anwendung. Unbekannte Vorgänge werden nicht automatisch wiederholt.</p><button data-refresh>Status lesend prüfen</button><details class="technical"><summary>Vorgangsdaten</summary><dl class="definition-list"><div><dt>Request-ID</dt><dd><code>${this.escape(this.activationStatus.request_id || "Nicht vorhanden")}</code></dd></div><div><dt>Letzte Meldung</dt><dd>${this.formatTime(this.activationStatus.updated_at)}</dd></div><div><dt>Aktueller Bridge-Zustand</dt><dd>${this.escape(this.activationStatus.observations?.bridge_state || "Unbekannt")}</dd></div></dl></details></section>${this.conflict ? `<aside class="notice warning" role="alert">Der aktuelle Zustand oder die Vorschau enthält einen Konflikt. Bitte die Vorschau erneut prüfen.</aside>` : ""}<section class="surface changes-surface"><div class="section-heading"><h3>Geplante Änderungen</h3><span class="muted">${changes.length}</span></div>${changes.length ? changes.map(item => { const planned = previewById.get(item.entity_id); return `<article class="change-row"><div class="entity-copy"><strong>${this.escape(item.name)}</strong><code>${this.escape(item.entity_id)}</code><small>Bridge: ${this.escape(this.bridge?.title || "Nicht ausgewählt")}</small></div><dl class="change-states"><div><dt>Bisher</dt><dd>${this.statusLabel(item.current)}</dd></div><div><dt>Geplant</dt><dd>${this.statusLabel(item.desired)}</dd></div></dl>${planned?.blocked || planned?.risk === "high" ? `<p class="text-warning">${this.escape(planned.reason || "Zusätzliche Prüfung erforderlich")}</p>` : ""}</article>`; }).join("") : `<div class="empty"><strong>Keine Änderungen vorgemerkt</strong><p>Wähle unter Geräte die gewünschten Entitäten aus.</p><button data-nav="devices">Geräte öffnen</button></div>`}</section>${this.migrationNotice()}<section class="surface operation-card"><div class="section-heading"><h3>Validierter Änderungsplan</h3><span class="state">${this.escape(this.operationStatus?.state || "Noch nicht geplant")}</span></div><p class="muted">Der Plan bindet Bridge, Quelle und Revision. Sicherung und Nachverifikation erfolgen erst beim erlaubten Apply; Apple Home bleibt ungeprüft.</p>${this.operationPlan ? `<dl class="definition-list"><div><dt>Operation-ID</dt><dd><code>${this.escape(this.operationPlan.operation_id)}</code></dd></div><div><dt>Quelle</dt><dd>${this.escape(this.operationPlan.source)}</dd></div><div><dt>Betroffene Entitäten</dt><dd>${this.operationPlan.changed_entities?.length || 0}</dd></div></dl>` : ""}<button data-operation-plan${(changes.length || this.positiveListMigration) && !this.conflict ? "" : " disabled"}>Plan validieren</button>${this.operationPlan?.operation_id ? `<button data-operation-reconcile>Vorgang lesend abgleichen</button>` : ""}</section><section class="notice lock-note"><button data-apply${this.supportsApply() ? "" : " disabled"} title="${this.escape(this.overview.operation_policy?.reason || "HomeKit-Schreibpfad gesperrt")}">${this.supportsApply() ? "Änderung anwenden" : "Änderung anwenden · gesperrt"}</button><p>${this.escape(this.overview.operation_policy?.reason || "Der Schreibpfad ist im Backend gesperrt. Verwaltung und Vorschau heben diese Sperre nicht auf.")}</p></section><footer class="sticky-actions" aria-label="Änderungsaktionen"><span class="footer-count">${changes.length} vorgemerkt</span><button class="primary" data-save${changes.length || this.positiveListMigration ? "" : " disabled"}>Entwurf speichern</button><button data-preview${changes.length || this.positiveListMigration ? "" : " disabled"}>Vorschau</button><button data-action-menu aria-expanded="${this.actionMenuOpen}">Weitere</button>${this.actionMenuOpen ? `<div class="action-menu"><button data-export>YAML exportieren</button><button data-load>Entwurf laden</button><button data-discard${changes.length || this.positiveListMigration ? "" : " disabled"}>Verwerfen</button></div>` : ""}</footer>`;
   }
   settingsTemplate() {
     const tabs = [["general", "Allgemein"], ["configuration", "Konfiguration"], ["diagnostics", "Diagnose"], ["rules", "Regeln"], ["history", "Historie"], ["performance", "Performance"]];
     let body;
-    if (this.settingsView === "configuration") body = `<h3>Konfigurationsquelle</h3><p class="muted">Aktive Bridge-Konfiguration und Manager-Entwürfe sind getrennte Daten.</p><div class="source-options">${this.sourceCard()}</div>${this.managementCard()}${this.testWriteModeCard()}<dl class="definition-list"><div><dt>Gespeicherter Entwurf</dt><dd>${!this.yamlStatus.valid ? "Ungültig" : this.yamlStatus.exists ? "Vorhanden" : "Nicht vorhanden"}</dd></div><div><dt>Letzte Entwurfsspeicherung</dt><dd>${this.formatTime(this.yamlStatus.last_modified)}</dd></div></dl><p class="lock-note">Änderungen bewahren die bestehende Konfigurationsquelle der Bridge.</p>`;
+    if (this.settingsView === "configuration") body = `<h3>Konfigurationsquelle</h3><p class="muted">Aktive Bridge-Konfiguration und Manager-Entwürfe sind getrennte Daten.</p><div class="source-options">${this.sourceCard()}</div>${this.managementCard()}${this.positiveListCard()}${this.testWriteModeCard()}<dl class="definition-list"><div><dt>Gespeicherter Entwurf</dt><dd>${!this.yamlStatus.valid ? "Ungültig" : this.yamlStatus.exists ? "Vorhanden" : "Nicht vorhanden"}</dd></div><div><dt>Letzte Entwurfsspeicherung</dt><dd>${this.formatTime(this.yamlStatus.last_modified)}</dd></div></dl><p class="lock-note">Änderungen bewahren die bestehende Konfigurationsquelle der Bridge.</p>`;
     else if (this.settingsView === "diagnostics") {
       const findings = this.diagnostics.grouped_findings || this.diagnostics.findings || [];
       body = `<h3>Backend und Diagnose</h3><dl class="definition-list"><div><dt>Letzter Datenabruf</dt><dd>${this.formatTime(this.lastFetchAt)}</dd></div><div><dt>Letzter vollständiger Backend-Stand</dt><dd>${this.formatTime(this.overview.last_updated)}</dd></div><div><dt>Aktualisierung</dt><dd>${this.overview.snapshot_stale ? "Letzter Abruf fehlgeschlagen" : this.lastFetchAt ? "Bestätigt" : "Nicht geprüft"}</dd></div></dl>${this.overview.last_error ? `<p class="notice error">${this.escape(this.overview.last_error)}</p>` : ""}<label>Problemtyp<select data-diagnostic-filter><option value="">Alle</option>${[...new Map(findings.map(item => [item.code, item.title])).entries()].map(([code, title]) => `<option value="${this.escape(code)}"${this.diagnosticFilter === code ? " selected" : ""}>${this.escape(title)}</option>`).join("")}</select></label>${findings.filter(item => !this.diagnosticFilter || item.code === this.diagnosticFilter).map(item => `<details class="finding"><summary><strong>${this.escape(item.title)}</strong><span>${item.count || 1} betroffen</span></summary><p>${this.escape(item.detail)}</p><p>${this.escape(item.recommendation || "Keine weitere Empfehlung")}</p><ul>${(item.entity_ids || (item.entity_id ? [item.entity_id] : [])).map(id => `<li><code>${this.escape(id)}</code></li>`).join("")}</ul></details>`).join("") || `<p class="muted">${this.lastFetchAt ? "Keine Befunde im letzten Backend-Stand." : "Diagnose noch nicht bestätigt."}</p>`}`;
@@ -488,6 +543,7 @@ class HomeKitManagerPanel extends HTMLElement {
     one("[data-action-menu]", "click", () => { this.actionMenuOpen = !this.actionMenuOpen; this.render(); });
     one("[data-test-mode-enable]", "click", () => this.enableTestWriteMode());
     one("[data-test-mode-disable]", "click", () => this.disableTestWriteMode());
+    one("[data-positive-migration]", "click", () => this.preparePositiveListMigration());
     one("[data-operation-plan]", "click", () => this.planOperation());
     one("[data-operation-reconcile]", "click", () => this.reconcileOperation());
     one("[data-apply]", "click", () => this.applyDraft());

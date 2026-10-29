@@ -52,5 +52,5 @@ async def test_browser_uses_registered_panel_and_real_backend(hass, enable_custo
     manager = hass.data["homekit_manager"]["coordinator"]
     snapshot = await manager.async_yaml_status()
     assert snapshot["valid"] and snapshot["exists"]
-    assert snapshot["document"]["bridges"][native.entry_id]["entities"]["light.audit_lamp"] == "exclude"
+    assert snapshot["document"]["bridges"][native.entry_id] == {"policy": "positive_list", "entities": {}}
     assert manager.activation_status()["state"] == "unknown"

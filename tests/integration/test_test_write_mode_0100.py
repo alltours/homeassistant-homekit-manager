@@ -79,11 +79,22 @@ async def test_native_test_mode_applies_filter_once_and_revokes(hass, monkeypatc
     entry = await native_entry(hass, monkeypatch, suffix="apply")
     service = HomeKitOperationService(hass)
     bridge = {"entry_id": entry.entry_id, "source": "user", "filter": dict(entry.options["filter"])}
+    assert (await service.authority_status(entry.entry_id, "user"))["authority"] == "confirmed_operation"
+    service.test_write_mode.enable(hass, entry.entry_id, entry.entry_id)
     plan = await service.plan_filter(entry_id=entry.entry_id, bridge=bridge,
                                      document=desired(entry.entry_id), inventory=inventory())
-    assert plan["apply_enabled"] is False
-    service.test_write_mode.enable(hass, entry.entry_id, entry.entry_id)
+    assert plan["apply_enabled"] is True
     assert (await service.authority_status(entry.entry_id, "user"))["authority"] == "test_mode"
+    args = {"entry_id": entry.entry_id, "expected_revision": plan["source_revision"],
+            "confirmed_operation_id": plan["operation_id"], "admin": True}
+    service.test_write_mode.disable()
+    with pytest.raises(Exception, match="seit der Vorschau"):
+        await service.apply(plan["operation_id"], **args)
+    service.test_write_mode.enable(hass, entry.entry_id, entry.entry_id)
+    with pytest.raises(Exception, match="seit der Vorschau"):
+        await service.apply(plan["operation_id"], **args)
+    plan = await service.plan_filter(entry_id=entry.entry_id, bridge=bridge,
+                                     document=desired(entry.entry_id), inventory=inventory())
     args = {"entry_id": entry.entry_id, "expected_revision": plan["source_revision"],
             "confirmed_operation_id": plan["operation_id"], "admin": True}
     with pytest.raises(Exception, match="Bestätigung"):
@@ -93,7 +104,7 @@ async def test_native_test_mode_applies_filter_once_and_revokes(hass, monkeypatc
     assert entry.options["filter"]["include_entities"] == ["light.after", "light.before"]
     assert (await service.reconcile(plan["operation_id"]))["state"] == "verified"
     service.test_write_mode.disable()
-    assert (await service.authority_status(entry.entry_id, "user"))["enabled"] is False
+    assert (await service.authority_status(entry.entry_id, "user"))["authority"] == "confirmed_operation"
     assert WriteMode().status()["enabled"] is False
 
 

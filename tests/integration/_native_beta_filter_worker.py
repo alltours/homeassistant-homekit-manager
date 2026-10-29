@@ -99,11 +99,9 @@ async def run() -> None:
         }}}
         plan = await service.plan_filter(entry_id=ENTRY_ID, bridge=bridge,
                                          document=document, inventory=inventory)
-        assert plan["apply_enabled"] is False
+        assert plan["apply_enabled"] is True
         assert set(plan["changed_entities"]) == set(SENSORS)
         assert not (shared / ".homekit_manager_write_grant.json").exists()
-        authority = service.test_write_mode.enable(hass, ENTRY_ID, ENTRY_ID)
-        await authority.verify(hass, ENTRY_ID, "user")
         result = await service.apply(
             plan["operation_id"], entry_id=ENTRY_ID,
             expected_revision=plan["source_revision"],
@@ -121,8 +119,7 @@ async def run() -> None:
         assert after is not before and after.driver.state.mac == mac and after.driver.state.paired
         assert after.aid_storage.get_allocated_aid_for_entity_id("input_boolean.restart_test") == aid
         assert after.iid_storage.allocations.get(aid) == iids
-        service.test_write_mode.disable()
-        assert (await service.authority_status(ENTRY_ID, "user"))["enabled"] is False
+        assert (await service.authority_status(ENTRY_ID, "user"))["authority"] == "confirmed_operation"
         # Core schedules config-entry persistence after a one-second delay.
         await asyncio.sleep(1.2)
         saved = json.loads((shared / ".storage" / "core.config_entries").read_text())

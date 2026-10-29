@@ -162,7 +162,8 @@
           if (message.type === "homekit_manager/operation_plan") {
             if (message.entry_id !== "fixture-bridge" || message.expected_fingerprint !== "fixture-fingerprint") throw new Error("Bridge oder Revision geändert");
             operationState = "validated";
-            return { operation_id: "fixture-operation-1", entry_id: message.entry_id, source: "user", source_revision: "fixture-source-revision", changed_entities: ["light.kitchen"], state: operationState, apply_enabled: isolatedWrite || testModeActive };
+            const migration = message.document?.bridges?.[message.entry_id]?.migration_acknowledged === true;
+            return { operation_id: "fixture-operation-1", entry_id: message.entry_id, source: "user", source_revision: "fixture-source-revision", changed_entities: migration ? [] : ["light.kitchen"], change_details: migration ? [] : [{ entity_id: "light.kitchen", current: "included", desired: "excluded", action: "remove" }], migration: migration ? { selected_before: 1, hap_published_before: 1, published_removals: [], future_entities_excluded: true } : null, state: operationState, apply_enabled: isolatedWrite || testModeActive };
           }
           if (message.type === "homekit_manager/operation_apply") {
             if (!(isolatedWrite || testModeActive) || message.operation_id !== "fixture-operation-1" || message.confirmed_operation_id !== message.operation_id || operationState !== "validated") throw new Error("Operation blockiert");

@@ -11,7 +11,9 @@ from aiohomekit.zeroconf import HomeKitService
 from homeassistant import config_entries
 import pytest
 
-from custom_components.homekit_manager.homekit_writer import HomeKitWriter, OptionsDiff
+from custom_components.homekit_manager.homekit_writer import HomeKitWriteBlocked, HomeKitWriter, OptionsDiff
+from custom_components.homekit_manager.operations import HomeKitOperationService
+from custom_components.homekit_manager.filtering import evaluate_filter
 
 
 class LocalAdvertiser:
@@ -89,7 +91,6 @@ async def test_loopback_hap_server_survives_native_filter_reload(hass, monkeypat
     writer.close()
     await writer.wait_closed()
     assert response.startswith(b"HTTP/1.1")
-
     controller = Controller()
     discovery = IpDiscovery(controller, HomeKitService.from_service_info(first.driver.mdns_service_info))
     try:
@@ -139,3 +140,103 @@ async def test_loopback_hap_server_survives_native_filter_reload(hass, monkeypat
     assert (await asyncio.wait_for(reader.read(128), 3)).startswith(b"HTTP/1.1")
     writer.close()
     await writer.wait_closed()
+
+
+async def test_broad_filter_migration_needs_live_hap_evidence_and_keeps_identity(
+    hass, monkeypatch, socket_enabled,
+):
+    """Use a real loopback Core/HAP bridge; no test mDNS reaches the LAN."""
+    from homeassistant.components.homekit import HomeKit
+    from homeassistant.helpers import entity_registry as er
+
+    async def local_advertiser(_hass):
+        return LocalAdvertiser()
+
+    monkeypatch.setattr("homeassistant.components.homekit.zeroconf.async_get_async_instance", local_advertiser)
+    monkeypatch.setattr(HomeKit, "_async_show_setup_message", lambda _self: None)
+    Path(hass.config.path(".storage")).mkdir(mode=0o700, exist_ok=True)
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
+        reservation.bind(("127.0.0.1", 0))
+        port = reservation.getsockname()[1]
+    for name in ("light.keep", "light.remove"):
+        hass.states.async_set(name, "on")
+    registry = er.async_get(hass)
+    hidden = registry.async_get_or_create("light", "hkm_test", "hidden", suggested_object_id="hidden")
+    registry.async_update_entity(hidden.entity_id, hidden_by=er.RegistryEntryHider.USER)
+    hass.states.async_set(hidden.entity_id, "on")
+    await hass.async_block_till_done()
+    entry = config_entries.ConfigEntry(
+        version=1, minor_version=1, domain="homekit", title="Migration HAP",
+        data={"name": "Migration HAP", "port": port, "ip_address": "127.0.0.1",
+              "advertise_ip": ["127.0.0.1"]},
+        options={"mode": "bridge", "filter": {"include_domains": ["light"]}},
+        source=config_entries.SOURCE_USER, entry_id="isolated-hap-migration",
+        unique_id=None, discovery_keys={}, subentries_data=None,
+    )
+    await hass.config_entries.async_add(entry)
+    await hass.async_block_till_done()
+    assert entry.state.value == "loaded"
+    before = entry.runtime_data.homekit
+    mac = before.driver.state.mac
+    keep_aid = before.aid_storage.get_allocated_aid_for_entity_id("light.keep")
+    assert keep_aid in before.bridge.accessories
+    controller = Controller()
+    discovery = IpDiscovery(controller, HomeKitService.from_service_info(before.driver.mdns_service_info))
+    try:
+        finish_pairing = await asyncio.wait_for(discovery.async_start_pairing("migration"), 10)
+        pairing = await asyncio.wait_for(finish_pairing(before.driver.state.pincode.decode()), 10)
+    finally:
+        await discovery.close()
+    await hass.async_add_executor_job(before.driver.persist)
+    pairing_data = dict(pairing.pairing_data)
+    await pairing.shutdown()
+    assert before.driver.state.paired
+    service = HomeKitOperationService(hass)
+    bridge = {"entry_id": entry.entry_id, "source": "user", "filter": dict(entry.options["filter"])}
+    inventory = [{"entity_id": name, "available": True,
+                  "compatibility": {"status": "supported"},
+                  "homekit": {"configured_by_filter": evaluate_filter(name, config=bridge["filter"]).configured}}
+                 for name in ("light.keep", "light.remove", hidden.entity_id)]
+    document = {"schema_version": 1, "bridges": {entry.entry_id: {
+        "policy": "positive_list", "migration_acknowledged": True,
+        "entities": {"light.keep": "include"},
+    }}}
+    unsafe = {"schema_version": 1, "bridges": {entry.entry_id: {
+        "policy": "positive_list", "migration_acknowledged": True,
+        "entities": {"light.keep": "include", hidden.entity_id: "include"},
+    }}}
+    with pytest.raises(HomeKitWriteBlocked, match="ausgeblendete"):
+        await service.plan_filter(entry_id=entry.entry_id, bridge=bridge,
+                                  document=unsafe, inventory=inventory)
+    plan = await service.plan_filter(entry_id=entry.entry_id, bridge=bridge,
+                                     document=document, inventory=inventory)
+    assert plan["migration"]["selected_before"] == 3
+    assert plan["migration"]["hap_published_before"] == 2
+    assert plan["migration"]["published_removals"] == ["light.remove"]
+    assert plan["changed_entities"] == [hidden.entity_id, "light.remove"]
+    hass.states.async_set("sensor.drift", "1")
+    await hass.async_block_till_done()
+    with pytest.raises(ValueError, match="Inventar enthält nicht alle"):
+        await service.apply(plan["operation_id"], entry_id=entry.entry_id,
+                            expected_revision=plan["source_revision"],
+                            confirmed_operation_id=plan["operation_id"], admin=True)
+    assert entry.options["filter"] == {"include_domains": ["light"]}
+    assert (await service.reconcile(plan["operation_id"]))["state"] == "not_applied"
+    hass.states.async_remove("sensor.drift")
+    await hass.async_block_till_done()
+    plan = await service.plan_filter(entry_id=entry.entry_id, bridge=bridge,
+                                     document=document, inventory=inventory)
+    result = await service.apply(plan["operation_id"], entry_id=entry.entry_id,
+                                 expected_revision=plan["source_revision"],
+                                 confirmed_operation_id=plan["operation_id"], admin=True)
+    assert result["state"] == "verified"
+    after = entry.runtime_data.homekit
+    assert after.driver.state.mac == mac
+    assert after.aid_storage.get_allocated_aid_for_entity_id("light.keep") == keep_aid
+    assert after.driver.state.paired
+    assert entry.options["filter"] == {"include_entities": ["light.keep"]}
+    assert evaluate_filter("light.future", config=entry.options["filter"]).configured is False
+    reopened = IpPairing(controller, pairing_data)
+    accessories = await asyncio.wait_for(reopened.list_accessories_and_characteristics(), 10)
+    assert keep_aid in {accessory["aid"] for accessory in accessories}
+    await reopened.shutdown()

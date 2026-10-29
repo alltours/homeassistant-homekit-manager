@@ -345,6 +345,28 @@ test('unknown-only device has a neutral and accurate aggregate label', async ({ 
   await expect(panel.locator('.device-row')).toContainText('Keine auswertbaren Entitäten');
 });
 
+test('broad filter migration stays a draft until server plan and exact apply confirmation', async ({ page }) => {
+  await page.goto('/tests/frontend/browser_fixture.html?isolated-write');
+  const panel = page.locator('homekit-manager-panel');
+  await panel.getByRole('tab', { name: 'Einstellungen' }).click();
+  await panel.getByRole('button', { name: 'Konfiguration', exact: true }).click();
+  await panel.locator('[data-positive-migration]').click();
+  await expect(panel.getByRole('dialog')).toContainText('1 aktuell durch den Filter ausgewählte Entitäten');
+  await panel.getByRole('button', { name: 'Positivlistenentwurf vorbereiten' }).click();
+  await expect(panel.locator('.operation-card')).toContainText('Noch nicht geplant');
+  await expect(panel.locator('[data-operation-plan]')).toBeEnabled();
+  const document = await panel.evaluate(element => element.desiredDocument());
+  expect(document.bridges['fixture-bridge']).toEqual({ policy: 'positive_list', entities: { 'light.kitchen': 'include' }, migration_acknowledged: true });
+  await panel.locator('[data-operation-plan]').click();
+  await expect(panel.locator('.operation-card')).toContainText('validated');
+  await expect(panel.locator('.notice.warning')).toContainText('HAP-Accessories nachgewiesen: 1');
+  await panel.locator('[data-apply]').click();
+  await expect(panel.getByRole('dialog')).toContainText('keine aktuelle Entity-Änderung; Filterregel wird umgestellt');
+  await expect(panel.getByRole('dialog')).toContainText('Künftige neue Entitäten bleiben ausgeschlossen');
+  await panel.getByRole('button', { name: 'Abbrechen' }).click();
+  expect(await page.evaluate(() => window.fixtureCommands.filter(name => name === 'homekit_manager/operation_apply'))).toEqual([]);
+});
+
 test('area action spans 5000 entities while search displays one result', async ({ page }) => {
   await page.goto('/tests/frontend/browser_fixture.html?paged');
   const panel = page.locator('homekit-manager-panel');

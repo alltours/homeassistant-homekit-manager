@@ -49,6 +49,7 @@ def plan_changes(
     document = validate_document(desired_document)
     entry_id = expected_entry_id or (current_bridge or {}).get("entry_id")
     desired = _desired_for(document, entry_id or "")
+    positive_list = document.get("bridges", {}).get(entry_id, {}).get("policy") == "positive_list"
     items = {item.get("entity_id"): item for item in inventory if item.get("entity_id")}
     pattern_rules, filter_reason, filter_unknown = _filter_assessment(current_bridge)
     changes: list[dict[str, Any]] = []
@@ -66,7 +67,9 @@ def plan_changes(
         current = _current(item)
         if current == "unknown":
             counts["unknown"] += 1
-        desired_status = "included" if requested == "include" else "excluded" if requested == "exclude" else current
+        desired_status = ("included" if requested == "include" else "excluded") if positive_list else ("included" if requested == "include" else "excluded" if requested == "exclude" else current)
+        if positive_list and requested is None and current == "included":
+            requested = "exclude"
         compat = item.get("compatibility", {}).get("status", "unknown")
         if compat == "unsupported" and requested == "include":
             incompatible += 1
@@ -97,4 +100,5 @@ def plan_changes(
         "changes": changes,
         "summary": counts | {"incompatible_entities": incompatible, "blocked": any(change["blocked"] for change in changes)},
         "filter_analysis": {"known": not filter_unknown, "pattern_rules": pattern_rules, "reason": filter_reason},
+        "policy": "positive_list" if positive_list else "explicit_overrides",
     }

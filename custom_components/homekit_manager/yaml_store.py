@@ -27,7 +27,7 @@ except ImportError:  # pragma: no cover - Windows development fallback
 from .const import SCHEMA_VERSION
 
 _ENTITY_ID = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")
-_POLICY = "explicit_overrides"
+_POLICIES = frozenset({"explicit_overrides", "positive_list"})
 _SENSITIVE = ("password", "token", "secret", "pin", "key", "pairing")
 _locks: dict[str, threading.RLock] = {}
 _locks_guard = threading.Lock()
@@ -103,10 +103,13 @@ def validate_document(document: Any) -> dict[str, Any]:
         bridge = bridges[entry_id]
         if not isinstance(bridge, Mapping):
             raise YamlValidationError(f"bridges.{entry_id} muss ein Mapping sein")
-        if set(bridge) - {"policy", "entities"}:
+        if set(bridge) - {"policy", "entities", "migration_acknowledged"}:
             raise YamlValidationError(f"Unbekannte Schlüssel in bridges.{entry_id}")
-        if bridge.get("policy") != _POLICY:
-            raise YamlValidationError(f"bridges.{entry_id}.policy muss {_POLICY!r} sein")
+        if bridge.get("policy") not in _POLICIES:
+            raise YamlValidationError(f"bridges.{entry_id}.policy muss eine unterstützte Filterstrategie sein")
+        acknowledged = bridge.get("migration_acknowledged", False)
+        if type(acknowledged) is not bool or (acknowledged and bridge["policy"] != "positive_list"):
+            raise YamlValidationError("Migrationsbestätigung gilt nur für eine Positivliste")
         entities = bridge.get("entities")
         if not isinstance(entities, Mapping):
             raise YamlValidationError(f"bridges.{entry_id}.entities muss ein Mapping sein")
@@ -119,7 +122,9 @@ def validate_document(document: Any) -> dict[str, Any]:
             if not isinstance(status, str) or status not in {"include", "exclude"}:
                 raise YamlValidationError(f"Ungültiger Status für {entity_id}: {status!r}")
             normalized_entities[entity_id] = status
-        normalized_bridges[entry_id] = {"policy": _POLICY, "entities": normalized_entities}
+        normalized_bridges[entry_id] = {"policy": bridge["policy"], "entities": normalized_entities}
+        if acknowledged:
+            normalized_bridges[entry_id]["migration_acknowledged"] = True
     return {"schema_version": SCHEMA_VERSION, "bridges": normalized_bridges}
 
 

@@ -236,6 +236,12 @@ async def test_native_grant_is_bound_revocable_and_single_use(hass, tmp_path, mo
         await service.apply(plan["operation_id"], **args)
     assert entry.options["filter"]["include_entities"] == ["light.before"]
     save_grant(tmp_path, grant_data(entry.entry_id))
+    with pytest.raises(HomeKitWriteDisabled, match="seit der Vorschau"):
+        await service.apply(plan["operation_id"], **args)
+    plan = await service.plan_filter(entry_id=entry.entry_id, bridge=bridge,
+                                     document=desired(entry.entry_id), inventory=inventory())
+    args = {"entry_id": entry.entry_id, "expected_revision": plan["source_revision"],
+            "confirmed_operation_id": plan["operation_id"], "admin": True}
     result = await service.apply(plan["operation_id"], **args)
     assert result["state"] == "verified"
     assert entry.options["filter"]["include_entities"] == ["light.after", "light.before"]
@@ -342,6 +348,11 @@ async def test_real_admin_websocket_uses_local_grant_without_service_injection(
     assert blocked["success"] is False and blocked["error"]["code"] == "write_blocked"
     assert entry.options["filter"]["include_entities"] == ["light.before"]
     save_grant(tmp_path, grant_data(entry.entry_id))
+    await client.send_json_auto_id({"type": "homekit_manager/operation_plan", "entry_id": entry.entry_id,
+                                    "document": desired(entry.entry_id), "expected_fingerprint": manager.fingerprint})
+    refreshed = await client.receive_json()
+    assert refreshed["success"], refreshed
+    plan = refreshed["result"]
     await client.send_json_auto_id({"type": "homekit_manager/operation_apply", "operation_id": plan["operation_id"],
                                     "entry_id": entry.entry_id, "source_revision": plan["source_revision"],
                                     "expected_fingerprint": manager.fingerprint,

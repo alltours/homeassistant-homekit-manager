@@ -4,6 +4,8 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any, Mapping
 
+MAX_BULK_SCOPE = 10000
+
 
 def exclusion_reason(item: Mapping[str, Any]) -> str | None:
     """Return the first reason an entity must stay out of automatic actions.
@@ -57,7 +59,7 @@ def preview_bulk(
         if not isinstance(entity_ids, list) or any(type(value) is not str for value in entity_ids):
             raise ValueError("Ungültige Entitätsauswahl")
         selected = set(entity_ids)
-        if not selected or len(selected) != len(entity_ids or []) or len(selected) > 10000:
+        if not selected or len(selected) != len(entity_ids or []) or len(selected) > MAX_BULK_SCOPE:
             raise ValueError("Ungültige Entitätsauswahl")
         members = [item for item in inventory if item.get("entity_id") in selected]
         if len(members) != len(selected):
@@ -66,6 +68,8 @@ def preview_bulk(
         raise ValueError("Unbekannter oder ungültiger Hierarchieknoten")
     if not members:
         raise ValueError("Der ausgewählte Knoten enthält keine Entitäten")
+    if len(members) > MAX_BULK_SCOPE:
+        raise ValueError("Der ausgewählte Knoten überschreitet die sichere Vorschaugrenze")
     reasons = Counter(reason for item in members if (reason := exclusion_reason(item)))
     eligible = [item["entity_id"] for item in members if exclusion_reason(item) is None]
     return {"total": len(members), "eligible_entity_ids": eligible,

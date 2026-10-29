@@ -15,6 +15,9 @@ Automatische Sammelaktionen lassen deaktivierte, ausgeblendete, Diagnose- und
 Konfigurationsentitäten sowie Einträge mit fehlender Registry oder State,
 unsicherer Gerätezuordnung oder nicht nachgewiesener HomeKit-Kompatibilität aus.
 Die gleiche Schranke verhindert neue Includes über manipulierte Entwürfe.
+Eine Sammelvorschau ist auf 10.000 Entitäten begrenzt; größere Knoten werden
+mit einer konkreten Erklärung blockiert, statt eine unbeschränkte
+WebSocket-Antwort zu erzeugen.
 Eine ausdrücklich gewählte Einzeländerung ist nur im Rahmen der serverseitigen
 Plan- und Schreibprüfung möglich. Ausgeblendete Einträge bleiben lesbar über
 die Anzeigeoptionen; die Anzeigeoptionen ändern den HomeKit-Filter nicht.

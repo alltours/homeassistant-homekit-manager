@@ -48,6 +48,12 @@ def test_area_uses_full_node_and_selection_rejects_unknown_entities():
         preview_bulk(inventory, "selection", "", entity_ids=["light.first", "light.missing"])
 
 
+def test_bulk_scope_is_bounded_even_for_a_whole_area():
+    inventory = [entity(f"light.large_{index}") for index in range(10001)]
+    with pytest.raises(ValueError, match="Vorschaugrenze"):
+        preview_bulk(inventory, "area", "area:hall")
+
+
 def test_filter_reason_has_one_value_in_both_wire_fields():
     result = evaluate_filter("light.first", config={"include_domains": ["light"]}).as_dict()
     assert result["reason"] == result["filter_reason"] == "domain_include"

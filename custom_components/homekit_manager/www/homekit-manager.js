@@ -174,7 +174,7 @@ class HomeKitManagerPanel extends HTMLElement {
   bulkExclusionReason(entity) {
     if (this.currentStatus(entity) === "unknown") return "Filterstatus unbekannt";
     if (entity.registry_entry_present !== true) return "Ohne Registry-Eintrag";
-    if (entity.device_id && ["missing", "unknown"].includes(entity.device_registry_status)) return "Gerätereferenz fehlt";
+    if (entity.device_id && !["main", "child"].includes(entity.device_registry_status)) return "Gerätereferenz fehlt";
     if (entity.disabled_by || entity.device_disabled_by) return "Deaktiviert";
     if (entity.hidden_by) return "Ausgeblendet";
     if (entity.entity_category === "diagnostic") return "Diagnoseentität";

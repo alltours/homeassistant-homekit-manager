@@ -1,6 +1,7 @@
 """Exercise the admin gate of every registered manager WebSocket command."""
 
 from homeassistant.auth.const import GROUP_ID_USER
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.homekit_manager.websocket import REGISTERED_HANDLERS
 
@@ -36,6 +37,7 @@ async def test_every_manager_websocket_route_rejects_authenticated_non_admin(
             "entry_id": "none", "expected_fingerprint": "none", "confirmed_entry_id": "none",
         },
     }
+    args["homekit_manager/bulk_preview"] = {"entry_id": "none", "fingerprint": "none", "kind": "device", "key": "device:none"}
     document_routes = {
         "homekit_manager/validate_draft", "homekit_manager/preview",
         "homekit_manager/save_draft", "homekit_manager/apply_options_diff",
@@ -52,3 +54,33 @@ async def test_every_manager_websocket_route_rejects_authenticated_non_admin(
         response = await client.receive_json()
         assert response["type"] == "result" and response["success"] is False, (route, response)
         assert response["error"]["code"] == "unauthorized", (route, response)
+
+
+async def test_bulk_preview_uses_server_scope_and_rejects_stale_or_wrong_bridge(
+    hass, enable_custom_integrations, hass_ws_client,
+):
+    MockConfigEntry(domain="homekit", entry_id="bulk-bridge", source="user",
+                    data={"name": "Bulk Bridge", "mode": "bridge"},
+                    options={"filter": {}}).add_to_hass(hass)
+    flow = await hass.config_entries.flow.async_init("homekit_manager", context={"source": "user"})
+    await hass.config_entries.flow.async_configure(flow["flow_id"], {})
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    coordinator.inventory = [
+        {"entity_id": "light.first", "device_id": "device-one", "device_registry_status": "main", "registry_entry_present": True,
+         "state_present": True, "compatibility": {"status": "supported"},
+         "homekit": {"configured_by_filter": False}},
+        {"entity_id": "sensor.diagnostic", "device_id": "device-one", "device_registry_status": "main", "registry_entry_present": True,
+         "state_present": True, "entity_category": "diagnostic", "compatibility": {"status": "supported"},
+         "homekit": {"configured_by_filter": False}},
+    ]
+    client = await hass_ws_client()
+    payload = {"type": "homekit_manager/bulk_preview", "entry_id": "bulk-bridge",
+               "fingerprint": coordinator.fingerprint, "kind": "device", "key": "device:device-one"}
+    await client.send_json_auto_id(payload)
+    result = await client.receive_json()
+    assert result["success"] and result["result"]["eligible_entity_ids"] == ["light.first"]
+    assert result["result"]["skipped"] == {"diagnostic": 1}
+    await client.send_json_auto_id(payload | {"fingerprint": "stale"})
+    assert (await client.receive_json())["error"]["code"] == "conflict"
+    await client.send_json_auto_id(payload | {"entry_id": "another-bridge"})
+    assert (await client.receive_json())["error"]["code"] == "conflict"

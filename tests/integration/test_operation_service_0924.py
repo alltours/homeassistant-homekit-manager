@@ -16,8 +16,8 @@ def desired(entry_id):
 
 def inventory():
     return [
-        {"entity_id": "light.before", "homekit": {"configured_by_filter": True}, "compatibility": {"status": "supported"}},
-        {"entity_id": "light.after", "homekit": {"configured_by_filter": False}, "compatibility": {"status": "supported"}},
+        {"entity_id": "light.before", "homekit": {"configured_by_filter": True}, "compatibility": {"status": "supported"}, "registry_entry_present": True, "state_present": True},
+        {"entity_id": "light.after", "homekit": {"configured_by_filter": False}, "compatibility": {"status": "supported"}, "registry_entry_present": True, "state_present": True},
     ]
 
 

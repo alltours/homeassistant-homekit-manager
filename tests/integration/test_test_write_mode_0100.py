@@ -7,6 +7,7 @@ import time
 
 import pytest
 from homeassistant import config_entries
+from homeassistant.helpers import entity_registry as er
 
 from custom_components.homekit_manager import homekit_writer as writer_module
 from custom_components.homekit_manager.homekit_writer import HomeKitWriter, OptionsDiff
@@ -44,7 +45,8 @@ def desired(entry_id):
 
 def inventory():
     return [{"entity_id": name, "homekit": {"configured_by_filter": name == "light.before"},
-             "compatibility": {"status": "supported"}} for name in ("light.before", "light.after")]
+             "compatibility": {"status": "supported"}, "registry_entry_present": True, "state_present": True}
+            for name in ("light.before", "light.after")]
 
 
 async def test_native_test_mode_requires_exact_bridge_and_expires_without_file(hass, monkeypatch):
@@ -152,6 +154,7 @@ async def test_admin_websocket_test_mode_without_grant_file(hass, monkeypatch,
                                                            enable_custom_integrations, hass_ws_client):
     entry = await native_entry(hass, monkeypatch, suffix="websocket")
     hass.states.async_set("light.before", "on")
+    assert er.async_get(hass).async_get_or_create("light", "test", "after", suggested_object_id="after").entity_id == "light.after"
     hass.states.async_set("light.after", "on")
     flow = await hass.config_entries.flow.async_init("homekit_manager", context={"source": "user"})
     await hass.config_entries.flow.async_configure(flow["flow_id"], {})

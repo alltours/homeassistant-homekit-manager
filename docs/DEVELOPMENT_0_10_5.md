@@ -13,16 +13,15 @@
 - The filter-reason wire field now matches the UI. A regression test covers the alias.
 - Core 2026.11.0b0 compatibility classification is version-gated and includes the added ozone and sulphur-dioxide mappings; future Core versions remain unknown. Native filter-Apply beta validation and positive-list migration have separate capability gates.
 - The devices view groups real areas and devices without synthetic cards for device-less entities, offers separate include/exclude actions and display options, shows scoped status/counts and keeps technical details collapsible.
-- Focused backend tests: 58 passed. Full Chromium/WebKit browser suite: 86 passed. Frontend unit test, JS syntax and diff whitespace checks passed. The full Python suite was started and is still pending at this checkpoint.
+- Full Core 2026.10.4 Python suite: 253 passed. Full Chromium/WebKit browser suite: 86 passed. The isolated full HA/HAP process restart and reconnect test passed in 104 seconds after raising the macOS subprocess timeout from 90 to 240 seconds. Frontend unit, JS syntax, Ruff, Bandit, pip check and npm audit passed. A second ZIP build matched byte-for-byte.
 
 ## Open release gates
 
-1. Complete and inspect the full Python, Core integration and HAP tests; verify the beta accessory probe.
-2. Review mutation-boundary eligibility, YAML safety and WebSocket authorization after the new bulk route. Add only tests/fixes supported by findings.
-3. Finish version 0.10.5 metadata, compatibility/UX/security notes, release manifest and reproducible ZIP.
-4. Run final static, dependency, browser and isolated backend checks on the final commit; inspect CI and required reviews before any merge or release.
-5. Physical Apple Home validation and productive 0.10.5 installation are not authorized or claimed.
+1. Finish the currently running isolated Core 2026.11.0b0 pair/filter/reconnect probe and inspect its result.
+2. Review the final CI runs, HACS/hassfest and dependency audit on the pushed release candidate. Address any findings without broadening the feature scope.
+3. Review required PR approvals and branch protection before any merge or release; download and verify remote release assets only after a true GO.
+4. Physical Apple Home validation and productive 0.10.5 installation are not authorized or claimed.
 
 ## Next concrete step
 
-Poll the running full Python suite. Then review the actual native mutation boundary for eligibility drift and run the real isolated backend/browser integration test. No release before every mandatory gate has evidence.
+Poll the isolated Core beta probe, push the versioned release candidate and open a PR for the final CI and review gates. No release before every mandatory gate has evidence.

@@ -39,7 +39,7 @@ from .activation_store import ActivationStore
 from .safety import WRITE_LOCK_REASON, write_policy
 from .homekit_writer import HomeKitWriteDisabled
 from .operations import HomeKitOperationService
-from .const import INTEGRATION_VERSION, SUPPORTED_CORE_VERSION, NATIVE_FILTER_WRITE_CORE_VERSIONS
+from .const import INTEGRATION_VERSION, NATIVE_FILTER_WRITE_CORE_VERSIONS
 from homeassistant.const import __version__ as CORE_VERSION
 
 _LOGGER = logging.getLogger(__name__)

@@ -1,30 +1,29 @@
-# HomeKit Manager 0.10.4
+# HomeKit Manager 0.10.5
 
-Version 0.10.4 updates only release metadata and the documented UX target for
-device and area bulk actions. It adds no new functionality. Version 0.10.3 added
-the area, device and entity hierarchy with confirmed bulk draft actions;
-version 0.10.2 fixed dropdown menus closing during background
-inventory updates. The 0.10.1 filter test mode and all server-side write checks remain
-unchanged. Publishing this version does not install it on Home Assistant.
+Version 0.10.5 makes area and device bulk actions conservative and moves their
+scope calculation to the server. Both actions preview the complete node,
+show changed, unchanged and skipped counts, and save confirmed changes only
+to the Manager draft. The devices view groups entities without a device
+directly under their area and hides technical and disabled entries by default.
+Publishing this version does not install it on Home Assistant.
 
 Home Assistant custom integration for inspecting existing HomeKit Bridges and
 planning changes in one four-tab panel: HomeKit, Devices, Changes and Settings.
 The complete 0.10.0 reference remains Home Assistant Core **2026.10.4**. The
 native Bridge filter writer is also isolated-tested on **2026.11.0b0**; YAML
-writing and general accessory compatibility are not extended to that beta.
+writing is not extended to that beta. The beta compatibility projection is
+version-gated; future Core versions remain unverified.
 Native `SOURCE_USER` Bridges and
 simple direct or directly included YAML `SOURCE_IMPORT` Bridges retain their
 original source. Filter-list changes are the only supported write operation.
 Complex or ambiguous YAML structures and accessory-mode entries remain
 read-only. No YAML ↔ UI migration is performed.
 
-Production apply is disabled by default. For native SOURCE_USER Bridges on
-Core 2026.10.4 or 2026.11.0b0, an administrator may deliberately enable a one-hour,
-Bridge-bound in-memory test mode in Settings. It requires no separate grant
-file, expires automatically, is revoked on Core restart and can be disabled
-immediately. It only authorizes validated filter operations; each Apply still
-requires confirmation of its concrete diff. The existing local grant remains
-available for the previously supported workflow and YAML cases. See
+Supported existing Bridge filter operations require an administrator, an exact
+server-held operation ID, source, complete revision and concrete diff confirmation.
+The legacy direct Apply route remains blocked. The one-hour Bridge-bound native
+test mode and local grant remain available; neither is activated by an
+installation or release. See
 [test-mode authorization](docs/TEST_WRITE_MODE_0_10_1.md) and
 [local authorization and recovery](docs/WRITE_AUTHORIZATION_0_10_0.md).
 The release process does not activate a test mode or grant on any installation.
@@ -57,13 +56,13 @@ Home Assistant custom integration for reading existing HomeKit Bridges, inspecti
 - Atomic draft files with optimistic conflict checks, per-bridge merging, export and bounded history.
 - Durable activation evidence: interrupted operations recover as unknown; no automatic retry.
 - Admin-protected WebSocket API, consistent snapshot responses and event-driven updates with event/recompute/CPU counters.
-- Side-effect-free compatibility projection for Home Assistant Core 2026.10.4. Eligibility and filter inclusion do not prove Apple Home publication.
+- Version-gated, side-effect-free compatibility projection for Home Assistant Core 2026.10.4 and 2026.11.0b0. Eligibility and filter inclusion do not prove Apple Home publication.
 
 ## Safety
 
-**Applying HomeKit changes is disabled by default in the backend and visibly disabled in the panel.** Administrative ownership only stores Manager metadata. It does not enable the writer, migrate native HomeKit configuration, reload a bridge or move pairing data. The optional in-memory native test mode is a separate, explicitly confirmed Admin action with a one-hour expiry. Productive installation, test-mode activation and the first Apply are separate decisions.
+**No installation, test-mode activation or filter Apply occurs during release.** Administrative ownership only stores Manager metadata. It does not migrate native HomeKit configuration or move pairing data. The confirmed operation path is restricted to an existing Bridge, current source and revision, filter-only diff and server-side authority checked again at mutation. The optional in-memory native test mode remains a separate Admin action with a one-hour expiry. Productive installation and the first Apply are separate decisions.
 
-Drafts use `homekit_manager.yaml` and its backup; Manager metadata uses separate `homekit_manager.*` Home Assistant stores. Native HomeKit keys, pairings and identifiers are never read into these stores. The old `allow_production=True` shortcut is rejected. The production filter path requires either the ephemeral native test mode or the separately verified local grant described above.
+Drafts use `homekit_manager.yaml` and its backup; Manager metadata uses separate `homekit_manager.*` Home Assistant stores. Native HomeKit keys, pairings and identifiers are never read into these stores. The old `allow_production=True` shortcut is rejected. The operation path additionally requires an exact operation-ID confirmation; legacy direct Apply remains locked.
 
 There is no retrospective proof for an older activation that was only kept in process memory. A loaded bridge is a current observation and does not resolve an unknown historical operation.
 
@@ -81,7 +80,7 @@ The authoritative product repository is `https://github.com/alltours/homeassista
 
 Review the [0.10.0 upgrade and rollback guide](docs/UPGRADE_0_10_0.md) before any installation decision. This repository does not prove the currently installed production version or Apple Home behavior. No production installation was performed during this work. Replacing custom-component files does not itself update a running Home Assistant process.
 
-Accessory-mode instances are reported separately and cannot be selected as bridge targets. Cross-source migration and bridge creation/deletion stay blocked. The beta has a verified native filter path, but entity/accessory compatibility continues to report unknown outside Core 2026.10.4. Browser tests cover Chromium and WebKit; physical iPhone and VoiceOver acceptance remains separate. See the [0.10.4 release notes](docs/RELEASE_0_10_4.md), [UX target](docs/UX_BULK_ACTIONS_0_10_3.md) and [0.10.1 test-mode notes](docs/RELEASE_0_10_1.md) for the exact scope.
+Accessory-mode instances are reported separately and cannot be selected as bridge targets. Cross-source migration and bridge creation/deletion stay blocked. Unverified future Core versions remain unknown and automatic bulk actions fail closed. Browser tests cover Chromium and WebKit; physical iPhone and VoiceOver acceptance remains separate. See the [0.10.5 release notes](docs/RELEASE_0_10_5.md), [UX target](docs/UX_BULK_ACTIONS_0_10_3.md) and [0.10.1 test-mode notes](docs/RELEASE_0_10_1.md) for the exact scope.
 
 ## License
 

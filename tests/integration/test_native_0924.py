@@ -75,8 +75,8 @@ async def test_native_adapter_plans_and_recovers_on_loaded_core_entry(hass, monk
     bridge = {"entry_id": entry.entry_id, "source": "user", "filter": dict(entry.options["filter"])}
     document = {"schema_version": 1, "bridges": {entry.entry_id: {"policy": "explicit_overrides", "entities": {"light.after": "include"}}}}
     inventory = [
-        {"entity_id": "light.before", "homekit": {"configured_by_filter": True}, "compatibility": {"status": "supported"}},
-        {"entity_id": "light.after", "homekit": {"configured_by_filter": False}, "compatibility": {"status": "supported"}},
+        {"entity_id": "light.before", "homekit": {"configured_by_filter": True}, "compatibility": {"status": "supported"}, "registry_entry_present": True, "state_present": True},
+        {"entity_id": "light.after", "homekit": {"configured_by_filter": False}, "compatibility": {"status": "supported"}, "registry_entry_present": True, "state_present": True},
     ]
     plan = adapter.plan_filter(bridge, document, inventory)
     assert adapter.reconcile(plan) == "not_applied"

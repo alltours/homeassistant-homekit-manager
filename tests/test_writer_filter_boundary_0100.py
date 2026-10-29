@@ -12,6 +12,7 @@ from custom_components.homekit_manager.homekit_writer import (
 def _diff(before, entity_id, desired):
     bridge = {"entry_id": "test", "data": {}, "options": {"filter": before}, "filter": before}
     inventory = [{"entity_id": entity_id, "available": True,
+                  "registry_entry_present": True, "state_present": True,
                   "compatibility": {"status": "supported"},
                   "homekit": {"configured_by_filter": evaluate_filter(entity_id, config=before).configured}}]
     document = {"schema_version": 1, "bridges": {"test": {
@@ -76,6 +77,7 @@ def test_noop_only_draft_cannot_create_a_write_operation():
 def _positive_diff(before, desired):
     bridge = {"entry_id": "test", "data": {}, "options": {"filter": before}, "filter": before}
     inventory = [{"entity_id": entity_id, "available": True,
+                  "registry_entry_present": True, "state_present": True,
                   "compatibility": {"status": "supported"},
                   "homekit": {"configured_by_filter": evaluate_filter(entity_id, config=before).configured}}
                  for entity_id in ("light.keep", "light.remove", "light.new")]

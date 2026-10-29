@@ -20,7 +20,7 @@ def test_full_bootstrap_reloads_persisted_entry_and_hap_pairing():
             result = subprocess.run(  # noqa: S603 - fixed interpreter and local worker
                 [sys.executable, "-X", "faulthandler", str(WORKER)],
                 cwd=ROOT, env=environment, capture_output=True, text=True,
-                timeout=90, check=False,
+                timeout=240, check=False,
             )
             # Keep all child diagnostics private: Core may log ephemeral HAP
             # pairing material on failure.

@@ -104,7 +104,8 @@ async def test_yaml_filter_reload_retains_local_hap_pairing_and_ids(hass, tmp_pa
     document = {"schema_version": 1, "bridges": {entry.entry_id: {
         "policy": "explicit_overrides", "entities": {"light.after": "include"}}}}
     inventory = [{"entity_id": name, "homekit": {"configured_by_filter": name == "light.before"},
-                  "compatibility": {"status": "supported"}} for name in ("light.before", "light.after")]
+                  "compatibility": {"status": "supported"}, "registry_entry_present": True,
+                  "state_present": True} for name in ("light.before", "light.after")]
     plan = await service.plan_filter(entry_id=entry.entry_id, bridge=bridge, document=document, inventory=inventory)
     assert (await service.apply(plan["operation_id"], entry_id=entry.entry_id,
                                 expected_revision=plan["source_revision"],

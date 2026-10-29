@@ -1,6 +1,7 @@
 """Admin WebSocket through manager coordinator to isolated Core writer."""
 from homeassistant import config_entries
 from homeassistant.config import async_hass_config_yaml
+from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
 
 from custom_components.homekit_manager.operations import HomeKitOperationService
@@ -21,6 +22,7 @@ async def test_admin_operation_websocket_isolated_apply_and_verify(hass, enable_
     await hass.config_entries.async_add(native)
     await hass.async_block_till_done()
     hass.states.async_set("light.before", "on")
+    assert er.async_get(hass).async_get_or_create("light", "test", "after", suggested_object_id="after").entity_id == "light.after"
     hass.states.async_set("light.after", "on")
     flow = await hass.config_entries.flow.async_init("homekit_manager", context={"source": "user"})
     await hass.config_entries.flow.async_configure(flow["flow_id"], {})
@@ -62,6 +64,7 @@ async def test_admin_operation_websocket_isolated_yaml_apply_and_verify(hass, tm
     imported = hass.config_entries.async_entries("homekit")[0]
     assert imported.source == config_entries.SOURCE_IMPORT
     hass.states.async_set("light.before", "on")
+    assert er.async_get(hass).async_get_or_create("light", "test", "after", suggested_object_id="after").entity_id == "light.after"
     hass.states.async_set("light.after", "on")
     flow = await hass.config_entries.flow.async_init("homekit_manager", context={"source": "user"})
     await hass.config_entries.flow.async_configure(flow["flow_id"], {})
@@ -115,6 +118,7 @@ async def test_admin_websocket_direct_yaml_apply_preserves_other_config(hass, tm
     entry = hass.config_entries.async_entries("homekit")[0]
     assert entry.source == config_entries.SOURCE_IMPORT
     hass.states.async_set("light.before", "on")
+    assert er.async_get(hass).async_get_or_create("light", "test", "after", suggested_object_id="after").entity_id == "light.after"
     hass.states.async_set("light.after", "on")
     flow = await hass.config_entries.flow.async_init("homekit_manager", context={"source": "user"})
     await hass.config_entries.flow.async_configure(flow["flow_id"], {})

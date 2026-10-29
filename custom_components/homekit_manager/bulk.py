@@ -15,7 +15,7 @@ def exclusion_reason(item: Mapping[str, Any]) -> str | None:
         return "filter_unknown"
     if item.get("registry_entry_present") is not True:
         return "registry_missing"
-    if item.get("device_id") and item.get("device_registry_status") in {"missing", "unknown"}:
+    if item.get("device_id") and item.get("device_registry_status") not in {"main", "child"}:
         return "device_missing"
     if item.get("disabled_by") or item.get("device_disabled_by"):
         return "disabled"

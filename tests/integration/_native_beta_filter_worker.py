@@ -57,7 +57,7 @@ async def run() -> None:
     # support. This does not start a HAP driver or touch the productive host.
     for device_class, accessory_type in (("ozone", "OzoneSensor"), ("sulphur_dioxide", "SulphurDioxideSensor")):
         state = State(f"sensor.beta_{device_class}", "20", {"device_class": device_class})
-        with patch.dict(TYPES, {accessory_type: lambda *_args: accessory_type}):
+        with patch.dict(TYPES, {accessory_type: lambda *_args, result=accessory_type: result}):
             assert get_accessory(None, None, state, 1, {}) == accessory_type
         projected = classify_entity({"domain": "sensor", "device_class": device_class}, core_version=CORE_VERSION)
         assert projected.status == "supported" and projected.expected_type == accessory_type

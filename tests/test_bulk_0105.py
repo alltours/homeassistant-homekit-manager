@@ -32,6 +32,8 @@ def test_disabled_diagnostics_and_unknown_are_never_bulk_eligible():
     ({"compatibility": {"status": "conditionally_supported"}}, "conditional"),
     ({"compatibility": {"status": "unsupported"}}, "unsupported"),
     ({"device_registry_status": "missing"}, "device_missing"),
+    ({"device_registry_status": "composite"}, "device_missing"),
+    ({"device_registry_status": None}, "device_missing"),
     ({"homekit": {"configured_by_filter": None}}, "filter_unknown"),
 ])
 def test_all_exclusion_reasons(fields, reason):

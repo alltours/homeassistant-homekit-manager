@@ -66,8 +66,8 @@ class HomeKitManagerCoordinator:
         self.migration_store = MigrationStore(hass)
         self.management_store = ManagementStore(hass)
         self.activation_store = ActivationStore(hass)
-        # No writer authority exists by default. A separate, local grant is
-        # evaluated by the service and rechecked at the writer boundary.
+        # No writer authority exists by default. The optional native test mode
+        # is in memory only; the existing local grant remains a separate path.
         self.operation_service = HomeKitOperationService(hass)
         self.operation_policy: dict[str, Any] = {"enabled": False, "reason": WRITE_LOCK_REASON, "automatic_retry": False}
         self.management_statuses: dict[str, dict[str, Any]] = {}
@@ -302,6 +302,7 @@ class HomeKitManagerCoordinator:
             "write_policy": write_policy(),
             "operation_policy": {"enabled": True, "reason": "Nur isolierte Testinstanz", "automatic_retry": False}
                                 if self.operation_service._isolated_write_authority else self.operation_policy,
+            "test_write_mode": self.operation_service.test_write_mode.status(),
             "refresh_count": self.refresh_count,
             "refresh_duration_ms": self.refresh_duration_ms,
             "refresh_cpu_ms": self.refresh_cpu_ms,
@@ -593,6 +594,37 @@ class HomeKitManagerCoordinator:
                                                   expected_revision=source_revision,
                                                   confirmed_operation_id=confirmed_operation_id, admin=True)
 
+    async def async_enable_test_write_mode(self, entry_id: str, expected_fingerprint: str,
+                                           confirmed_entry_id: str) -> dict[str, Any]:
+        """Admin WebSocket activation; the authority vanishes on Core restart."""
+        from .write_test_mode import TestModeBlocked
+
+        bridge = self.selected_bridge()
+        if (self.last_error or self.fingerprint != expected_fingerprint or bridge is None
+                or bridge.get("entry_id") != entry_id or bridge.get("source") != "user"
+                or bridge.get("mode") != "bridge" or bridge.get("state") != "loaded"):
+            raise TestModeBlocked("Bridge-Kontext oder Inventarstand ist nicht mehr aktuell")
+        records = await self.operation_service._records()
+        if any(isinstance(item, dict) and item.get("entry_id") == entry_id
+               and item.get("state") in {"applying", "unknown_outcome"}
+               for item in records.values()):
+            raise TestModeBlocked("Ungeklärten früheren Vorgang zuerst lesend abgleichen")
+        authority = self.operation_service.test_write_mode.enable(self.hass, entry_id, confirmed_entry_id)
+        self.operation_policy = await self.operation_service.authority_status(entry_id, "user")
+        self.hass.bus.async_fire("homekit_manager_updated", {"revision": self.refresh_count})
+        return {"enabled": True, "entry_id": entry_id, "expires_at": authority.expires_at.isoformat(),
+                "persistent": False, "duration_minutes": 60}
+
+    async def async_disable_test_write_mode(self) -> dict[str, Any]:
+        """Revoke immediately; an in-flight writer rechecks before mutation."""
+        self.operation_service.test_write_mode.disable()
+        bridge = self.selected_bridge()
+        self.operation_policy = (await self.operation_service.authority_status(
+            bridge["entry_id"], bridge["source"]) if bridge else
+            {"enabled": False, "reason": "Keine Bridge ausgewählt", "automatic_retry": False})
+        self.hass.bus.async_fire("homekit_manager_updated", {"revision": self.refresh_count})
+        return {"enabled": False, "persistent": False}
+
     def reconcile(self, document: Any, baseline_fingerprint: str | None = None) -> dict[str, Any]:
         validated = self.validate_draft(document)
         bridge = self.selected_bridge()
@@ -605,6 +637,7 @@ class HomeKitManagerCoordinator:
         return {"format": format_name, "content": export_desired_state(validated["document"], format_name), "applied": False}
 
     async def async_shutdown(self) -> None:
+        self.operation_service.test_write_mode.disable()
         self._stopping = True
         self._refresh_pending = False
         if self._refresh_task and not self._refresh_task.done():

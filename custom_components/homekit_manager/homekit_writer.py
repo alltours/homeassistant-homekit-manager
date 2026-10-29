@@ -1,6 +1,6 @@
 """Diff preparation and a tightly authorized native Core filter writer.
 
-Production use requires a local grant plus a complete expected Entry revision.
+Production use requires a narrow authority plus a complete expected Entry revision.
 The retained ``allow_production`` shortcut rejects legacy callers.
 """
 from __future__ import annotations
@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
 from .change_planner import plan_changes
-from .const import SUPPORTED_CORE_VERSION
+from .const import NATIVE_FILTER_WRITE_CORE_VERSIONS
 from .filtering import evaluate_filter
 from .safety import WRITE_LOCK_REASON
 from .source_model import revision
@@ -96,7 +96,7 @@ def _candidate_filter(current: Mapping[str, Any], desired: Mapping[str, str]) ->
 
 
 def _unlisted_entity_default(config: Mapping[str, Any]) -> bool:
-    """Core 2026.10.4's selection of an entity matching no listed rule.
+    """Selection of an entity matching no listed rule on supported Core versions.
 
     Entity-only edits must not switch the default for unobserved entities.
     Inventory comparison alone cannot detect that future or unloaded entities
@@ -117,14 +117,20 @@ def _unlisted_entity_default(config: Mapping[str, Any]) -> bool:
 
 def _verify_scope(before: Mapping[str, Any], after: Mapping[str, Any], inventory: list[Mapping[str, Any]], desired: Mapping[str, str]) -> None:
     """Ensure non-targeted entities keep the exact effective filter result."""
+    from homeassistant.helpers.entityfilter import FILTER_SCHEMA
+
     if _unlisted_entity_default(before) != _unlisted_entity_default(after):
         raise HomeKitWriteBlocked("Filteränderung würde die Standardauswahl unbekannter Entitäten verändern")
+    try:
+        old_filter, new_filter = FILTER_SCHEMA(dict(before)), FILTER_SCHEMA(dict(after))
+    except Exception as err:
+        raise HomeKitWriteBlocked("HomeKit-Core-Filter-Schema lehnt den Filter ab") from err
     for item in inventory:
         entity_id = item.get("entity_id")
         if not entity_id or entity_id in desired:
             continue
-        old = evaluate_filter(entity_id, item.get("entity_category"), item.get("hidden_by"), before).configured
-        new = evaluate_filter(entity_id, item.get("entity_category"), item.get("hidden_by"), after).configured
+        old = evaluate_filter(entity_id, item.get("entity_category"), item.get("hidden_by"), before, old_filter).configured
+        new = evaluate_filter(entity_id, item.get("entity_category"), item.get("hidden_by"), after, new_filter).configured
         if old != new:
             raise HomeKitWriteBlocked(f"Filter-Diff verändert unbeabsichtigt {entity_id}")
 
@@ -163,10 +169,10 @@ def build_options_diff(
 
 
 class HomeKitWriter:
-    """Core options writer gated by an isolated fixture or a local narrow grant.
+    """Core options writer gated by an isolated fixture or narrow authority.
 
     The retained allow_production argument deliberately rejects former callers.
-    A production grant is verified against its local file at write time.
+    The authority is rechecked at the Core mutation boundary.
     """
 
     def __init__(self, hass: Any, *, test_environment: bool = False, apply_enabled: bool = False, allow_production: bool = False, production_grant: Any = None, expected_source_revision: str | None = None):
@@ -191,7 +197,7 @@ class HomeKitWriter:
             raise HomeKitWriteBlocked("Options-Diff enthält keine Änderung")
         from homeassistant.const import __version__
         from homeassistant.config_entries import SOURCE_USER
-        if __version__ != SUPPORTED_CORE_VERSION:
+        if __version__ not in NATIVE_FILTER_WRITE_CORE_VERSIONS:
             raise HomeKitWriteBlocked(
                 f"Core-Version {__version__} wird für den isolierten Adapter nicht unterstützt"
             )

@@ -1,0 +1,14 @@
+# Isolated native filter and loopback HAP compatibility probe only.
+# The published pytest helper currently pins Core 2026.10.4, so this probe
+# uses Core's real bootstrap and does not load that helper.
+homeassistant==2026.11.0b0
+home-assistant-frontend==20260930.5
+HAP-python==5.0.0
+aiohomekit==4.0.1
+PyTurboJPEG==1.8.3
+PyQRCode==1.2.1
+fnv-hash-fast==2.0.3
+homekit-audio-proxy==1.2.1
+base36==0.1.1
+ha-ffmpeg==3.2.2
+ruamel.yaml==0.18.17

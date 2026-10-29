@@ -1,6 +1,6 @@
 """A narrowly scoped native adapter over Core's config-entry update contract.
 
-Only filter-list changes are supported. Production apply requires a local grant;
+Only filter-list changes are supported. Production apply requires narrow authority;
 automatic recovery and rollback remain unavailable.
 """
 from __future__ import annotations

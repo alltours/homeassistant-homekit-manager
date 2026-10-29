@@ -87,6 +87,11 @@ async def run() -> None:
             entry = hass.config_entries.async_get_entry(ENTRY_ID)
             assert entry is not None and entry.source == config_entries.SOURCE_USER
             assert entry.options["filter"]["include_entities"] == [ENTITY_ID]
+            if os.environ.get("HKM_EXPECT_BETA_EXCLUDES") == "1":
+                assert entry.options["filter"]["exclude_entities"] == [
+                    "sensor.blaue_tonne", "sensor.braune_tonne",
+                    "sensor.gelbe_tonne", "sensor.graue_tonne",
+                ]
             port = json.loads((shared / "public_identity.json").read_text())["port"]
             assert entry.data["port"] == port
         await hass.async_start()

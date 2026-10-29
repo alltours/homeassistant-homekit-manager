@@ -1,7 +1,7 @@
 """Authenticated WebSocket API for reads, drafts and gated filter operations.
 
-All commands require an administrator connection. A local, bridge-bound grant
-is additionally required for any production HomeKit filter mutation.
+All commands require an administrator connection. Production filter mutation
+also requires either a local grant or the explicit ephemeral native test mode.
 """
 from __future__ import annotations
 import probatio
@@ -14,6 +14,7 @@ from .const import (
     DEVICES_COMMAND, AREAS_COMMAND, DIAGNOSTICS_COMMAND, DEVICE_PREVIEW_COMMAND, RULES_PREVIEW_COMMAND, HISTORY_COMMAND, HISTORY_RESTORE_COMMAND, PERFORMANCE_COMMAND,
     ACTIVATION_STATUS_COMMAND,
     OPERATION_PLAN_COMMAND, OPERATION_APPLY_COMMAND, OPERATION_STATUS_COMMAND, OPERATION_RECONCILE_COMMAND,
+    TEST_WRITE_MODE_ENABLE_COMMAND, TEST_WRITE_MODE_DISABLE_COMMAND,
     MIGRATION_PLAN_COMMAND, MIGRATION_START_COMMAND, MIGRATION_STATUS_COMMAND,
     MANAGEMENT_STATUS_COMMAND, MANAGEMENT_ENABLE_COMMAND, MANAGEMENT_DISABLE_COMMAND,
 )
@@ -258,6 +259,36 @@ async def websocket_management_disable(hass, connection, msg):
         connection.send_error(msg["id"], "management_blocked", str(err))
 
 
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required("type"): TEST_WRITE_MODE_ENABLE_COMMAND,
+                                  probatio.Required("entry_id"): str,
+                                  probatio.Required("expected_fingerprint"): str,
+                                  probatio.Required("confirmed_entry_id"): str})
+@websocket_api.async_response
+async def websocket_test_write_mode_enable(hass, connection, msg):
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    try:
+        result = await coordinator.async_enable_test_write_mode(
+            msg["entry_id"], msg["expected_fingerprint"], msg["confirmed_entry_id"])
+    except (ValueError, OSError) as err:
+        connection.send_error(msg["id"], "test_mode_blocked", str(err))
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required("type"): TEST_WRITE_MODE_DISABLE_COMMAND})
+@websocket_api.async_response
+async def websocket_test_write_mode_disable(hass, connection, msg):
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    try:
+        result = await coordinator.async_disable_test_write_mode()
+    except (ValueError, OSError) as err:
+        connection.send_error(msg["id"], "test_mode_blocked", str(err))
+        return
+    connection.send_result(msg["id"], result)
+
+
 def _document(msg):
     return msg.get("document") or msg.get("draft")
 
@@ -452,7 +483,7 @@ async def websocket_export(hass, connection, msg):
     except (YamlValidationError, ValueError) as err:
         connection.send_error(msg["id"], "invalid_format", str(err))
 
-REGISTERED_HANDLERS = (websocket_inventory, websocket_bridges, websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_activation_status, websocket_mode_status, websocket_set_mode, websocket_migration_plan, websocket_migration_status, websocket_migration_start, websocket_management_status, websocket_management_enable, websocket_management_disable, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_apply_options_diff, websocket_operation_plan, websocket_operation_apply, websocket_operation_status, websocket_operation_reconcile, websocket_prepare_options_diff, websocket_reconcile, websocket_export)
+REGISTERED_HANDLERS = (websocket_inventory, websocket_bridges, websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_activation_status, websocket_mode_status, websocket_set_mode, websocket_migration_plan, websocket_migration_status, websocket_migration_start, websocket_management_status, websocket_management_enable, websocket_management_disable, websocket_test_write_mode_enable, websocket_test_write_mode_disable, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_apply_options_diff, websocket_operation_plan, websocket_operation_apply, websocket_operation_status, websocket_operation_reconcile, websocket_prepare_options_diff, websocket_reconcile, websocket_export)
 
 
 def async_register_websocket_commands(hass, coordinator) -> None:

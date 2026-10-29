@@ -1,7 +1,7 @@
 """Constants for HomeKit Manager."""
 from __future__ import annotations
 DOMAIN = "homekit_manager"
-INTEGRATION_VERSION = "0.10.0"
+INTEGRATION_VERSION = "0.10.1"
 INVENTORY_COMMAND = f"{DOMAIN}/inventory"
 BRIDGES_COMMAND = f"{DOMAIN}/bridges"
 SELECT_BRIDGE_COMMAND = f"{DOMAIN}/select_bridge"
@@ -15,6 +15,8 @@ OPERATION_PLAN_COMMAND = f"{DOMAIN}/operation_plan"
 OPERATION_APPLY_COMMAND = f"{DOMAIN}/operation_apply"
 OPERATION_STATUS_COMMAND = f"{DOMAIN}/operation_status"
 OPERATION_RECONCILE_COMMAND = f"{DOMAIN}/operation_reconcile"
+TEST_WRITE_MODE_ENABLE_COMMAND = f"{DOMAIN}/test_write_mode_enable"
+TEST_WRITE_MODE_DISABLE_COMMAND = f"{DOMAIN}/test_write_mode_disable"
 RECONCILE_COMMAND = f"{DOMAIN}/reconcile"
 EXPORT_COMMAND = f"{DOMAIN}/export"
 MODE_STATUS_COMMAND = f"{DOMAIN}/mode_status"
@@ -36,6 +38,7 @@ MANAGEMENT_ENABLE_COMMAND = f"{DOMAIN}/management_enable"
 MANAGEMENT_DISABLE_COMMAND = f"{DOMAIN}/management_disable"
 SCHEMA_VERSION = 1
 SUPPORTED_CORE_VERSION = "2026.10.4"
+NATIVE_FILTER_WRITE_CORE_VERSIONS = frozenset({"2026.10.4", "2026.11.0b0"})
 MODE_SCHEMA_VERSION = 1
 HISTORY_SCHEMA_VERSION = 1
 MAX_HISTORY_ENTRIES = 50

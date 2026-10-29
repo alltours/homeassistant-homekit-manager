@@ -237,3 +237,45 @@ test('search, sort, filters and bulk draft span every loaded inventory page', as
   ]);
   await expect(panel.locator('[data-apply]')).toBeDisabled();
 });
+
+test('native test mode is opt-in, bridge-bound in UI and revocable before apply', async ({page}) => {
+  await page.goto('/tests/frontend/browser_fixture.html');
+  const panel = page.locator('homekit-manager-panel');
+  await panel.getByRole('tab', {name:'Einstellungen', exact:true}).click();
+  await panel.getByRole('button', {name:'Konfiguration', exact:true}).click();
+  await expect(panel.locator('[data-test-mode-enable]')).toBeVisible();
+  await expect(panel.locator('[data-test-mode-disable]')).toHaveCount(0);
+  await panel.locator('[data-test-mode-enable]').click();
+  await expect(panel.locator('dialog')).toContainText('fixture-bridge');
+  await expect(panel.locator('dialog')).toContainText('60 Minuten');
+  await panel.locator('[data-confirm-cancel]').click();
+  expect(await page.evaluate(() => window.fixtureCommands.includes('homekit_manager/test_write_mode_enable'))).toBe(false);
+  await panel.locator('[data-test-mode-enable]').click();
+  await panel.locator('[data-confirm-accept]').click();
+  await expect(panel.locator('[data-test-mode-disable]')).toBeVisible();
+  await panel.getByRole('tab', {name:'Geräte', exact:true}).click();
+  await panel.locator('[data-group=entities]').click();
+  await panel.locator('[data-entity-toggle]').first().click();
+  await panel.getByRole('tab', {name:'Änderungen', exact:true}).click();
+  await panel.locator('[data-operation-plan]').click();
+  await expect(panel.locator('[data-apply]')).toBeEnabled();
+  await panel.locator('[data-apply]').click();
+  await expect(panel.locator('dialog')).toContainText('light.kitchen: Eingeschlossen → Ausgeschlossen');
+  await panel.locator('[data-confirm-cancel]').click();
+  await panel.getByRole('tab', {name:'Einstellungen', exact:true}).click();
+  await panel.getByRole('button', {name:'Konfiguration', exact:true}).click();
+  await panel.locator('[data-test-mode-disable]').click();
+  await expect(panel.locator('[data-test-mode-enable]')).toBeVisible();
+  await panel.getByRole('tab', {name:'Änderungen', exact:true}).click();
+  await expect(panel.locator('[data-apply]')).toBeDisabled();
+  expect(await page.evaluate(() => window.fixtureCommands.includes('homekit_manager/operation_apply'))).toBe(false);
+});
+
+test('isolated Core beta native Bridge exposes the explicit test-mode control', async ({page}) => {
+  await page.goto('/tests/frontend/browser_fixture.html?core-beta');
+  const panel = page.locator('homekit-manager-panel');
+  await panel.getByRole('tab', {name:'Einstellungen', exact:true}).click();
+  await panel.getByRole('button', {name:'Konfiguration', exact:true}).click();
+  await expect(panel.locator('[data-test-mode-enable]')).toBeEnabled();
+  await expect(panel.locator('[data-test-mode-disable]')).toHaveCount(0);
+});

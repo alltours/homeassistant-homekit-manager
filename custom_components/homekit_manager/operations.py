@@ -1,6 +1,7 @@
 """Common operation state machine for native and YAML filter writers.
 
-The normal coordinator has no authority without a separate local grant.
+The normal coordinator has no authority without a local grant or a deliberately
+enabled, short-lived native test mode.
 Only secret-free metadata is persisted. An interrupted apply is unknown until a
 separate read-only reconcile; it is never retried automatically.
 """
@@ -18,6 +19,7 @@ from .native_adapter import NativeFilterPlan, NativeHomeKitAdapter
 from .safety import WRITE_LOCK_REASON
 from .yaml_adapter import YamlFilterPlan, YamlHomeKitAdapter
 from .write_grant import GrantBlocked, ProductionWriteGrant, read_production_grant
+from .write_test_mode import TestWriteMode, TestModeBlocked, TestModeAuthority
 
 
 @dataclass(frozen=True)
@@ -39,10 +41,20 @@ class HomeKitOperationService:
         self._store = Store(hass, 1, "homekit_manager.operations")
         self._plans: dict[str, OperationPlan] = {}
         self._lock = asyncio.Lock()
+        self.test_write_mode = TestWriteMode()
 
     async def authority_status(self, entry_id: str, source: str) -> dict[str, Any]:
         if self._isolated_write_authority:
             return {"enabled": True, "reason": "Nur isolierte Testinstanz", "automatic_retry": False}
+        test_authority = self.test_write_mode.current(entry_id, source)
+        if test_authority is not None:
+            try:
+                await test_authority.verify(self.hass, entry_id, source)
+            except TestModeBlocked as err:
+                return {"enabled": False, "reason": str(err), "automatic_retry": False}
+            return {"enabled": True, "reason": "Befristeter nativer Testmodus aktiv",
+                    "authority": "test_mode", "expires_at": test_authority.expires_at.isoformat(),
+                    "automatic_retry": False}
         try:
             grant = await read_production_grant(self.hass)
             if grant is None:
@@ -53,7 +65,11 @@ class HomeKitOperationService:
         return {"enabled": True, "reason": "Lokale, befristete Filter-Schreibfreigabe aktiv", "automatic_retry": False,
                 "grant_id": grant.grant_id, "expires_at": grant.expires_at.isoformat()}
 
-    async def _production_grant(self, entry_id: str, source: str) -> ProductionWriteGrant:
+    async def _production_grant(self, entry_id: str, source: str) -> ProductionWriteGrant | TestModeAuthority:
+        test_authority = self.test_write_mode.current(entry_id, source)
+        if test_authority is not None:
+            await test_authority.verify(self.hass, entry_id, source)
+            return test_authority
         grant = await read_production_grant(self.hass)
         if grant is None:
             raise HomeKitWriteDisabled(WRITE_LOCK_REASON)

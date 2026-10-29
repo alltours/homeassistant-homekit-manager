@@ -32,7 +32,7 @@ def has_extended_acl(descriptor: int) -> bool:
         libc.acl_free(acl)
 
 WRITE_LOCK_REASON = (
-    "HomeKit-Änderungen benötigen eine lokale, befristete und Bridge-gebundene Schreibfreigabe. "
+    "HomeKit-Änderungen benötigen den befristeten, Bridge-gebundenen Testmodus oder eine lokale Schreibfreigabe. "
     "Ohne diese Freigabe bleiben nur Entwurf, Vorschau und Export verfügbar. "
     "Ein unbekannter Apply-Ausgang wird niemals automatisch wiederholt."
 )
@@ -40,4 +40,4 @@ WRITE_LOCK_REASON = (
 
 def write_policy() -> dict:
     """The legacy direct apply route is always disabled; use operation policy."""
-    return {"enabled": False, "reason": "Direkter Options-Apply-Pfad ist gesperrt; nur validierte Operationen mit lokaler Freigabe sind möglich.", "automatic_retry": False}
+    return {"enabled": False, "reason": "Direkter Options-Apply-Pfad ist gesperrt; nur validierte Operationen mit ausdrücklicher Freigabe sind möglich.", "automatic_retry": False}

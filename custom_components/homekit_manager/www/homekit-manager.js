@@ -24,7 +24,7 @@ class HomeKitManagerPanel extends HTMLElement {
       filters: { status: "", compatibility: "", domain: "", integration: "", area: "", availability: "", published: "", changed: "" },
       selected: new Set(), draft: new Map(), fingerprint: null, serverPreview: null, error: null, loading: false, statusMessage: "Keine Änderungen", expandedBridges: new Set(), activationMessage: "", actionMenuOpen: false, diagnosticFilter: "", filtersOpen: false });
     this.operationPlan = null; this.operationStatus = null;
-    Object.assign(this, { action: "", statusTone: "neutral", expandedAreas: new Set(), areaPages: new Map(), draftFingerprint: null, conflict: false, dialog: null, lastFetchAt: null, _subscription: null, _pendingRevision: 0, _seenRevision: 0, _refreshQueued: false });
+    Object.assign(this, { action: "", statusTone: "neutral", expandedAreas: new Set(), areaPages: new Map(), draftFingerprint: null, conflict: false, dialog: null, lastFetchAt: null, _subscription: null, _pendingRevision: 0, _seenRevision: 0, _refreshQueued: false, _passiveRenderPending: false, _passiveRenderControl: null });
     this.filters.device = "";
     this.render();
   }
@@ -46,7 +46,7 @@ class HomeKitManagerPanel extends HTMLElement {
     else this._refreshQueued = true;
     if (!this.loading) this.refresh(false);
   }
-  set narrow(value) { const next = Boolean(value); if (next !== this._narrow) { this._narrow = next; this.render(); } } get narrow() { return this._narrow; }
+  set narrow(value) { const next = Boolean(value); if (next !== this._narrow) { this._narrow = next; this.render(true); } } get narrow() { return this._narrow; }
   async refresh(force = true) {
     if (!this._hass) return false;
     if (this.loading) { this._refreshQueued = true; return false; }
@@ -78,7 +78,7 @@ class HomeKitManagerPanel extends HTMLElement {
       return true;
     } catch (error) { this.error = error?.message || String(error); return false; }
     finally {
-      this.loading = false; this.render();
+      this.loading = false; this.render(!force);
       const retry = this._refreshQueued || this._pendingRevision > this._seenRevision;
       this._refreshQueued = false;
       if (retry && succeeded) queueMicrotask(() => this.refresh(false));
@@ -362,15 +362,31 @@ class HomeKitManagerPanel extends HTMLElement {
     else body = `<h3>Integration</h3><dl class="definition-list"><div><dt>Version</dt><dd>${this.escape(this.overview.integration_version || "Nicht gemeldet")}</dd></div><div><dt>Backend</dt><dd>${this.lastFetchAt && !this.overview.snapshot_stale ? "Erreichbar" : "Nicht bestätigt"}</dd></div><div><dt>Home Assistant Core</dt><dd>${this.escape(this.overview.core_version || "Nicht gemeldet")}</dd></div><div><dt>Erkannte Bridges</dt><dd>${this.bridges.length}</dd></div><div><dt>Separate Accessories</dt><dd>${this.overview.accessories ?? "Nicht gemeldet"}</dd></div></dl><details class="technical"><summary>Kennzahlen verstehen</summary><p>Geräte sind eindeutige Device-Registry-IDs. Entitäten ohne Gerät werden separat gezählt. Eine Geräte-ID kann durch Entity-Bereichszuordnungen in mehreren Bereichen vorkommen. Bereichs-Gerätezahlen dürfen deshalb nicht als globale Gerätesumme addiert werden.</p><p>Eingeschlossen, unterstützt und nicht verfügbar sind überlappende Teilmengen aller aktuellen Treffer. Ein Filtertreffer bestätigt keine Veröffentlichung in Apple Home.</p></details>`;
     return `${this.pageHeading("Einstellungen", "Verwaltung und Diagnose", "Aktuelle Systemdaten und vorhandene Funktionen.")}<nav class="settings-nav" aria-label="Einstellungsbereiche">${tabs.map(([id, label]) => `<button data-settings-view="${id}" aria-current="${this.settingsView === id ? "page" : "false"}">${label}</button>`).join("")}</nav><section class="surface settings-content">${body}</section>`;
   }
-  render() {
+  render(passive = false) {
+    const focused = this.shadowRoot.activeElement;
+    if (passive && focused?.tagName === "SELECT") {
+      this._passiveRenderPending = true;
+      if (this._passiveRenderControl !== focused) {
+        this._passiveRenderControl = focused;
+        focused.addEventListener("blur", () => {
+          this._passiveRenderControl = null;
+          if (this._passiveRenderPending) setTimeout(() => { if (this._passiveRenderPending) this.render(); }, 0);
+        }, { once: true });
+      }
+      return;
+    }
+    this._passiveRenderPending = false;
+    this._passiveRenderControl = null;
     this.renderCount += 1;
     const active = this.shadowRoot.activeElement;
     const queryFocused = active?.hasAttribute?.("data-query");
+    const selectFocused = active?.tagName === "SELECT" ? (active.hasAttribute("data-filter") ? `[data-filter="${active.dataset.filter}"]` : active.hasAttribute("data-diagnostic-filter") ? "[data-diagnostic-filter]" : null) : null;
     const start = queryFocused ? active.selectionStart : null, end = queryFocused ? active.selectionEnd : null;
     const content = this.view === "home" ? this.homeTemplate() : this.view === "devices" ? this.devicesTemplate() : this.view === "changes" ? this.changesTemplate() : this.settingsTemplate();
     this.shadowRoot.innerHTML = `<style>${this.styles()}</style><main aria-busy="${Boolean(this.loading || this.action)}"><header class="app-header"><div><h1>HomeKit Manager</h1><p>Konfiguration sicher verwalten</p></div><button class="icon-button" data-refresh aria-label="Aktualisieren"${this.loading ? " disabled" : ""}>${this.loading ? "…" : "↻"}</button></header><nav class="main-nav" role="tablist" aria-label="Hauptbereiche">${[["home", "HomeKit"], ["devices", "Geräte"], ["changes", "Änderungen"], ["settings", "Einstellungen"]].map(([id, label]) => `<button id="nav-${id}" role="tab" data-nav="${id}" aria-selected="${this.view === id}" aria-controls="main-view" tabindex="${this.view === id ? 0 : -1}">${label}</button>`).join("")}</nav><div class="feedback" aria-live="polite">${this.action ? `<p class="notice" role="status">${this.escape(this.action)} …</p>` : `<p class="status-line tone-${this.statusTone || "neutral"}" role="status">${this.escape(this.statusMessage)}</p>`}${this.error ? `<aside class="notice error" role="alert"><strong>Aktion nicht bestätigt</strong><p>${this.escape(this.error)}</p><button data-refresh>Erneut lesend prüfen</button></aside>` : ""}${this.overview.snapshot_stale ? `<aside class="notice warning" role="alert">Die angezeigten Daten stammen vom letzten vollständigen Stand. Der aktuelle Abruf ist fehlgeschlagen.</aside>` : ""}</div><section id="main-view" role="tabpanel" aria-labelledby="nav-${this.view}">${content}</section>${this.dialog ? `<dialog aria-labelledby="confirm-title"><h2 id="confirm-title">${this.escape(this.dialog.title)}</h2><p>${this.escape(this.dialog.message)}</p><div class="dialog-actions"><button data-confirm-cancel>Abbrechen</button><button class="primary" data-confirm-accept>${this.escape(this.dialog.label)}</button></div></dialog>` : ""}</main>`;
     this.bind();
     if (queryFocused) { const query = this.shadowRoot.querySelector("[data-query]"); query?.focus(); if (start != null) query?.setSelectionRange(start, end); }
+    if (selectFocused) this.shadowRoot.querySelector(selectFocused)?.focus();
     if (this.action) this.shadowRoot.querySelectorAll("button:not([data-nav]), input, select").forEach(node => { node.disabled = true; });
     const dialog = this.shadowRoot.querySelector("dialog"); if (dialog && !dialog.open) dialog.showModal();
   }

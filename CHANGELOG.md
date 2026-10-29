@@ -1,6 +1,12 @@
 # Changelog
 
-## 0.10.1 release candidate (2026-10-29)
+## 0.10.2 (2026-10-29)
+
+- Kept native device-filter and diagnostic dropdown controls mounted while passive inventory updates arrive; a pending view update renders after selection or focus leaves the control.
+- Restored focus after a deliberate dropdown selection. Added Chromium, WebKit and mobile-touch regression coverage for refresh, waiting, selection, keyboard navigation and outside clicks.
+- Retained the 0.10.1 native filter test mode and its server-side authorization boundaries without change.
+
+## 0.10.1 (2026-10-29)
 
 - Added a separately confirmed, one-hour in-memory test mode for one existing native `SOURCE_USER` HomeKit Bridge on Core 2026.10.4. It starts disabled, requires Admin access, expires or is revoked without a local grant file, and does not authorize YAML or accessory writes.
 - Preserved filter-only planning, exact Entry revision checks, Core schema validation, operation journaling, duplicate rejection and read-only reconciliation. The Apply confirmation now names the concrete entity diff.

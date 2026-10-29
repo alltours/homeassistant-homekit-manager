@@ -30,6 +30,8 @@ panel.setDraft('light.kitchen', 'included'); assert.equal(panel.draft.size, 0);
 panel.setDraft('sensor.temperature', 'included'); assert.equal(panel.desiredDocument().bridges['bridge-one'].entities['sensor.temperature'], 'include');
 panel.view = 'changes'; panel.activationStatus = { state: 'unknown', has_operation: true };
 panel.render(); assert.match(panel.shadowRoot.innerHTML, /Ergebnis unbekannt/); assert.match(panel.shadowRoot.innerHTML, /data-apply disabled/);
+panel.activationStatus = { state: 'unknown', has_operation: false };
+panel.render(); assert.match(panel.shadowRoot.innerHTML, /Keine Anwendung protokolliert/);
 let writes = 0; panel._hass = { callWS: async () => { writes++; } };
 await panel.applyDraft(); assert.equal(writes, 0); assert.equal(panel.activationStatus.state, 'unknown');
 for (const view of ['home', 'devices', 'changes', 'settings']) { panel.view = view; panel.render(); assert.match(panel.shadowRoot.innerHTML, /Hauptbereiche/); }

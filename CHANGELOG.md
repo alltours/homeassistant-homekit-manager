@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.3 (2026-10-29)
+
+- Added the area → device → entity hierarchy. Device placement uses the actual device area while entity overrides remain visible as entity metadata.
+- Added explicit include/exclude actions on areas and devices. Confirmation shows full-scope counts even when search, filters or pagination hide members; all actions remain draft-only.
+- Added current and planned aggregate filter status, keyboard and responsive browser coverage, and a 5,000-entity bulk-action test.
+- Count only actual entity filter changes in a server-side operation plan when a saved draft also contains no-op overrides; block all-no-op plans.
+- Keep expanded entity and bridge technical details open across passive inventory refreshes.
+- Show a neutral "Keine Anwendung protokolliert" state when no apply operation exists; reserve "Ergebnis unbekannt" for an actual operation with uncertain outcome.
+
 ## 0.10.2 (2026-10-29)
 
 - Kept native device-filter and diagnostic dropdown controls mounted while passive inventory updates arrive; a pending view update renders after selection or focus leaves the control.

@@ -1,5 +1,5 @@
 {
-  "integration_version": "0.10.2",
+  "integration_version": "0.10.3",
   "file_count": 45,
   "files": [
     {
@@ -39,7 +39,7 @@
     },
     {
       "path": "const.py",
-      "sha256": "c86dbf17e23b99b2b2e37f4c203dc9b14892c1b00136eee9756b91eb08373de4",
+      "sha256": "82c1599ac9802eb3d84b6cd4df4714563bf2b8464549adc031753021e6e21a98",
       "size": 2642
     },
     {
@@ -109,13 +109,13 @@
     },
     {
       "path": "homekit_writer.py",
-      "sha256": "89e7f9d60b192f44206a698f27d2eefe7db74bc39b9516fd62ed97750e2f39b9",
-      "size": 14013
+      "sha256": "4c5022f38ead5ffdb8cbe31111e92ce1fcda36774e791f8cb913ef9b465ee129",
+      "size": 14280
     },
     {
       "path": "inventory.py",
-      "sha256": "96404fac1f0f9953b5515aa7bd73431dcba89aaafc8e1b191818ed0d050b5428",
-      "size": 7348
+      "sha256": "626b4fad6b61afc86b9fdc9fdf2450e7dd84b24b245d9cb88a78e63d2e141949",
+      "size": 7643
     },
     {
       "path": "management_store.py",
@@ -124,7 +124,7 @@
     },
     {
       "path": "manifest.json",
-      "sha256": "8043e35cae4bc7709c9348e4d1ceff8d78b17cad4a23086b6813e1a23fd9bde9",
+      "sha256": "fc61a5afbf50b583bf002b1edd6134ddbce6cffecf61e24e71bdbb35a4143380",
       "size": 516
     },
     {
@@ -214,8 +214,8 @@
     },
     {
       "path": "www/homekit-manager.js",
-      "sha256": "55d8ccf5ebe400cbd84b4321b495da86f2ff104cc0518f80e5ce6de6603ff74c",
-      "size": 78176
+      "sha256": "1c8b0df845ad706118f6631af2826b2f7e3501f82ca03d34ddc9e0cd43031d55",
+      "size": 83115
     },
     {
       "path": "yaml_adapter.py",

@@ -1,7 +1,8 @@
-# HomeKit Manager 0.10.2
+# HomeKit Manager 0.10.3
 
-Version 0.10.2 fixes native dropdown menus closing during background inventory
-updates. The 0.10.1 filter test mode and all server-side write checks remain
+Version 0.10.3 adds an area, device and entity hierarchy with confirmed bulk
+draft actions. Version 0.10.2 fixed dropdown menus closing during background
+inventory updates. The 0.10.1 filter test mode and all server-side write checks remain
 unchanged. Publishing this version does not install it on Home Assistant.
 
 Home Assistant custom integration for inspecting existing HomeKit Bridges and
@@ -78,7 +79,7 @@ The authoritative product repository is `https://github.com/alltours/homeassista
 
 Review the [0.10.0 upgrade and rollback guide](docs/UPGRADE_0_10_0.md) before any installation decision. This repository does not prove the currently installed production version or Apple Home behavior. No production installation was performed during this work. Replacing custom-component files does not itself update a running Home Assistant process.
 
-Accessory-mode instances are reported separately and cannot be selected as bridge targets. Cross-source migration and bridge creation/deletion stay blocked. The beta has a verified native filter path, but entity/accessory compatibility continues to report unknown outside Core 2026.10.4. Browser tests cover Chromium and WebKit; physical iPhone and VoiceOver acceptance remains separate. See the [0.10.2 release notes](docs/RELEASE_0_10_2.md) and [0.10.1 test-mode notes](docs/RELEASE_0_10_1.md) for the exact scope.
+Accessory-mode instances are reported separately and cannot be selected as bridge targets. Cross-source migration and bridge creation/deletion stay blocked. The beta has a verified native filter path, but entity/accessory compatibility continues to report unknown outside Core 2026.10.4. Browser tests cover Chromium and WebKit; physical iPhone and VoiceOver acceptance remains separate. See the [0.10.3 release notes](docs/RELEASE_0_10_3.md) and [0.10.1 test-mode notes](docs/RELEASE_0_10_1.md) for the exact scope.
 
 ## License
 

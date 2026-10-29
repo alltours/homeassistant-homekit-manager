@@ -11,7 +11,7 @@ import time
 from typing import Any
 from uuid import uuid4
 
-from .const import SUPPORTED_CORE_VERSION
+from .const import NATIVE_FILTER_WRITE_CORE_VERSIONS
 
 
 TEST_MODE_SECONDS = 60 * 60
@@ -36,7 +36,7 @@ class TestModeAuthority:
         from homeassistant.config_entries import SOURCE_USER
 
         if (self.manager._authority is not self or time.monotonic() >= self.deadline
-                or __version__ != SUPPORTED_CORE_VERSION or entry_id != self.entry_id
+                or __version__ not in NATIVE_FILTER_WRITE_CORE_VERSIONS or entry_id != self.entry_id
                 or source != self.source):
             raise TestModeBlocked("HomeKit-Testmodus ist abgelaufen oder widerrufen")
         entry = hass.config_entries.async_get_entry(entry_id)
@@ -73,7 +73,7 @@ class TestWriteMode:
 
         if not entry_id or confirmed_entry_id != entry_id:
             raise TestModeBlocked("Die konkrete Bridge-ID muss bestätigt werden")
-        if __version__ != SUPPORTED_CORE_VERSION:
+        if __version__ not in NATIVE_FILTER_WRITE_CORE_VERSIONS:
             raise TestModeBlocked("Diese Home-Assistant-Core-Version ist für den Testmodus nicht verifiziert")
         entry = hass.config_entries.async_get_entry(entry_id)
         if entry is None or entry.domain != "homekit" or entry.source != SOURCE_USER:

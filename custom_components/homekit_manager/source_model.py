@@ -12,6 +12,8 @@ import json
 from types import MappingProxyType
 from typing import Any, Mapping
 
+from .const import NATIVE_FILTER_WRITE_CORE_VERSIONS
+
 
 def revision(value: Mapping[str, Any]) -> str:
     """Fingerprint complete values, including unknown fields, for conflict checks."""
@@ -56,7 +58,7 @@ def native_source(entry: Any, core_version: str) -> HomeKitSource:
     data, options = dict(entry.data), dict(entry.options)
     effective = data | options
     source = str(entry.source)
-    writable = source == SOURCE_USER and core_version == "2026.10.4" and effective.get("mode", "bridge") == "bridge"
+    writable = source == SOURCE_USER and core_version in NATIVE_FILTER_WRITE_CORE_VERSIONS and effective.get("mode", "bridge") == "bridge"
     return HomeKitSource(
         entry_id=entry.entry_id,
         source=source,
@@ -68,7 +70,7 @@ def native_source(entry: Any, core_version: str) -> HomeKitSource:
         options=_freeze(options),
         provenance=None,
         revision=revision({"entry_id": entry.entry_id, "source": source, "data": data, "options": options}),
-        capabilities=SourceCapabilities(True, writable, True, None if writable else "Native Filter nur für SOURCE_USER im Bridge-Modus auf Core 2026.10.4"),
+        capabilities=SourceCapabilities(True, writable, True, None if writable else "Native Filter nur für SOURCE_USER im Bridge-Modus auf einer verifizierten Core-Version"),
     )
 
 

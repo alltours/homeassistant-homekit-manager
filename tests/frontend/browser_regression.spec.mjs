@@ -270,3 +270,12 @@ test('native test mode is opt-in, bridge-bound in UI and revocable before apply'
   await expect(panel.locator('[data-apply]')).toBeDisabled();
   expect(await page.evaluate(() => window.fixtureCommands.includes('homekit_manager/operation_apply'))).toBe(false);
 });
+
+test('isolated Core beta native Bridge exposes the explicit test-mode control', async ({page}) => {
+  await page.goto('/tests/frontend/browser_fixture.html?core-beta');
+  const panel = page.locator('homekit-manager-panel');
+  await panel.getByRole('tab', {name:'Einstellungen', exact:true}).click();
+  await panel.getByRole('button', {name:'Konfiguration', exact:true}).click();
+  await expect(panel.locator('[data-test-mode-enable]')).toBeEnabled();
+  await expect(panel.locator('[data-test-mode-disable]')).toHaveCount(0);
+});

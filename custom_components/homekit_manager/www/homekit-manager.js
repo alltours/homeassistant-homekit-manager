@@ -307,10 +307,10 @@ class HomeKitManagerPanel extends HTMLElement {
   testWriteModeCard() {
     const mode = this.overview.test_write_mode || {};
     const bridge = this.bridge;
-    const supported = Boolean(bridge?.source === "user" && bridge?.mode === "bridge" && bridge?.state === "loaded" && this.overview.core_version === "2026.10.4" && !this.overview.snapshot_stale);
+    const supported = Boolean(bridge?.source === "user" && bridge?.mode === "bridge" && bridge?.state === "loaded" && ["2026.10.4", "2026.11.0b0"].includes(this.overview.core_version) && !this.overview.snapshot_stale);
     const activeHere = mode.enabled && mode.entry_id === bridge?.entry_id;
     const detail = mode.enabled ? `Aktiv für Entry ${mode.entry_id} bis ${this.formatTime(mode.expires_at)}. Nach Core-Neustart deaktiviert.` : "Deaktiviert. Nach bewusster Admin-Aktivierung 60 Minuten nur für eine native Bridge und Filteränderungen gültig.";
-    return `<section class="notice${mode.enabled ? " warning" : ""}" aria-label="Produktiver Filter-Testmodus"><strong>Produktiver Filter-Testmodus</strong><p>${this.escape(detail)}</p><p>Keine separate Grant-Datei erforderlich. Vor jedem Apply sind ein aktueller Plan, der konkrete Diff und eine eigene Bestätigung nötig. Pairing-Erhalt in Apple Home wird dadurch nicht garantiert.</p>${mode.enabled ? `<button data-test-mode-disable>Testmodus sofort widerrufen</button>` : `<button data-test-mode-enable${supported ? "" : " disabled"}>Testmodus für diese Bridge aktivieren</button>`}${!supported && !mode.enabled ? `<p>Nur eine geladene native Bridge mit Core 2026.10.4 ist freigegeben.</p>` : ""}</section>`;
+    return `<section class="notice${mode.enabled ? " warning" : ""}" aria-label="Produktiver Filter-Testmodus"><strong>Produktiver Filter-Testmodus</strong><p>${this.escape(detail)}</p><p>Keine separate Grant-Datei erforderlich. Vor jedem Apply sind ein aktueller Plan, der konkrete Diff und eine eigene Bestätigung nötig. Pairing-Erhalt in Apple Home wird dadurch nicht garantiert.</p>${mode.enabled ? `<button data-test-mode-disable>Testmodus sofort widerrufen</button>` : `<button data-test-mode-enable${supported ? "" : " disabled"}>Testmodus für diese Bridge aktivieren</button>`}${!supported && !mode.enabled ? `<p>Nur eine geladene native Bridge mit Core 2026.10.4 oder 2026.11.0b0 ist für Filteränderungen freigegeben.</p>` : ""}</section>`;
   }
   async enableTestWriteMode() {
     const bridge = this.bridge;

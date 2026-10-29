@@ -129,7 +129,7 @@ async def test_test_mode_blocks_wrong_core_and_accessory(hass, monkeypatch):
     entry = await native_entry(hass, monkeypatch, suffix="version")
     mode = WriteMode()
     with monkeypatch.context() as patcher:
-        patcher.setattr("homeassistant.const.__version__", "2026.11.0b0")
+        patcher.setattr("homeassistant.const.__version__", "2026.12.0")
         with pytest.raises(ModeBlocked, match="Core-Version"):
             mode.enable(hass, entry.entry_id, entry.entry_id)
     accessory = await native_entry(hass, monkeypatch, suffix="accessory", mode="accessory")

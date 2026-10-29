@@ -10,7 +10,7 @@ continues to require its local grant file.
 The backend starts locked. A Home Assistant administrator can open
 **Settings → Configuration → Productive filter test mode** and confirm the
 selected Bridge's exact Entry ID. Activation is accepted only when the current
-Core version is **2026.10.4**, the selected existing HomeKit Config Entry is
+Core version is **2026.10.4 or 2026.11.0b0**, the selected existing HomeKit Config Entry is
 loaded, its source is `user`, its mode is `bridge`, the inventory fingerprint
 still matches, and no unresolved operation for that Entry is applying or has
 an unknown outcome. The test mode does not support YAML or accessory Entries.
@@ -43,8 +43,11 @@ Apple Home pairing preservation.
 
 1. Verify the **running** Core and Manager versions and a complete restorable
    backup, including the site's HomeKit persistence. If a Core update is in
-   progress, stop. If Core is not 2026.10.4, the mode remains blocked until
-   that version's HomeKit filter path is reviewed and isolated tests pass.
+   progress, stop. Only the exact Core versions 2026.10.4 and 2026.11.0b0
+   are authorized for the native filter path. The latter has a focused
+   isolated native/HAP test; it does not extend YAML writing or prove general
+   accessory compatibility. Any other Core version remains blocked until
+   its filter path is reviewed and isolated tests pass.
 2. Confirm the selected Bridge Entry ID, `user` source, `bridge` mode and
    currently active filter. Prepare the intended entity changes as a draft.
 3. In Settings → Configuration, activate the one-hour test mode for this Bridge.

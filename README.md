@@ -7,14 +7,17 @@ each require separate, explicit authorization.
 
 Home Assistant custom integration for inspecting existing HomeKit Bridges and
 planning changes in one four-tab panel: HomeKit, Devices, Changes and Settings.
-It supports Home Assistant Core **2026.10.4**. Native `SOURCE_USER` Bridges and
+The complete 0.10.0 reference remains Home Assistant Core **2026.10.4**. The
+native Bridge filter writer is also isolated-tested on **2026.11.0b0**; YAML
+writing and general accessory compatibility are not extended to that beta.
+Native `SOURCE_USER` Bridges and
 simple direct or directly included YAML `SOURCE_IMPORT` Bridges retain their
 original source. Filter-list changes are the only supported write operation.
 Complex or ambiguous YAML structures and accessory-mode entries remain
 read-only. No YAML ↔ UI migration is performed.
 
 Production apply is disabled by default. For native SOURCE_USER Bridges on
-Core 2026.10.4, an administrator may deliberately enable a one-hour,
+Core 2026.10.4 or 2026.11.0b0, an administrator may deliberately enable a one-hour,
 Bridge-bound in-memory test mode in Settings. It requires no separate grant
 file, expires automatically, is revoked on Core restart and can be disabled
 immediately. It only authorizes validated filter operations; each Apply still
@@ -64,7 +67,7 @@ There is no retrospective proof for an older activation that was only kept in pr
 
 ## Development and release
 
-Use Python 3.14.2 or later. The verified local runtime was Python 3.14.9 and Home Assistant Core 2026.10.4. Install `tests/integration/requirements-ha-2026.10.4.txt`, then run `npm ci` and `npx playwright install chromium webkit`.
+Use Python 3.14.2 or later. The verified local runtime was Python 3.14.9 with Home Assistant Core 2026.10.4 and an isolated native/HAP probe on 2026.11.0b0. Install `tests/integration/requirements-ha-2026.10.4.txt` for the full suite or `tests/integration/requirements-ha-2026.11.0b0.txt` for the beta native probe, then run `npm ci` and `npx playwright install chromium webkit`.
 
 Run `pytest -q`, `npm run test:frontend` and `npm run test:browser`. The Python suite includes real authenticated Home Assistant WebSocket/browser tests when pinned browser dependencies are installed. Each integration test receives a separate temporary configuration directory. The five-minute browser observation is `npx playwright test -c tests/frontend/playwright.config.mjs tests/frontend/browser_stability.spec.mjs`.
 
@@ -76,7 +79,7 @@ The authoritative product repository is `https://github.com/alltours/homeassista
 
 Review the [0.10.0 upgrade and rollback guide](docs/UPGRADE_0_10_0.md) before any installation decision. This repository does not prove the currently installed production version or Apple Home behavior. No production installation was performed during this work. Replacing custom-component files does not itself update a running Home Assistant process.
 
-Accessory-mode instances are reported separately and cannot be selected as bridge targets. Cross-source migration and bridge creation/deletion stay blocked. Versions other than Core 2026.10.4 receive unknown compatibility rather than a positive claim. Browser tests cover Chromium and WebKit; physical iPhone and VoiceOver acceptance remains separate.
+Accessory-mode instances are reported separately and cannot be selected as bridge targets. Cross-source migration and bridge creation/deletion stay blocked. The beta has a verified native filter path, but entity/accessory compatibility continues to report unknown outside Core 2026.10.4. Browser tests cover Chromium and WebKit; physical iPhone and VoiceOver acceptance remains separate. See the [0.10.1 release candidate notes](docs/RELEASE_0_10_1.md) for the exact scope.
 
 ## License
 

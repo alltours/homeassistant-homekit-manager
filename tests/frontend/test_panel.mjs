@@ -13,8 +13,8 @@ await new Promise(resolve => setTimeout(resolve, 0));
 assert.equal(calls, 1, 'dependent reads must stop after failed inventory transport');
 assert.match(panel.shadowRoot.innerHTML, /Transport offline/);
 panel.entities = [
-  { entity_id: 'light.kitchen', name: 'Kitchen', device_id: 'ceiling', device_name: 'Ceiling light', area_id: 'kitchen', area_name: 'Kitchen area', domain: 'light', integration_domain: 'demo', available: true, compatibility: { status: 'supported' }, homekit: { configured_by_filter: true } },
-  { entity_id: 'sensor.temperature', name: 'Temperature', device_id: 'meter', device_name: 'Meter', area_id: 'hall', area_name: 'Hall', domain: 'sensor', integration_domain: 'sensor_test', available: false, compatibility: { status: 'conditionally_supported' }, homekit: { configured_by_filter: false } },
+  { entity_id: 'light.kitchen', name: 'Kitchen', device_id: 'ceiling', device_registry_status: 'main', registry_entry_present: true, state_present: true, device_name: 'Ceiling light', area_id: 'kitchen', area_name: 'Kitchen area', domain: 'light', integration_domain: 'demo', available: true, compatibility: { status: 'supported' }, homekit: { configured_by_filter: true } },
+  { entity_id: 'sensor.temperature', name: 'Temperature', device_id: 'meter', device_registry_status: 'main', registry_entry_present: true, state_present: true, device_name: 'Meter', area_id: 'hall', area_name: 'Hall', domain: 'sensor', device_class: 'temperature', integration_domain: 'sensor_test', available: false, compatibility: { status: 'supported' }, homekit: { configured_by_filter: false } },
 ];
 panel.bridge = { entry_id: 'bridge-one', title: 'Test Bridge', source: 'user', state: 'loaded' };
 panel.bridges = [panel.bridge];

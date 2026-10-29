@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from .yaml_store import validate_document
+from .bulk import exclusion_reason
 
 _FILTER_KEYS = {
     "include_entities", "exclude_entities", "include_domains", "exclude_domains",
@@ -81,6 +82,15 @@ def plan_changes(
                 counts["conflicts"] += 1
             changes.append({"entity_id": entity_id, "current": current, "desired": desired_status, "action": "conflict" if requested else "unknown", "risk": "high", "reason": "unknown_current_filter", "blocked": True})
             continue
+        # A forged draft must not add an entity whose Core eligibility has
+        # not been established. Existing includes remain untouched.
+        if requested == "include" and current != "included":
+            unsafe = exclusion_reason(item)
+            if unsafe:
+                counts["conflicts"] += 1
+                changes.append({"entity_id": entity_id, "current": current, "desired": desired_status,
+                                "action": "conflict", "risk": "high", "reason": unsafe, "blocked": True})
+                continue
         if not requested or desired_status == current:
             counts["unchanged"] += 1
             changes.append({"entity_id": entity_id, "current": current, "desired": desired_status, "action": "unchanged", "risk": "low", "reason": "no_explicit_override", "blocked": False})

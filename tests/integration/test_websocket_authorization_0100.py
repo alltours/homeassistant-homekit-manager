@@ -46,7 +46,7 @@ async def test_every_manager_websocket_route_rejects_authenticated_non_admin(
         args[command] = {"document": document}
 
     routes = {handler._ws_command for handler in REGISTERED_HANDLERS}
-    assert len(routes) == len(REGISTERED_HANDLERS) == 34
+    assert len(routes) == len(REGISTERED_HANDLERS) == 35
     for route in sorted(routes):
         await client.send_json_auto_id({"type": route, **args.get(route, {})})
         response = await client.receive_json()

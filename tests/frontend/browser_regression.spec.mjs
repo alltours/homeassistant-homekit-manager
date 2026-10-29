@@ -239,8 +239,8 @@ test('whole area and device selection use an explicit draft confirmation', async
   await panel.getByRole('tab',{name:'Geräte',exact:true}).click();
   const kitchen = panel.locator('.area-card').filter({has:page.locator('[data-area="Kitchen"]')});
   await kitchen.locator('[data-scope-value="excluded"]').click();
-  await expect(panel.getByRole('dialog')).toContainText('Geräte: 1; Entitäten: 1; neu zu ändern: 1');
-  await panel.getByRole('button',{name:'Nur im Entwurf vormerken'}).click();
+  await expect(panel.getByRole('dialog')).toContainText('Entitäten insgesamt1Werden neu ausgeschlossen1');
+  await panel.getByRole('button',{name:'Im Entwurf vormerken'}).click();
   await panel.getByRole('tab',{name:'Änderungen',exact:true}).click(); await expect(panel.locator('.change-row')).toHaveCount(1);
 });
 
@@ -253,12 +253,12 @@ test('hierarchy uses device area, shows every entity once and scopes bulk edits 
       { entity_id: 'light.a2', name: 'Alpha two', domain: 'light', area_id: 'a', area_name: 'Alpha', area_source: 'device', device_area_id: 'a', device_area_name: 'Alpha', device_id: 'device-a', device_name: 'Main device', available: true, compatibility: { status: 'supported' }, homekit: { configured_by_filter: true } },
       { entity_id: 'light.b', name: 'Beta orphan', domain: 'light', area_id: 'b', area_name: 'Beta', area_source: 'entity', device_id: null, available: true, compatibility: { status: 'supported' }, homekit: { configured_by_filter: true } },
       { entity_id: 'light.none', name: 'No area', domain: 'light', area_id: null, area_name: null, device_area_id: null, device_area_name: null, device_id: 'device-none', device_name: 'Unassigned device', available: true, compatibility: { status: 'supported' }, homekit: { configured_by_filter: true } },
-    ];
+    ].map(item => ({ registry_entry_present: true, state_present: true, device_registry_status: item.device_id ? 'main' : 'none', ...item }));
     element.render();
   });
   await panel.getByRole('tab', { name: 'Geräte', exact: true }).click();
   const alpha = panel.locator('.area-card').filter({ has: page.locator('[data-area="Alpha"]') });
-  await expect(alpha).toContainText('1 Geräte · 2 Entitäten');
+  await expect(alpha).toContainText('1 Gerät · 2 Entitäten');
   await alpha.locator('.area-heading').click();
   await alpha.locator('[data-expand]').click();
   await expect(alpha.locator('.entity-row')).toHaveCount(2);
@@ -266,8 +266,8 @@ test('hierarchy uses device area, shows every entity once and scopes bulk edits 
   await panel.getByRole('searchbox', { name: 'Entitäten suchen' }).fill('Alpha one');
   await expect(alpha.locator('.entity-row')).toHaveCount(1);
   await alpha.locator('[data-scope-kind="area"][data-scope-value="excluded"]').click();
-  await expect(panel.getByRole('dialog')).toContainText('Geräte: 1; Entitäten: 2; neu zu ändern: 2; bereits so eingestellt: 0; nicht bearbeitbar: 0');
-  await panel.getByRole('button', { name: 'Nur im Entwurf vormerken' }).click();
+  await expect(panel.getByRole('dialog')).toContainText('Entitäten insgesamt2Werden neu ausgeschlossen2Bereits ausgeschlossen0Werden übersprungen0');
+  await panel.getByRole('button', { name: 'Im Entwurf vormerken' }).click();
   expect(await panel.evaluate(element => [...element.draft.keys()].sort())).toEqual(['light.a1', 'light.a2']);
   await expect(alpha).toContainText('Entwurf');
 });
@@ -280,7 +280,7 @@ test('mixed aggregates and device action count existing drafts and unsupported e
       { entity_id: 'light.on', name: 'On', domain: 'light', area_id: 'a', area_name: 'Alpha', device_id: 'device-a', device_name: 'Lamp', available: true, compatibility: { status: 'supported' }, homekit: { configured_by_filter: true } },
       { entity_id: 'light.off', name: 'Off', domain: 'light', area_id: 'a', area_name: 'Alpha', device_id: 'device-a', device_name: 'Lamp', available: true, compatibility: { status: 'supported' }, homekit: { configured_by_filter: false } },
       { entity_id: 'light.unsupported', name: 'Unsupported', domain: 'light', area_id: 'a', area_name: 'Alpha', device_id: 'device-a', device_name: 'Lamp', available: true, compatibility: { status: 'unsupported' }, homekit: { configured_by_filter: false } },
-    ];
+    ].map(item => ({ registry_entry_present: true, state_present: true, device_registry_status: item.device_id ? 'main' : 'none', ...item }));
     element.draft.set('light.on', 'excluded'); element.render();
   });
   await panel.getByRole('tab', { name: 'Geräte', exact: true }).click();
@@ -291,8 +291,8 @@ test('mixed aggregates and device action count existing drafts and unsupported e
   await expect(device).toContainText('Gemischt');
   await device.locator('[data-scope-value="included"]').focus();
   await device.locator('[data-scope-value="included"]').press('Enter');
-  await expect(panel.getByRole('dialog')).toContainText('Geräte: 1; Entitäten: 3; neu zu ändern: 2; bereits so eingestellt: 0; nicht bearbeitbar: 1');
-  await panel.getByRole('button', { name: 'Nur im Entwurf vormerken' }).click();
+  await expect(panel.getByRole('dialog')).toContainText('Entitäten insgesamt3Werden neu eingeschlossen2Bereits eingeschlossen0Werden übersprungen1');
+  await panel.getByRole('button', { name: 'Im Entwurf vormerken' }).click();
   expect(await panel.evaluate(element => [...element.draft])).toEqual([['light.off', 'included']]);
 });
 
@@ -312,7 +312,7 @@ test('device bulk actions exclude hidden, disabled, categorized and incompatible
       row('hidden', { hidden_by: 'user' }),
       row('diagnostic', { entity_category: 'diagnostic' }),
       row('config', { entity_category: 'config' }),
-    ];
+    ].map(item => ({ registry_entry_present: true, state_present: true, device_registry_status: item.device_id ? 'main' : 'none', ...item }));
     element.render();
   });
   await panel.getByRole('tab', { name: 'Geräte', exact: true }).click();
@@ -322,11 +322,12 @@ test('device bulk actions exclude hidden, disabled, categorized and incompatible
   await expect(device.getByRole('button', { name: 'Alle Entitäten in Lamp ausschließen' })).toBeVisible();
   await device.locator('[data-scope-value="excluded"]').click();
   const dialog = panel.getByRole('dialog');
-  await expect(dialog).toContainText('Entitäten: 7; neu zu ändern: 1; bereits so eingestellt: 0; nicht bearbeitbar: 6');
-  for (const reason of ['Nicht unterstützt: 1', 'Kompatibilität unbekannt: 1', 'Deaktiviert: 1', 'Ausgeblendet: 1', 'Diagnoseentität: 1', 'Konfigurationsentität: 1']) {
+  await expect(dialog).toContainText('Entitäten insgesamt7Werden neu ausgeschlossen1Bereits ausgeschlossen0Werden übersprungen6');
+  await dialog.getByText('Warum werden Entitäten übersprungen?').click();
+  for (const reason of ['1 Nicht HomeKit-kompatibel', '1 Kompatibilität nicht verifiziert', '1 Deaktiviert', '1 Ausgeblendet', '1 Diagnoseentität', '1 Konfigurationsentität']) {
     await expect(dialog).toContainText(reason);
   }
-  await panel.getByRole('button', { name: 'Nur im Entwurf vormerken' }).click();
+  await panel.getByRole('button', { name: 'Im Entwurf vormerken' }).click();
   expect(await panel.evaluate(element => [...element.draft])).toEqual([['light.eligible', 'excluded']]);
 });
 
@@ -337,12 +338,12 @@ test('unknown-only device has a neutral and accurate aggregate label', async ({ 
     element.entities = [{ entity_id: 'light.unknown', name: 'Unknown', domain: 'light',
       device_id: 'device-a', device_name: 'Lamp', area_id: 'a', area_name: 'Alpha',
       available: true, compatibility: { status: 'supported' },
-      homekit: { configured_by_filter: null } }];
+      homekit: { configured_by_filter: null } }].map(item => ({ registry_entry_present: true, state_present: true, device_registry_status: item.device_id ? 'main' : 'none', ...item }));
     element.render();
   });
   await panel.getByRole('tab', { name: 'Geräte', exact: true }).click();
   await panel.locator('[data-group="devices"]').click();
-  await expect(panel.locator('.device-row')).toContainText('Keine auswertbaren Entitäten');
+  await expect(panel.locator('.device-row')).toContainText('Nicht verifiziert');
 });
 
 test('broad filter migration stays a draft until server plan and exact apply confirmation', async ({ page }) => {
@@ -375,8 +376,8 @@ test('area action spans 5000 entities while search displays one result', async (
   await expect(panel.locator('.result-count')).toContainText('1 von 5000');
   const started = Date.now();
   await panel.locator('.area-card [data-scope-value="excluded"]').click();
-  await expect(panel.getByRole('dialog')).toContainText('Entitäten: 5000; neu zu ändern: 5000');
-  await panel.getByRole('button', { name: 'Nur im Entwurf vormerken' }).click();
+  await expect(panel.getByRole('dialog')).toContainText('Entitäten insgesamt5000Werden neu ausgeschlossen5000');
+  await panel.getByRole('button', { name: 'Im Entwurf vormerken' }).click();
   expect(await panel.evaluate(element => element.draft.size)).toBe(5000);
   expect(Date.now() - started).toBeLessThan(10000);
 });
@@ -460,7 +461,7 @@ test('search, sort, filters and bulk draft span every loaded inventory page', as
   await panel.locator('[data-select="light.paged_4999"]').check();
   await expect(panel.locator('.selection-bar')).toContainText('3 ausgewählt');
   await panel.locator('[data-exclude]').click();
-  await expect(panel.locator('dialog')).toContainText('Es entsteht nur ein Entwurf');
+  await expect(panel.locator('dialog')).toContainText('Die Bestätigung ändert nur den Entwurf');
   await panel.locator('[data-confirm-accept]').click();
   await panel.getByRole('tab', {name:'Änderungen', exact:true}).click();
   await expect(panel.locator('.change-row')).toHaveCount(3);
@@ -510,4 +511,91 @@ test('isolated Core beta native Bridge exposes the explicit test-mode control', 
   await panel.getByRole('button', {name:'Konfiguration', exact:true}).click();
   await expect(panel.locator('[data-test-mode-enable]')).toBeEnabled();
   await expect(panel.locator('[data-test-mode-disable]')).toHaveCount(0);
+});
+
+test('unassigned entities are direct area members and display options only affect the view', async ({ page }) => {
+  await page.goto('/tests/frontend/browser_fixture.html');
+  const panel = page.locator('homekit-manager-panel');
+  await panel.evaluate(element => {
+    const item = (id, extra = {}) => ({ entity_id: `sensor.${id}`, name: id, domain: 'sensor', area_id: 'trash', area_name: 'Müllplatz',
+      device_id: null, device_registry_status: 'none', registry_entry_present: true, state_present: true,
+      compatibility: { status: 'supported' }, homekit: { configured_by_filter: false }, ...extra });
+    element.entities = [item('blaue_tonne'), item('braune_tonne'), item('gelbe_tonne'), item('graue_tonne'),
+      item('diagnose', { entity_category: 'diagnostic' }), item('deaktiviert', { disabled_by: 'integration' }),
+      item('versteckt', { hidden_by: 'user' }), item('unbekannt', { compatibility: { status: 'unknown' } })];
+    element.render();
+  });
+  await panel.getByRole('tab', { name: 'Geräte', exact: true }).click();
+  const area = panel.locator('.area-card').filter({ has: page.locator('[data-area="Müllplatz"]') });
+  await expect(area.locator('.area-heading')).toContainText('0 Geräte · 5 Entitäten');
+  await area.locator('.area-heading').click();
+  await expect(area.locator('.device-row')).toHaveCount(0);
+  await expect(area.locator('.unassigned .entity-row')).toHaveCount(5);
+  await expect(area.locator('.unassigned')).toContainText('blaue_tonne');
+  for (const key of ['disabled', 'hidden', 'technical']) await panel.locator(`[data-display="${key}"]`).check();
+  await expect(area.locator('.unassigned .entity-row')).toHaveCount(8);
+  expect(await panel.evaluate(element => element.draft.size)).toBe(0);
+  await area.locator('[data-scope-value="included"]').click();
+  await expect(panel.getByRole('dialog').locator('.dialog-counts')).toContainText('Werden übersprungen4');
+  await panel.locator('[data-confirm-cancel]').click();
+  expect(await panel.evaluate(element => element.draft.size)).toBe(0);
+});
+
+test('same-name devices remain distinct and aggregate only regularly manageable entities', async ({ page }) => {
+  await page.goto('/tests/frontend/browser_fixture.html');
+  const panel = page.locator('homekit-manager-panel');
+  await panel.evaluate(element => {
+    const item = (id, device, area, extra = {}) => ({ entity_id: `light.${id}`, name: `Decke ${id}`, domain: 'light',
+      device_id: device, device_name: 'Decke', device_area_id: area, device_area_name: area, area_id: area, area_name: area,
+      device_registry_status: 'main', registry_entry_present: true, state_present: true,
+      compatibility: { status: 'supported' }, homekit: { configured_by_filter: true }, ...extra });
+    element.entities = [item('flur', 'one', 'Flur'), item('flur_hidden', 'one', 'Flur', { hidden_by: 'user', homekit: { configured_by_filter: false } }),
+      item('katzen', 'two', 'Katzengefängnis')]; element.render();
+  });
+  await panel.getByRole('tab', { name: 'Geräte', exact: true }).click();
+  await panel.locator('[data-group="devices"]').click();
+  await expect(panel.locator('.device-row')).toHaveCount(2);
+  await expect(panel.locator('.device-row').first()).toContainText('Decke · Flur');
+  await expect(panel.locator('.device-row').last()).toContainText('Decke · Katzengefängnis');
+  await expect(panel.locator('.device-row').first().locator('.state').first()).toHaveText('Eingeschlossen');
+  await panel.locator('.device-row').first().locator('[data-expand]').click();
+  await expect(panel.locator('.device-row').first().locator('.entity-row')).toHaveCount(1);
+  await panel.locator('[data-display="hidden"]').check();
+  await expect(panel.locator('.device-row').first().locator('.entity-row')).toHaveCount(2);
+  await expect(panel.locator('.device-row').first().locator('.state').first()).toHaveText('Eingeschlossen');
+});
+
+test('bulk action with no effective change does not create a draft or dialog', async ({ page }) => {
+  await page.goto('/tests/frontend/browser_fixture.html');
+  const panel = page.locator('homekit-manager-panel');
+  await panel.getByRole('tab', { name: 'Geräte', exact: true }).click();
+  const kitchen = panel.locator('.area-card').filter({ has: page.locator('[data-area="Kitchen"]') });
+  await kitchen.locator('[data-scope-value="included"]').click();
+  await expect(panel.getByRole('dialog')).toHaveCount(0);
+  expect(await panel.evaluate(element => element.draft.size)).toBe(0);
+  await expect(panel.locator('.status-line')).toContainText('Keine Änderung erforderlich');
+});
+
+test('five thousand device references remain paged and searchable', async ({ page }) => {
+  await page.goto('/tests/frontend/browser_fixture.html');
+  const panel = page.locator('homekit-manager-panel');
+  await panel.evaluate(element => {
+    element.entities = Array.from({ length: 5000 }, (_, index) => ({
+      entity_id: `light.device_${index}`, name: `Lamp ${index}`, domain: 'light',
+      device_id: `device-${index}`, device_name: `Device ${index}`, device_registry_status: 'main',
+      area_id: 'many', area_name: 'Viele Geräte', device_area_id: 'many', device_area_name: 'Viele Geräte',
+      registry_entry_present: true, state_present: true, available: true,
+      compatibility: { status: 'supported' }, homekit: { configured_by_filter: true },
+    })); element.render();
+  });
+  await panel.getByRole('tab', { name: 'Geräte', exact: true }).click();
+  const area = panel.locator('.area-card');
+  await expect(area).toHaveCount(1);
+  await area.locator('.area-heading').click();
+  await expect(area.locator('.device-row')).toHaveCount(40);
+  await panel.locator('[data-group="devices"]').click();
+  await expect(panel.locator('.device-row')).toHaveCount(80);
+  await panel.getByRole('searchbox', { name: 'Entitäten suchen' }).fill('Device 4999');
+  await expect(panel.locator('.device-row')).toHaveCount(1);
+  await expect(panel.locator('.device-row')).toContainText('Device 4999');
 });

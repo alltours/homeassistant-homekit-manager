@@ -30,10 +30,10 @@ for (const [name,width,height] of viewports) {
       if (view==='devices') {
         await expect(panel.locator('.area-card')).toHaveCount(11);
         const unassigned=panel.locator('.area-card').filter({has:page.locator('[data-area="Ohne Bereich"]')});
-        await expect(unassigned.locator('.area-heading')).toContainText('72 Geräte · 581 Entitäten · 190 ohne Gerät');
-        await expect(unassigned.locator('.area-metrics dd')).toHaveText(['248','168','378']);
+        await expect(unassigned.locator('.area-heading')).toContainText('72 Geräte · 581 Entitäten');
+        await expect(unassigned.locator('.area-metrics dd')).toHaveText(['248','168']);
         const kitchen=panel.locator('.area-card').filter({has:page.locator('[data-area="Küche"]')});
-        await expect(kitchen.locator('.area-metrics dd')).toHaveText(['6','13','53']);
+        await expect(kitchen.locator('.area-metrics dd')).toHaveText(['6','13']);
         const totals=await panel.evaluate(element=>({global:element.counts(element.entities).devices,areas:[...new Set(element.entities.map(e=>e.area_name))].map(area=>element.counts(element.entities.filter(e=>e.area_name===area)).devices)}));
         expect(totals.global).toBe(129);expect(Math.max(...totals.areas)).toBeLessThanOrEqual(totals.global);
       }

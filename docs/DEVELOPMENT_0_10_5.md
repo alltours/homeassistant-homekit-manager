@@ -13,15 +13,15 @@
 - The filter-reason wire field now matches the UI. A regression test covers the alias.
 - Core 2026.11.0b0 compatibility classification is version-gated and includes the added ozone and sulphur-dioxide mappings; future Core versions remain unknown. Native filter-Apply beta validation and positive-list migration have separate capability gates.
 - The devices view groups real areas and devices without synthetic cards for device-less entities, offers separate include/exclude actions and display options, shows scoped status/counts and keeps technical details collapsible.
-- Full Core 2026.10.4 Python suite: 253 passed. Full Chromium/WebKit browser suite: 86 passed. The isolated full HA/HAP process restart and reconnect test passed in 104 seconds after raising the macOS subprocess timeout from 90 to 240 seconds. Frontend unit, JS syntax, Ruff, Bandit, pip check and npm audit passed. A second ZIP build matched byte-for-byte.
+- Full Core 2026.10.4 Python suite: 253 passed. Full Chromium/WebKit browser suite: 86 passed. The isolated full HA/HAP process restart and reconnect test passed in 104 seconds after raising the macOS subprocess timeout from 90 to 240 seconds. A separate local Core 2026.11.0b0 full-bootstrap attempt timed out after 240 seconds during its initial pair phase and is not counted as a pass; the GitHub Linux Core-beta-native pair/filter/reconnect job passed on the release candidate. Frontend unit, JS syntax, Ruff, Bandit, pip check and npm audit passed. A second ZIP build matched byte-for-byte.
+- Release candidate `be6ef2426bcf43b7feaf035432b5f4dc00ef84c5` was pushed; draft PR #18 is open. Its final CI quality and browser jobs are still running. The productive installation was read-only checked: Manager 0.10.4 on Core 2026.11.0b0, one loaded native bridge, writer locked. No productive 0.10.5 test or installation occurred.
 
 ## Open release gates
 
-1. Finish the currently running isolated Core 2026.11.0b0 pair/filter/reconnect probe and inspect its result.
-2. Review the final CI runs, HACS/hassfest and dependency audit on the pushed release candidate. Address any findings without broadening the feature scope.
-3. Review required PR approvals and branch protection before any merge or release; download and verify remote release assets only after a true GO.
-4. Physical Apple Home validation and productive 0.10.5 installation are not authorized or claimed.
+1. Review the final CI quality and browser jobs, HACS/hassfest and dependency audit on the pushed release candidate. Address any findings without broadening the feature scope.
+2. Review required PR approvals and branch protection before any merge or release; download and verify remote release assets only after a true GO.
+3. Physical Apple Home validation and productive 0.10.5 installation are not authorized or claimed.
 
 ## Next concrete step
 
-Poll the isolated Core beta probe, push the versioned release candidate and open a PR for the final CI and review gates. No release before every mandatory gate has evidence.
+Wait for final PR CI on the checkpoint commit, inspect protection and reviews, then merge and publish only if every mandatory gate has evidence.

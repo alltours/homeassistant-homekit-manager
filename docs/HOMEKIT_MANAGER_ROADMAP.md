@@ -1,5 +1,17 @@
 # HomeKit Manager Roadmap
 
+## Aktueller UX-Nachtrag zu 0.10.3 (29. Oktober 2026)
+
+Das verbindliche [Zielkonzept für Geräte- und Bereichs-Sammelaktionen](UX_BULK_ACTIONS_0_10_3.md)
+führt zwei separate, direkt erreichbare Schaltflächen „Alle einschließen“ und
+„Alle ausschließen“ auf Geräteebene sowie dasselbe Muster auf Bereichsebene.
+Es priorisiert die Core-geprüfte Behandlung nicht kompatibler, ausgeblendeter,
+kategorisierter und deaktivierter Entitäten (P0), korrekte Vollumfangs- und
+Entwurfszahlen (P0), mobile und barrierearme Bedienung (P1) sowie einen
+Verständlichkeitstest (P2). Der Nachtrag ist eine Dokumentation, keine
+Implementierung und keine produktive Apply-Freigabe. Die historischen Phasen
+unten dokumentieren frühere Entwicklungsstände.
+
 ## Phase 0.9.2 – Umbau und zentrale Modusverwaltung
 
 In Arbeit auf `feature/homekit-manager-0.9.2`. Die neue Oberfläche und die konservative

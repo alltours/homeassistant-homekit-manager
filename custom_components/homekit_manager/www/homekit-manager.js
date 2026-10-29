@@ -106,7 +106,7 @@ class HomeKitManagerPanel extends HTMLElement {
   currentStatus(entity) { const value = entity?.homekit?.current_status ?? entity?.homekit?.configured_by_filter; return value === true || value === "included" ? "included" : value === false || value === "excluded" ? "excluded" : "unknown"; }
   plannedStatus(entity) { return this.draft.has(entity.entity_id) ? this.draft.get(entity.entity_id) : this.currentStatus(entity); }
   status(entity) { return this.draft.has(entity.entity_id) && this.draft.get(entity.entity_id) !== this.currentStatus(entity) ? "planned" : this.currentStatus(entity); }
-  statusLabel(value) { return ({ included: "Eingeschlossen", include: "Eingeschlossen", excluded: "Ausgeschlossen", exclude: "Ausgeschlossen", unknown: "Unbekannt", no_state: "Ohne aktuellen State", disabled: "Deaktiviert", planned: "Vorgemerkt", mixed: "Gemischt", empty: "Keine Entitäten", supported: "Unterstützt", conditionally_supported: "Bedingt unterstützt", unsupported: "Nicht unterstützt", available: "Verfügbar", unavailable: "Nicht verfügbar", yes: "Ja", no: "Nein" })[value] || value; }
+  statusLabel(value) { return ({ included: "Eingeschlossen", include: "Eingeschlossen", excluded: "Ausgeschlossen", exclude: "Ausgeschlossen", unknown: "Unbekannt", no_state: "Ohne aktuellen State", disabled: "Deaktiviert", planned: "Vorgemerkt", mixed: "Gemischt", empty: "Keine Entitäten", unknown_only: "Keine auswertbaren Entitäten", supported: "Unterstützt", conditionally_supported: "Bedingt unterstützt", unsupported: "Nicht unterstützt", available: "Verfügbar", unavailable: "Nicht verfügbar", yes: "Ja", no: "Nein" })[value] || value; }
   changes() { const byId = new Map(this.entities.map(item => [item.entity_id, item])); return [...this.draft].map(([entity_id, desired]) => { const entity = byId.get(entity_id); return { entity_id, desired, current: entity ? this.currentStatus(entity) : "unknown", name: entity?.name || entity_id }; }).filter((item) => item.desired !== item.current); }
   desiredDocument() { const entry = this.bridge?.entry_id; const entities = Object.fromEntries([...this.draft].map(([id, value]) => [id, value === "included" ? "include" : value === "excluded" ? "exclude" : value])); return { schema_version: 1, bridges: entry ? { [entry]: { policy: "explicit_overrides", entities } } : {} }; }
   selectView(view) { this.view = view; if (view === "settings") this.settingsView = "general"; this.render(); }
@@ -131,14 +131,32 @@ class HomeKitManagerPanel extends HTMLElement {
     const deviceCount = new Set(scope.members.map(item => item.device_id).filter(Boolean)).size;
     await this.planSelection(scope.members.map(item => item.entity_id), value, { label: scope.name, deviceCount });
   }
+  bulkExclusionReason(entity) {
+    if (this.currentStatus(entity) === "unknown") return "Filterstatus unbekannt";
+    if (entity.disabled_by || entity.device_disabled_by) return "Deaktiviert";
+    if (entity.hidden_by) return "Ausgeblendet";
+    if (entity.entity_category === "diagnostic") return "Diagnoseentität";
+    if (entity.entity_category === "config") return "Konfigurationsentität";
+    if (entity.entity_category) return "Entity-Kategorie";
+    if (entity.compatibility?.status === "unsupported") return "Nicht unterstützt";
+    if (!entity.compatibility?.status || entity.compatibility.status === "unknown") return "Kompatibilität unbekannt";
+    return null;
+  }
   async planSelection(ids, value, scope = null) {
     const byId = new Map(this.entities.map(item => [item.entity_id, item]));
     const members = ids.map(id => byId.get(id)).filter(Boolean);
-    const eligible = members.filter(item => this.currentStatus(item) !== "unknown" && !(value === "included" && value !== this.currentStatus(item) && item.compatibility?.status === "unsupported"));
+    const exclusionCounts = new Map();
+    const eligible = members.filter(item => {
+      const reason = this.bulkExclusionReason(item);
+      if (!reason) return true;
+      exclusionCounts.set(reason, (exclusionCounts.get(reason) || 0) + 1);
+      return false;
+    });
     const newlyChanged = eligible.filter(item => this.plannedStatus(item) !== value).length;
     const alreadyCorrect = eligible.length - newlyChanged;
     const deviceCount = scope?.deviceCount ?? new Set(members.map(item => item.device_id).filter(Boolean)).size;
-    const message = `${scope?.label || this.bridge?.title || "Auswahl"}: ${this.statusLabel(value)}. Geräte: ${deviceCount}; Entitäten: ${members.length}; neu zu ändern: ${newlyChanged}; bereits so eingestellt: ${alreadyCorrect}; nicht bearbeitbar: ${members.length - eligible.length}. Es entsteht nur ein Entwurf; die aktive HomeKit-Konfiguration bleibt unverändert.`;
+    const reasons = [...exclusionCounts].map(([reason, count]) => `${reason}: ${count}`).join("; ");
+    const message = `${scope?.label || this.bridge?.title || "Auswahl"}: ${this.statusLabel(value)}. Geräte: ${deviceCount}; Entitäten: ${members.length}; neu zu ändern: ${newlyChanged}; bereits so eingestellt: ${alreadyCorrect}; nicht bearbeitbar: ${members.length - eligible.length}${reasons ? ` (${reasons})` : ""}. Es entsteht nur ein Entwurf; die aktive HomeKit-Konfiguration bleibt unverändert.`;
     if (!await this.requestConfirmation("Mehrfachänderung vormerken", message, "Nur im Entwurf vormerken")) return;
     if (!this.draft.size && eligible.length) this.draftFingerprint = this.fingerprint;
     eligible.forEach(item => { if (value === this.currentStatus(item)) this.draft.delete(item.entity_id); else this.draft.set(item.entity_id, value); });
@@ -300,7 +318,7 @@ class HomeKitManagerPanel extends HTMLElement {
   aggregateState(members, planned = true) {
     if (!members.length) return "empty";
     const states = members.map(entity => planned ? this.plannedStatus(entity) : this.currentStatus(entity));
-    if (states.every(state => state === "unknown")) return "empty";
+    if (states.every(state => state === "unknown")) return "unknown_only";
     if (states.every(state => state === "included")) return "included";
     if (states.every(state => state === "excluded")) return "excluded";
     return "mixed";
@@ -310,7 +328,7 @@ class HomeKitManagerPanel extends HTMLElement {
     return current === planned ? this.badge(current) : `<span class="muted">Aktuell</span>${this.badge(current)}<span class="muted">Entwurf</span>${this.badge(planned)}`;
   }
   scopeActions(kind, key, label) {
-    return `<button data-scope-kind="${kind}" data-scope-key="${this.escape(key)}" data-scope-value="included" aria-label="Alle Entitäten in ${this.escape(label)} einschließen">Alles einschließen</button><button data-scope-kind="${kind}" data-scope-key="${this.escape(key)}" data-scope-value="excluded" aria-label="Alle Entitäten in ${this.escape(label)} ausschließen">Alles ausschließen</button>`;
+    return `<button data-scope-kind="${kind}" data-scope-key="${this.escape(key)}" data-scope-value="included" aria-label="Alle Entitäten in ${this.escape(label)} einschließen">Alle einschließen</button><button data-scope-kind="${kind}" data-scope-key="${this.escape(key)}" data-scope-value="excluded" aria-label="Alle Entitäten in ${this.escape(label)} ausschließen">Alle ausschließen</button>`;
   }
   deviceRow(device, visibleMembers = device.members) {
     const open = this.expanded.has(device.id);

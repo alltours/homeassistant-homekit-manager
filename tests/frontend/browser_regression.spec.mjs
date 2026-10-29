@@ -526,6 +526,11 @@ test('unassigned entities are direct area members and display options only affec
     element.render();
   });
   await panel.getByRole('tab', { name: 'Geräte', exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const checkboxWidths = await panel.locator('.display-options input[type="checkbox"]')
+    .evaluateAll(inputs => inputs.map(input => input.getBoundingClientRect().width));
+  expect(checkboxWidths).toHaveLength(4);
+  expect(checkboxWidths.every(width => width >= 16 && width <= 24)).toBe(true);
   const area = panel.locator('.area-card').filter({ has: page.locator('[data-area="Müllplatz"]') });
   await expect(area.locator('.area-heading')).toContainText('0 Geräte · 5 Entitäten');
   await area.locator('.area-heading').click();

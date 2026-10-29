@@ -25,6 +25,8 @@ die Anzeigeoptionen; die Anzeigeoptionen ändern den HomeKit-Filter nicht.
 Entitäten ohne Home-Assistant-Gerät erscheinen direkt unter ihrem Bereich und
 nicht als künstliche Geräte. Namen folgen Benutzername, Registry-/State-Name
 und Originalname; technische IDs und rohe Filterfakten stehen in Details.
+Die Anzeigeoptionen verwenden auf Smartphones kompakte Checkboxen mit
+komfortabel großen Touch-Flächen.
 Status der regulär verwaltbaren Entitäten, aller Filtertreffer und des Entwurfs
 sind getrennt. Die Filterbegründung verwendet nun denselben Wire-Wert in
 Backend und Oberfläche.

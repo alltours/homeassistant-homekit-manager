@@ -224,8 +224,8 @@
     },
     {
       "path": "www/homekit-manager.js",
-      "sha256": "10bc957dee1ab273f4510bcab39e80a6a712a16c742ba53a456e423a8286eb5c",
-      "size": 100497
+      "sha256": "2119e0dcdfabaa811e2b634cbdcf51c3d0f3559740ea03950e38c634fe766ef6",
+      "size": 100646
     },
     {
       "path": "yaml_adapter.py",

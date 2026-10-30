@@ -184,7 +184,7 @@ class NativeHomeKitAdapter:
         return "unknown_outcome"
 
     async def recover(self, plan: NativeFilterPlan) -> str:
-        """Isolated option reversal; not a guarantee for HAP or Apple Home."""
+        """Isolated option reversal with native/HAP identity verification."""
         if not self._isolated_test_authority:
             from .homekit_writer import HomeKitWriteDisabled
             from .safety import WRITE_LOCK_REASON
@@ -198,5 +198,14 @@ class NativeHomeKitAdapter:
         restored_filter = dict(restored.options).get("filter") if restored else None
         if restored is None or restored_filter != plan.diff.before.get("filter") or getattr(restored.state, "value", restored.state) != "loaded":
             raise HomeKitWriteBlocked("Native Options-Wiederherstellung nicht verifiziert")
+        if plan.migration_evidence is not None:
+            restored_evidence = collect_migration_evidence(
+                self.hass, restored, plan.inventory_ids, restored_filter
+            )
+            verify_migration_runtime(
+                plan.migration_evidence,
+                restored_evidence,
+                plan.migration_evidence.published_ids,
+            )
         await self._record(plan, "verified_options_restore")
         return "verified_options_restore"

@@ -383,6 +383,36 @@ class HomeKitManagerTests(unittest.TestCase):
         self.assertEqual(result["differences"]["native_not_desired"], ["light.b"])
         self.assertEqual(result["desired"]["entity_ids"], ["light.a"])
 
+    def test_migration_shape_keeps_seven_domains_and_sixty_exclusions_explicit(self):
+        anchors = [f"{domain}.anchor" for domain in (
+            "light", "sensor", "switch", "fan", "climate", "cover", "binary_sensor"
+        )]
+        stored_exclusions = [f"sensor.manager_excluded_{index}" for index in range(60)]
+        native_ids = anchors + stored_exclusions + ["sensor.added_after_draft"]
+        inventory = [self._planner_item(entity_id, True) for entity_id in native_ids]
+        legacy_document = {"schema_version": 1, "bridges": {"b": {
+            "policy": "explicit_overrides",
+            "entities": {entity_id: "exclude" for entity_id in stored_exclusions},
+        }}}
+        legacy = reconcile_selection(
+            legacy_document, "b", inventory,
+            {"include_domains": ["light", "sensor", "switch", "fan", "climate", "cover", "binary_sensor"]},
+        )
+        self.assertEqual(legacy["differences"]["count"], 60)
+        self.assertEqual(legacy["differences"]["native_not_desired"], sorted(stored_exclusions))
+
+        positive_document = {"schema_version": 1, "bridges": {"b": {
+            "policy": "positive_list",
+            "entities": {entity_id: "include" for entity_id in anchors},
+        }}}
+        positive = reconcile_selection(
+            positive_document, "b", inventory,
+            {"include_domains": ["light", "sensor", "switch", "fan", "climate", "cover", "binary_sensor"]},
+        )
+        self.assertEqual(positive["desired"]["entity_ids"], sorted(anchors))
+        self.assertNotIn("sensor.added_after_draft", positive["desired"]["entity_ids"])
+        self.assertEqual(positive["differences"]["count"], 61)
+
     def test_options_diff_blocks_unknown_and_writer_never_applies(self):
         bridge = {"entry_id": "b", "data": {}, "options": {}, "filter": None}
         document = {"schema_version": 1, "bridges": {"b": {"policy": "explicit_overrides", "entities": {"light.a": "include"}}}}

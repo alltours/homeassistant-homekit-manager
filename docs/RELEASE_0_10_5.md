@@ -46,6 +46,9 @@ gesondert isoliert verifizierten Fall Core 2026.10.4 begrenzt.
 Der produktive Filter-Apply verlangt Adminrechte, eine vorhandene Bridge im
 Modus `bridge`, Quelle, vollständige aktuelle Revision, Core-Schema,
 serverseitig validierten Filter-Diff und Bestätigung der konkreten Operation.
+Ein bestätigter Operationsplan allein ist keine Schreibfreigabe: Ohne aktiven,
+befristeten Bridge-Testmodus oder gültige lokale Grant-Datei bleibt Apply
+serverseitig gesperrt.
 Vor der Mutation wird die Autorität erneut geprüft. Snapshot, Journal,
 Nachverifikation und lesender Reconcile bleiben bestehen. Eine unbekannte
 Ausgangslage wird niemals automatisch erneut geschrieben. Die alte direkte

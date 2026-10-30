@@ -21,6 +21,8 @@ read-only. No YAML ↔ UI migration is performed.
 
 Supported existing Bridge filter operations require an administrator, an exact
 server-held operation ID, source, complete revision and concrete diff confirmation.
+Without a separately enabled, short-lived Bridge-bound test mode or a valid local
+grant, the server keeps Apply locked even after an operation is confirmed.
 The legacy direct Apply route remains blocked. The one-hour Bridge-bound native
 test mode and local grant remain available; neither is activated by an
 installation or release. See

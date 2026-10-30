@@ -35,6 +35,19 @@ async def test_admin_operation_websocket_isolated_apply_and_verify(hass, enable_
     preview = await client.receive_json()
     assert preview["success"], preview
     plan = preview["result"]
+    assert plan["apply_enabled"] is False
+    await client.send_json_auto_id({"type": "homekit_manager/operation_apply", "operation_id": plan["operation_id"],
+                                    "entry_id": native.entry_id, "source_revision": plan["source_revision"],
+                                    "expected_fingerprint": manager.fingerprint,
+                                    "confirmed_operation_id": plan["operation_id"]})
+    assert (await client.receive_json())["success"] is False
+    assert native.options["filter"]["include_entities"] == ["light.before"]
+    manager.operation_service.test_write_mode.enable(hass, native.entry_id, native.entry_id)
+    await client.send_json_auto_id({"type": "homekit_manager/operation_plan", "entry_id": native.entry_id,
+                                    "document": document, "expected_fingerprint": manager.fingerprint})
+    preview = await client.receive_json()
+    assert preview["success"], preview
+    plan = preview["result"]
     assert plan["apply_enabled"] is True
     assert plan["change_details"] == [{"entity_id": "light.after", "current": "excluded",
                                         "desired": "included", "action": "add", "risk": "low",

@@ -1,7 +1,9 @@
 """Common operation state machine for native and YAML filter writers.
 
-Only secret-free metadata is persisted. An interrupted apply is unknown until a
-separate read-only reconcile; it is never retried automatically.
+The normal coordinator has no authority without a local grant or a deliberately
+enabled, short-lived native test mode. Only secret-free metadata is persisted.
+An interrupted apply is unknown until a separate read-only reconcile; it is
+never retried automatically.
 """
 from __future__ import annotations
 
@@ -14,11 +16,11 @@ from homeassistant.helpers.storage import Store
 
 from .homekit_writer import HomeKitWriteBlocked, HomeKitWriteDisabled, build_options_diff
 from .native_adapter import NativeFilterPlan, NativeHomeKitAdapter
+from .safety import WRITE_LOCK_REASON
 from .yaml_adapter import YamlFilterPlan, YamlHomeKitAdapter
 from .write_grant import GrantBlocked, ProductionWriteGrant, read_production_grant
 from .write_test_mode import TestWriteMode, TestModeBlocked, TestModeAuthority
 from .const import NATIVE_FILTER_WRITE_CORE_VERSIONS
-from .source_model import revision
 
 
 @dataclass(frozen=True)
@@ -29,48 +31,9 @@ class OperationPlan:
     source_revision: str
     changed_entities: tuple[str, ...]
     payload: NativeFilterPlan | YamlFilterPlan
-    authority_kind: str = "confirmed_operation"
+    authority_kind: str = "blocked"
     authority_id: str | None = None
     change_details: tuple[dict[str, Any], ...] = ()
-
-
-class ConfirmedOperationAuthority:
-    """Ephemeral authority for one already confirmed, journaled operation.
-
-    The service creates this only after an admin request matches a server-held
-    plan. It never appears in a WebSocket payload or in persistent storage.
-    Writers recheck it at their mutation boundary.
-    """
-
-    def __init__(self, service: HomeKitOperationService, plan: OperationPlan):
-        self.service = service
-        self.plan = plan
-        self.grant_id = f"operation:{plan.operation_id}"
-        self.active = True
-
-    def _check_binding(self, entry_id: str, source: str) -> None:
-        if (not self.active or self.service._plans.get(self.plan.operation_id) is not self.plan
-                or entry_id != self.plan.entry_id or source != self.plan.source):
-            raise GrantBlocked("Bestätigte Operation ist nicht mehr gültig")
-
-    async def verify(self, hass: Any, entry_id: str, source: str) -> None:
-        self._check_binding(entry_id, source)
-        record = (await self.service._records()).get(self.plan.operation_id)
-        entry = hass.config_entries.async_get_entry(entry_id)
-        if record is None or record.get("state") != "applying" or entry is None or entry.domain != "homekit" or entry.source != source:
-            raise GrantBlocked("Bestätigte HomeKit-Operation oder Bridge ist nicht mehr aktuell")
-        if (dict(entry.data) | dict(entry.options)).get("mode", "bridge") != "bridge" or getattr(entry.state, "value", entry.state) != "loaded":
-            raise GrantBlocked("Nur eine geladene bestehende Bridge darf geändert werden")
-        if source == "user":
-            actual = revision({"entry_id": entry.entry_id, "source": str(entry.source),
-                               "data": dict(entry.data), "options": dict(entry.options)})
-            if actual != self.plan.source_revision:
-                raise GrantBlocked("HomeKit-Entry wurde nach der Bestätigung verändert")
-
-    def verify_sync(self, hass: Any, entry_id: str, source: str) -> None:
-        # The YAML adapter does its source-byte and inode checks under its file
-        # lock. The event-loop-side verify above checks the Core Entry.
-        self._check_binding(entry_id, source)
 
 
 class HomeKitOperationService:
@@ -129,17 +92,17 @@ class HomeKitOperationService:
         if grant is not None:
             return {"enabled": True, "reason": "Lokale, befristete Filter-Schreibfreigabe aktiv", "authority": "local_grant", "automatic_retry": False,
                     "grant_id": grant.grant_id, "expires_at": grant.expires_at.isoformat()}
-        return {"enabled": True, "reason": "Filter-Apply nach validiertem Plan und ausdrücklicher Bestätigung verfügbar",
-                "authority": "confirmed_operation", "automatic_retry": False}
+        return {"enabled": False, "reason": WRITE_LOCK_REASON, "automatic_retry": False}
 
-    async def _production_grant(self, entry_id: str, source: str) -> ProductionWriteGrant | TestModeAuthority | None:
+    async def _production_grant(self, entry_id: str, source: str) -> ProductionWriteGrant | TestModeAuthority:
         test_authority = self.test_write_mode.current(entry_id, source)
         if test_authority is not None:
             await test_authority.verify(self.hass, entry_id, source)
             return test_authority
         grant = await read_production_grant(self.hass)
-        if grant is not None:
-            await grant.verify(self.hass, entry_id, source)
+        if grant is None:
+            raise HomeKitWriteDisabled(WRITE_LOCK_REASON)
+        await grant.verify(self.hass, entry_id, source)
         return grant
 
     async def _records(self) -> dict[str, dict[str, Any]]:
@@ -250,9 +213,7 @@ class HomeKitOperationService:
                 raise HomeKitWriteDisabled(policy["reason"])
             if plan.authority_kind != policy.get("authority") or plan.authority_id != policy.get("grant_id"):
                 raise HomeKitWriteDisabled("Schreibfreigabe hat sich seit der Vorschau geändert")
-            grant = None if self._isolated_write_authority or plan.authority_kind == "confirmed_operation" else await self._production_grant(entry_id, plan.source)
-            if not self._isolated_write_authority and plan.authority_kind == "confirmed_operation":
-                grant = ConfirmedOperationAuthority(self, plan)
+            grant = None if self._isolated_write_authority else await self._production_grant(entry_id, plan.source)
             await self._set_state(plan, "applying", grant_id=grant.grant_id if grant else None)
             try:
                 if isinstance(plan.payload, NativeFilterPlan):
@@ -270,9 +231,6 @@ class HomeKitOperationService:
             except Exception:
                 await self._set_state(plan, "unknown_outcome", detail="Apply-Ausgang lesend abgleichen; kein automatischer Retry")
                 raise
-            finally:
-                if isinstance(grant, ConfirmedOperationAuthority):
-                    grant.active = False
             await self._set_state(plan, "verified")
             return {"operation_id": plan.operation_id, "entry_id": plan.entry_id, "state": "verified", "pairing_verified": False}
 

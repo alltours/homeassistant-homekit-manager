@@ -5,7 +5,7 @@ from homeassistant import config_entries
 from homeassistant.config import async_hass_config_yaml
 from homeassistant.setup import async_setup_component
 
-from custom_components.homekit_manager.homekit_writer import HomeKitWriteBlocked
+from custom_components.homekit_manager.homekit_writer import HomeKitWriteBlocked, HomeKitWriteDisabled
 from custom_components.homekit_manager.operations import HomeKitOperationService
 from custom_components.homekit_manager.native_adapter import NativeHomeKitAdapter
 
@@ -38,10 +38,13 @@ async def test_native_operation_requires_backend_gate_admin_and_exact_confirmati
     bridge = {"entry_id": entry.entry_id, "source": "user", "filter": dict(entry.options["filter"])}
     standard = HomeKitOperationService(hass)
     preview = await standard.plan_filter(entry_id=entry.entry_id, bridge=bridge, document=desired(entry.entry_id), inventory=inventory())
-    assert preview["apply_enabled"] is True
+    assert preview["apply_enabled"] is False
     with pytest.raises(HomeKitWriteBlocked):
         await standard.apply(preview["operation_id"], entry_id=entry.entry_id,
                              expected_revision=preview["source_revision"], confirmed_operation_id=preview["operation_id"])
+    with pytest.raises(HomeKitWriteDisabled, match="Schreibfreigabe"):
+        await standard.apply(preview["operation_id"], entry_id=entry.entry_id,
+                             expected_revision=preview["source_revision"], confirmed_operation_id=preview["operation_id"], admin=True)
     assert entry.options["filter"]["include_entities"] == ["light.before"]
 
     service = HomeKitOperationService(hass, isolated_write_authority=True)

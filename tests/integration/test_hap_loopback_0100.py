@@ -192,6 +192,7 @@ async def test_broad_filter_migration_needs_live_hap_evidence_and_keeps_identity
     await pairing.shutdown()
     assert before.driver.state.paired
     service = HomeKitOperationService(hass)
+    service.test_write_mode.enable(hass, entry.entry_id, entry.entry_id)
     bridge = {"entry_id": entry.entry_id, "source": "user", "filter": dict(entry.options["filter"])}
     inventory = [{"entity_id": name, "available": True,
                   "compatibility": {"status": "supported"},

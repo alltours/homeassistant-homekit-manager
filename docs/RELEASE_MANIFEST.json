@@ -154,8 +154,8 @@
     },
     {
       "path": "operations.py",
-      "sha256": "484245606e5d36499da1d2aa7f6b79f7cc3a253533087dc428fce8603f58108a",
-      "size": 21040
+      "sha256": "c97b4e85b5cd1c46d6ccc6dcb2f5f3c1974d9a137e285bc8fe2916d68fa22d3c",
+      "size": 18511
     },
     {
       "path": "panel.py",

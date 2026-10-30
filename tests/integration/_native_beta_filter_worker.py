@@ -96,6 +96,7 @@ async def run() -> None:
         assert all(predicate(entity_id) for entity_id in SENSORS)
 
         service = HomeKitOperationService(hass)
+        service.test_write_mode.enable(hass, ENTRY_ID, ENTRY_ID)
         bridge = {"entry_id": ENTRY_ID, "source": "user", "filter": dict(entry.options["filter"])}
         inventory = [
             {"entity_id": entity_id, "homekit": {"configured_by_filter": True},
@@ -131,7 +132,8 @@ async def run() -> None:
         assert after is not before and after.driver.state.mac == mac and after.driver.state.paired
         assert after.aid_storage.get_allocated_aid_for_entity_id("input_boolean.restart_test") == aid
         assert after.iid_storage.allocations.get(aid) == iids
-        assert (await service.authority_status(ENTRY_ID, "user"))["authority"] == "confirmed_operation"
+        service.test_write_mode.disable()
+        assert (await service.authority_status(ENTRY_ID, "user"))["enabled"] is False
         # Core schedules config-entry persistence after a one-second delay.
         await asyncio.sleep(1.2)
         saved = json.loads((shared / ".storage" / "core.config_entries").read_text())

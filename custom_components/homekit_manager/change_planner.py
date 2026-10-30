@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from .yaml_store import validate_document
+from .bulk import exclusion_reason
 
 _FILTER_KEYS = {
     "include_entities", "exclude_entities", "include_domains", "exclude_domains",
@@ -49,6 +50,7 @@ def plan_changes(
     document = validate_document(desired_document)
     entry_id = expected_entry_id or (current_bridge or {}).get("entry_id")
     desired = _desired_for(document, entry_id or "")
+    positive_list = document.get("bridges", {}).get(entry_id, {}).get("policy") == "positive_list"
     items = {item.get("entity_id"): item for item in inventory if item.get("entity_id")}
     pattern_rules, filter_reason, filter_unknown = _filter_assessment(current_bridge)
     changes: list[dict[str, Any]] = []
@@ -66,7 +68,9 @@ def plan_changes(
         current = _current(item)
         if current == "unknown":
             counts["unknown"] += 1
-        desired_status = "included" if requested == "include" else "excluded" if requested == "exclude" else current
+        desired_status = ("included" if requested == "include" else "excluded") if positive_list else ("included" if requested == "include" else "excluded" if requested == "exclude" else current)
+        if positive_list and requested is None and current == "included":
+            requested = "exclude"
         compat = item.get("compatibility", {}).get("status", "unknown")
         if compat == "unsupported" and requested == "include":
             incompatible += 1
@@ -78,6 +82,15 @@ def plan_changes(
                 counts["conflicts"] += 1
             changes.append({"entity_id": entity_id, "current": current, "desired": desired_status, "action": "conflict" if requested else "unknown", "risk": "high", "reason": "unknown_current_filter", "blocked": True})
             continue
+        # A forged draft must not add an entity whose Core eligibility has
+        # not been established. Existing includes remain untouched.
+        if requested == "include" and current != "included":
+            unsafe = exclusion_reason(item)
+            if unsafe:
+                counts["conflicts"] += 1
+                changes.append({"entity_id": entity_id, "current": current, "desired": desired_status,
+                                "action": "conflict", "risk": "high", "reason": unsafe, "blocked": True})
+                continue
         if not requested or desired_status == current:
             counts["unchanged"] += 1
             changes.append({"entity_id": entity_id, "current": current, "desired": desired_status, "action": "unchanged", "risk": "low", "reason": "no_explicit_override", "blocked": False})
@@ -97,4 +110,5 @@ def plan_changes(
         "changes": changes,
         "summary": counts | {"incompatible_entities": incompatible, "blocked": any(change["blocked"] for change in changes)},
         "filter_analysis": {"known": not filter_unknown, "pattern_rules": pattern_rules, "reason": filter_reason},
+        "policy": "positive_list" if positive_list else "explicit_overrides",
     }

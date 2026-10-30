@@ -39,7 +39,7 @@ from .activation_store import ActivationStore
 from .safety import WRITE_LOCK_REASON, write_policy
 from .homekit_writer import HomeKitWriteDisabled
 from .operations import HomeKitOperationService
-from .const import INTEGRATION_VERSION, SUPPORTED_CORE_VERSION
+from .const import INTEGRATION_VERSION, NATIVE_FILTER_WRITE_CORE_VERSIONS
 from homeassistant.const import __version__ as CORE_VERSION
 
 _LOGGER = logging.getLogger(__name__)
@@ -217,7 +217,7 @@ class HomeKitManagerCoordinator:
                 inventory = []
                 for record in records:
                     item = record.as_dict()
-                    item["compatibility"] = classify_entity(record, "bridge", (selected.entity_config or {}).get(record.entity_id, {}) if selected else {}, core_version=CORE_VERSION).as_dict()
+                    item["compatibility"] = classify_entity(record, "bridge", (selected.entity_config or {}).get(record.entity_id, {}) if selected else {}, core_version=CORE_VERSION).as_dict(CORE_VERSION)
                     item["homekit"] = {"configured_by_filter": None, "current_status": "unknown", "filter_reason": "filter_unavailable", "published": "unknown", "apple_home_visible": "unknown"}
                     if bridge_filter is not None:
                         item["homekit"].update(evaluate_filter(record.entity_id, record.entity_category, record.hidden_by, bridge_filter, core_filter, state_present=record.state_present).as_dict())
@@ -434,7 +434,7 @@ class HomeKitManagerCoordinator:
             "write_status": write_status,
             "write_status_label": {"available": "Verfügbar", "locked": "Gesperrt", "unknown": "Status unbekannt"}[write_status],
             "bridge_state": bridge.get("state"),
-            "supported": bridge.get("source") == "user" and bridge.get("state") == "loaded" and bridge.get("mode", "bridge") == "bridge" and not self.last_error and CORE_VERSION == SUPPORTED_CORE_VERSION and self.activation_statuses.get(entry_id, {}).get("state") not in {"unknown", "activating", "saved"},
+            "supported": bridge.get("source") == "user" and bridge.get("state") == "loaded" and bridge.get("mode", "bridge") == "bridge" and not self.last_error and CORE_VERSION in NATIVE_FILTER_WRITE_CORE_VERSIONS and self.activation_statuses.get(entry_id, {}).get("state") not in {"unknown", "activating", "saved"},
             "message": status.get("message") or ("HomeKit Manager verwaltet diese Bridge jetzt." if active else "Die Verwaltung liegt bei Home Assistant. HomeKit Manager kann für diese Bridge aktiviert werden."),
             "step": status.get("step"),
             "request_id": status.get("request_id"),

@@ -12,6 +12,7 @@ from custom_components.homekit_manager.homekit_writer import (
 def _diff(before, entity_id, desired):
     bridge = {"entry_id": "test", "data": {}, "options": {"filter": before}, "filter": before}
     inventory = [{"entity_id": entity_id, "available": True,
+                  "registry_entry_present": True, "state_present": True,
                   "compatibility": {"status": "supported"},
                   "homekit": {"configured_by_filter": evaluate_filter(entity_id, config=before).configured}}]
     document = {"schema_version": 1, "bridges": {"test": {
@@ -71,3 +72,30 @@ def test_noop_only_draft_cannot_create_a_write_operation():
 
     with pytest.raises(HomeKitWriteBlocked, match="keine tatsächliche"):
         build_options_diff(bridge, document, inventory)
+
+
+def _positive_diff(before, desired):
+    bridge = {"entry_id": "test", "data": {}, "options": {"filter": before}, "filter": before}
+    inventory = [{"entity_id": entity_id, "available": True,
+                  "registry_entry_present": True, "state_present": True,
+                  "compatibility": {"status": "supported"},
+                  "homekit": {"configured_by_filter": evaluate_filter(entity_id, config=before).configured}}
+                 for entity_id in ("light.keep", "light.remove", "light.new")]
+    document = {"schema_version": 1, "bridges": {"test": {
+        "policy": "positive_list", "entities": desired}}}
+    return build_options_diff(bridge, document, inventory)
+
+
+def test_positive_list_preserves_selected_entities_and_excludes_future_entities():
+    diff = _positive_diff({"include_entities": ["light.keep", "light.remove"]},
+                          {"light.keep": "include", "light.new": "include"})
+    assert diff.changed_entities == ("light.new", "light.remove")
+    assert diff.after["filter"] == {"include_entities": ["light.keep", "light.new"]}
+    assert evaluate_filter("light.future", config=diff.after["filter"]).configured is False
+
+
+def test_positive_list_blocks_empty_and_unproven_broad_migration():
+    with pytest.raises(HomeKitWriteBlocked, match="leere HomeKit-Positivliste"):
+        _positive_diff({"include_entities": ["light.keep"]}, {})
+    with pytest.raises(HomeKitWriteBlocked, match="breiter Filter"):
+        _positive_diff({"include_domains": ["light"]}, {"light.keep": "include"})

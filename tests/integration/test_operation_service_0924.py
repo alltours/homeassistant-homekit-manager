@@ -16,8 +16,8 @@ def desired(entry_id):
 
 def inventory():
     return [
-        {"entity_id": "light.before", "homekit": {"configured_by_filter": True}, "compatibility": {"status": "supported"}},
-        {"entity_id": "light.after", "homekit": {"configured_by_filter": False}, "compatibility": {"status": "supported"}},
+        {"entity_id": "light.before", "homekit": {"configured_by_filter": True}, "compatibility": {"status": "supported"}, "registry_entry_present": True, "state_present": True},
+        {"entity_id": "light.after", "homekit": {"configured_by_filter": False}, "compatibility": {"status": "supported"}, "registry_entry_present": True, "state_present": True},
     ]
 
 
@@ -36,11 +36,15 @@ async def test_native_operation_requires_backend_gate_admin_and_exact_confirmati
     await hass.config_entries.async_add(entry)
     await hass.async_block_till_done()
     bridge = {"entry_id": entry.entry_id, "source": "user", "filter": dict(entry.options["filter"])}
-    locked = HomeKitOperationService(hass)
-    preview = await locked.plan_filter(entry_id=entry.entry_id, bridge=bridge, document=desired(entry.entry_id), inventory=inventory())
-    with pytest.raises(HomeKitWriteDisabled):
-        await locked.apply(preview["operation_id"], entry_id=entry.entry_id,
-                           expected_revision=preview["source_revision"], confirmed_operation_id=preview["operation_id"], admin=True)
+    standard = HomeKitOperationService(hass)
+    preview = await standard.plan_filter(entry_id=entry.entry_id, bridge=bridge, document=desired(entry.entry_id), inventory=inventory())
+    assert preview["apply_enabled"] is False
+    with pytest.raises(HomeKitWriteBlocked):
+        await standard.apply(preview["operation_id"], entry_id=entry.entry_id,
+                             expected_revision=preview["source_revision"], confirmed_operation_id=preview["operation_id"])
+    with pytest.raises(HomeKitWriteDisabled, match="Schreibfreigabe"):
+        await standard.apply(preview["operation_id"], entry_id=entry.entry_id,
+                             expected_revision=preview["source_revision"], confirmed_operation_id=preview["operation_id"], admin=True)
     assert entry.options["filter"]["include_entities"] == ["light.before"]
 
     service = HomeKitOperationService(hass, isolated_write_authority=True)

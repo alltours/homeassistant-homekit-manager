@@ -17,7 +17,9 @@ from .const import (
     TEST_WRITE_MODE_ENABLE_COMMAND, TEST_WRITE_MODE_DISABLE_COMMAND,
     MIGRATION_PLAN_COMMAND, MIGRATION_START_COMMAND, MIGRATION_STATUS_COMMAND,
     MANAGEMENT_STATUS_COMMAND, MANAGEMENT_ENABLE_COMMAND, MANAGEMENT_DISABLE_COMMAND,
+    BULK_PREVIEW_COMMAND,
 )
+from .bulk import preview_bulk
 from .homekit_writer import HomeKitWriteError
 from .yaml_store import YamlStoreError, YamlValidationError, YamlVersionConflict
 from .device_config import build_preview
@@ -58,6 +60,33 @@ async def websocket_inventory(hass, connection, msg):
             coordinator.management_status(),
         ]
     connection.send_result(msg["id"], result)
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({
+    probatio.Required("type"): BULK_PREVIEW_COMMAND,
+    probatio.Required("entry_id"): str,
+    probatio.Required("fingerprint"): str,
+    probatio.Required("kind"): str,
+    probatio.Required("key"): str,
+    probatio.Optional("entity_ids"): list,
+})
+@websocket_api.async_response
+async def websocket_bulk_preview(hass, connection, msg):
+    """Preview a complete hierarchy scope from the current server snapshot."""
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    selected = coordinator.selected_bridge()
+    if (selected is None or selected.get("entry_id") != msg["entry_id"]
+            or coordinator.fingerprint != msg["fingerprint"] or coordinator.last_error):
+        connection.send_error(msg["id"], "conflict", "Bridge oder Inventar haben sich verändert")
+        return
+    try:
+        result = preview_bulk(coordinator.inventory, msg["kind"], msg["key"], entity_ids=msg.get("entity_ids"))
+    except ValueError as err:
+        connection.send_error(msg["id"], "invalid_scope", str(err))
+        return
+    connection.send_result(msg["id"], result | {"fingerprint": coordinator.fingerprint,
+                                                   "entry_id": msg["entry_id"]})
+
 
 @websocket_api.require_admin
 @websocket_api.websocket_command({probatio.Required("type"): BRIDGES_COMMAND})
@@ -483,7 +512,7 @@ async def websocket_export(hass, connection, msg):
     except (YamlValidationError, ValueError) as err:
         connection.send_error(msg["id"], "invalid_format", str(err))
 
-REGISTERED_HANDLERS = (websocket_inventory, websocket_bridges, websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_activation_status, websocket_mode_status, websocket_set_mode, websocket_migration_plan, websocket_migration_status, websocket_migration_start, websocket_management_status, websocket_management_enable, websocket_management_disable, websocket_test_write_mode_enable, websocket_test_write_mode_disable, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_apply_options_diff, websocket_operation_plan, websocket_operation_apply, websocket_operation_status, websocket_operation_reconcile, websocket_prepare_options_diff, websocket_reconcile, websocket_export)
+REGISTERED_HANDLERS = (websocket_inventory, websocket_bulk_preview, websocket_bridges, websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_activation_status, websocket_mode_status, websocket_set_mode, websocket_migration_plan, websocket_migration_status, websocket_migration_start, websocket_management_status, websocket_management_enable, websocket_management_disable, websocket_test_write_mode_enable, websocket_test_write_mode_disable, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_apply_options_diff, websocket_operation_plan, websocket_operation_apply, websocket_operation_status, websocket_operation_reconcile, websocket_prepare_options_diff, websocket_reconcile, websocket_export)
 
 
 def async_register_websocket_commands(hass, coordinator) -> None:

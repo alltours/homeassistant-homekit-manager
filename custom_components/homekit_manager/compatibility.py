@@ -1,4 +1,4 @@
-"""Side-effect-free projection of HomeKit Core 2026.10.4 routing rules.
+"""Side-effect-free projection of versioned HomeKit Core routing rules.
 
 The native resolver also allocates accessory identities. We deliberately do not
 call it: this module reports eligibility, never actual Apple Home publication.
@@ -9,6 +9,7 @@ from typing import Any, Mapping
 from .const import SUPPORTED_DOMAINS, SUPPORTED_CORE_VERSION
 
 CORE_REFERENCE_VERSION = SUPPORTED_CORE_VERSION
+VERIFIED_COMPATIBILITY_VERSIONS = frozenset({"2026.10.4", "2026.11.0b0"})
 _KNOWN_UNCERTAIN_DOMAINS = {"number", "text", "time", "calendar", "image", "update", "notify", "zone", "counter", "input_number", "input_text", "event"}
 
 @dataclass(frozen=True)
@@ -18,12 +19,12 @@ class Compatibility:
     reason: str | None
     requirements: tuple[str, ...] = ()
 
-    def as_dict(self):
-        return asdict(self) | {"requirements": list(self.requirements), "core_reference": CORE_REFERENCE_VERSION, "publication_verified": False}
+    def as_dict(self, core_version: str = CORE_REFERENCE_VERSION):
+        return asdict(self) | {"requirements": list(self.requirements), "core_reference": core_version if core_version in VERIFIED_COMPATIBILITY_VERSIONS else None, "publication_verified": False}
 
 
 def compatibility_reference():
-    return {"core_version": CORE_REFERENCE_VERSION, "supported_domains": sorted(SUPPORTED_DOMAINS), "unknown_domains": sorted(_KNOWN_UNCERTAIN_DOMAINS), "policy": "unknown_when_no_core_accessory_mapping_is_proven"}
+    return {"core_version": CORE_REFERENCE_VERSION, "verified_versions": sorted(VERIFIED_COMPATIBILITY_VERSIONS), "supported_domains": sorted(SUPPORTED_DOMAINS), "unknown_domains": sorted(_KNOWN_UNCERTAIN_DOMAINS), "policy": "unknown_when_no_core_accessory_mapping_is_proven"}
 
 _SIMPLE_TYPES = {"light": "Lightbulb", "switch": "Switch", "fan": "Fan", "lock": "LockMechanism", "vacuum": "Switch", "humidifier": "HumidifierDehumidifier", "water_heater": "WaterHeater", "alarm_control_panel": "SecuritySystem", "person": "OccupancySensor", "device_tracker": "OccupancySensor", "input_select": "SelectSwitch", "select": "SelectSwitch"}
 _SENSOR_TYPES = {"temperature": "TemperatureSensor", "humidity": "HumiditySensor", "pm10": "PM10Sensor", "pm25": "PM25Sensor", "nitrogen_dioxide": "NitrogenDioxideSensor", "volatile_organic_compounds": "VolatileOrganicCompoundsSensor", "gas": "AirQualitySensor", "carbon_monoxide": "CarbonMonoxideSensor", "carbon_dioxide": "CarbonDioxideSensor", "illuminance": "LightSensor"}
@@ -36,7 +37,7 @@ def classify_entity(entity: Any, bridge_mode: str | None = "bridge", entity_conf
     attrs = value("attributes", {}) or {}
     device_class = value("device_class") or attrs.get("device_class")
     config = entity_config or {}
-    if core_version != CORE_REFERENCE_VERSION:
+    if core_version not in VERIFIED_COMPATIBILITY_VERSIONS:
         return Compatibility("unknown", None, "Die HomeKit-Fähigkeiten dieser Core-Version sind nicht verifiziert.", (CORE_REFERENCE_VERSION,))
     if domain in _KNOWN_UNCERTAIN_DOMAINS:
         return Compatibility("unknown", None, "Kein allgemeiner Core-Accessory-Pfad nachgewiesen.")
@@ -71,6 +72,8 @@ def classify_entity(entity: Any, bridge_mode: str | None = "bridge", entity_conf
     if domain == "sensor":
         unit = attrs.get("unit_of_measurement")
         expected = _SENSOR_TYPES.get(device_class)
+        if core_version == "2026.11.0b0" and device_class in {"ozone", "sulphur_dioxide"}:
+            expected = {"ozone": "OzoneSensor", "sulphur_dioxide": "SulphurDioxideSensor"}[device_class]
         if device_class == "temperature" or unit in {"°C", "°F"}:
             expected = "TemperatureSensor"
         if device_class == "illuminance" or unit == "lx":

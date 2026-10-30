@@ -123,7 +123,9 @@ def build_inventory(entity_registry: Any, device_registry: Any = None,
         attributes = dict(_value(state_obj, "attributes", {}) or {})
         availability_status = _availability_status(entry, device, device_status, state)
         available = availability_status == "available"
-        name = _value(entry, "name") or _value(entry, "original_name") or attributes.get("friendly_name")
+        # Match the name a user normally sees in HA: registry override first,
+        # then the live friendly name, then the integration's original name.
+        name = _value(entry, "name") or attributes.get("friendly_name") or _value(entry, "original_name")
         result.append(InventoryEntity(
             entity_id=entity_id, name=name, domain=domain, device_id=device_id,
             device_registry_status=device_status, availability_status=availability_status,

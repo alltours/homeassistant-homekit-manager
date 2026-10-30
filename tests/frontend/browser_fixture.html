@@ -10,7 +10,7 @@
 
       const entities = [
         {
-          entity_id: "light.kitchen", device_id: "device-kitchen", area_id: "kitchen",
+          entity_id: "light.kitchen", device_id: "device-kitchen", area_id: "kitchen", registry_entry_present: true, state_present: true, device_registry_status: "main",
           name: "Kitchen light",
           area_name: "Kitchen",
           device_name: "Kitchen device",
@@ -21,7 +21,7 @@
           homekit: { configured_by_filter: true, current_status: "included", filter_reason: "domain_include", published: "unknown" },
         },
         {
-          entity_id: "sensor.temperature", device_id: "device-hall", area_id: "hall",
+          entity_id: "sensor.temperature", device_id: "device-hall", area_id: "hall", registry_entry_present: true, state_present: true, device_registry_status: "main",
           name: "Temperature",
           area_name: "Hall",
           device_name: "Hall device",
@@ -34,7 +34,7 @@
       ];
       const params = new URLSearchParams(window.location.search);
       const pagedEntities = params.has("paged") ? Array.from({ length: 5000 }, (_, index) => ({
-        entity_id: `light.paged_${index}`, name: `Paged Lamp ${index}`, domain: "light",
+        entity_id: `light.paged_${index}`, name: `Paged Lamp ${index}`, domain: "light", registry_entry_present: true, state_present: true,
         available: true, availability_status: "available", integration_domain: "demo",
         compatibility: { status: "supported" },
         homekit: { configured_by_filter: true, current_status: "included" },
@@ -61,7 +61,7 @@
                 unavailable_entities: 1,
                 compatible_entities: 1,
                 configured_entities: 1,
-                integration_version: "0.10.4", core_version: params.has("core-beta") ? "2026.11.0b0" : "2026.10.4", last_updated: "2026-10-27T08:00:00Z", refresh_duration_ms: 3.2, refresh_count: 1, unavailable_entities: 1, accessories: 1, write_policy: { enabled: false }, operation_policy: { enabled: isolatedWrite || testModeActive, reason: isolatedWrite ? "Nur isolierte Testinstanz" : testModeActive ? "Befristeter nativer Testmodus aktiv" : "HomeKit-Schreibpfad gesperrt" },
+                integration_version: "0.10.5", core_version: params.has("core-beta") ? "2026.11.0b0" : "2026.10.4", last_updated: "2026-10-27T08:00:00Z", refresh_duration_ms: 3.2, refresh_count: 1, unavailable_entities: 1, accessories: 1, write_policy: { enabled: false }, operation_policy: { enabled: isolatedWrite || testModeActive, reason: isolatedWrite ? "Nur isolierte Testinstanz" : testModeActive ? "Befristeter nativer Testmodus aktiv" : "HomeKit-Schreibpfad gesperrt" },
                 test_write_mode: { enabled: testModeActive, entry_id: testModeActive ? "fixture-bridge" : null, expires_at: testModeActive ? "2026-10-28T23:00:00Z" : null, persistent: false, duration_minutes: 60 },
                 fingerprint: "fixture-fingerprint",
               },
@@ -73,6 +73,17 @@
               fingerprint: params.has("stale-page") && message.offset >= 500 ? "changed-fingerprint" : "fixture-fingerprint",
             });
             return response;
+          }
+          if (message.type === "homekit_manager/bulk_preview") {
+            if (message.entry_id !== "fixture-bridge" || message.fingerprint !== "fixture-fingerprint") throw new Error("Bridge oder Inventar haben sich verändert");
+            const inventory = document.querySelector("homekit-manager-panel")?.entities || pagedEntities;
+            const members = message.kind === "device" ? inventory.filter(item => `device:${item.device_id}` === message.key)
+              : message.kind === "area" ? inventory.filter(item => { const id = item.device_id && "device_area_id" in item ? item.device_area_id : item.area_id; const name = item.device_id && "device_area_id" in item ? item.device_area_name : item.area_name; return (id ? `area:${id}` : `name:${name || "Ohne Bereich"}`) === message.key; })
+              : inventory.filter(item => message.entity_ids.includes(item.entity_id));
+            const eligible = members.filter(item => !item.disabled_by && !item.hidden_by && !item.entity_category && item.compatibility?.status === "supported" && item.homekit?.configured_by_filter != null);
+            const skipped = {};
+            for (const item of members) if (!eligible.includes(item)) { const reason = item.disabled_by ? "disabled" : item.hidden_by ? "hidden" : item.entity_category === "diagnostic" ? "diagnostic" : item.entity_category === "config" ? "config" : item.entity_category ? "entity_category" : item.compatibility?.status === "conditionally_supported" ? "conditional" : item.compatibility?.status === "unsupported" ? "unsupported" : "compatibility_unknown"; skipped[reason] = (skipped[reason] || 0) + 1; }
+            return { entry_id: message.entry_id, fingerprint: message.fingerprint, total: members.length, eligible_entity_ids: eligible.map(item => item.entity_id), skipped, skipped_total: members.length - eligible.length };
           }
           if (message.type === "homekit_manager/bridges") {
             return { bridges: [{ entry_id: "fixture-bridge", title: "Fixture Bridge", source: "user", state: "loaded", mode: "bridge", filter: { include_domains: ["light"] }, data: { name: "Fixture Bridge", port: 21088 }, options: { mode: "bridge", filter: { include_domains: ["light"] } } }] };
@@ -162,7 +173,8 @@
           if (message.type === "homekit_manager/operation_plan") {
             if (message.entry_id !== "fixture-bridge" || message.expected_fingerprint !== "fixture-fingerprint") throw new Error("Bridge oder Revision geändert");
             operationState = "validated";
-            return { operation_id: "fixture-operation-1", entry_id: message.entry_id, source: "user", source_revision: "fixture-source-revision", changed_entities: ["light.kitchen"], state: operationState, apply_enabled: isolatedWrite || testModeActive };
+            const migration = message.document?.bridges?.[message.entry_id]?.migration_acknowledged === true;
+            return { operation_id: "fixture-operation-1", entry_id: message.entry_id, source: "user", source_revision: "fixture-source-revision", changed_entities: migration ? [] : ["light.kitchen"], change_details: migration ? [] : [{ entity_id: "light.kitchen", current: "included", desired: "excluded", action: "remove" }], migration: migration ? { selected_before: 1, hap_published_before: 1, published_removals: [], future_entities_excluded: true } : null, state: operationState, apply_enabled: isolatedWrite || testModeActive };
           }
           if (message.type === "homekit_manager/operation_apply") {
             if (!(isolatedWrite || testModeActive) || message.operation_id !== "fixture-operation-1" || message.confirmed_operation_id !== message.operation_id || operationState !== "validated") throw new Error("Operation blockiert");

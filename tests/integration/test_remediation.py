@@ -153,6 +153,7 @@ async def test_all_api_commands_reject_non_administrators(hass, enable_custom_in
     from custom_components.homekit_manager.websocket import REGISTERED_HANDLERS
     document = {"schema_version": 1, "bridges": {}}
     arguments = {"select_bridge": {"entry_id": "b"}, "device_preview": {"entity_id": "light.one"}, "rules_preview": {"rules": []}, "history_restore": {"index": 0}, "set_mode": {"mode": "homekit_bridge"}, "migration_start": {"target": "homekit_bridge"}, "management_enable": {}, "management_disable": {}, "test_write_mode_enable": {"entry_id": "b", "expected_fingerprint": "x", "confirmed_entry_id": "b"}, "operation_plan": {"document": document, "entry_id": "b", "expected_fingerprint": "x"}, "operation_apply": {"operation_id": "x", "entry_id": "b", "source_revision": "x", "expected_fingerprint": "x", "confirmed_operation_id": "x"}, "operation_status": {"operation_id": "x"}, "operation_reconcile": {"operation_id": "x"}}
+    arguments["bulk_preview"] = {"entry_id": "b", "fingerprint": "x", "kind": "device", "key": "device:b"}
     for handler in REGISTERED_HANDLERS:
         command = handler._ws_command
         name = command.split("/")[1]

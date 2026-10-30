@@ -7,6 +7,7 @@ import time
 
 import pytest
 from homeassistant import config_entries
+from homeassistant.helpers import entity_registry as er
 
 from custom_components.homekit_manager import homekit_writer as writer_module
 from custom_components.homekit_manager.homekit_writer import HomeKitWriter, OptionsDiff
@@ -44,7 +45,8 @@ def desired(entry_id):
 
 def inventory():
     return [{"entity_id": name, "homekit": {"configured_by_filter": name == "light.before"},
-             "compatibility": {"status": "supported"}} for name in ("light.before", "light.after")]
+             "compatibility": {"status": "supported"}, "registry_entry_present": True, "state_present": True}
+            for name in ("light.before", "light.after")]
 
 
 async def test_native_test_mode_requires_exact_bridge_and_expires_without_file(hass, monkeypatch):
@@ -79,11 +81,22 @@ async def test_native_test_mode_applies_filter_once_and_revokes(hass, monkeypatc
     entry = await native_entry(hass, monkeypatch, suffix="apply")
     service = HomeKitOperationService(hass)
     bridge = {"entry_id": entry.entry_id, "source": "user", "filter": dict(entry.options["filter"])}
+    assert (await service.authority_status(entry.entry_id, "user"))["enabled"] is False
+    service.test_write_mode.enable(hass, entry.entry_id, entry.entry_id)
     plan = await service.plan_filter(entry_id=entry.entry_id, bridge=bridge,
                                      document=desired(entry.entry_id), inventory=inventory())
-    assert plan["apply_enabled"] is False
-    service.test_write_mode.enable(hass, entry.entry_id, entry.entry_id)
+    assert plan["apply_enabled"] is True
     assert (await service.authority_status(entry.entry_id, "user"))["authority"] == "test_mode"
+    args = {"entry_id": entry.entry_id, "expected_revision": plan["source_revision"],
+            "confirmed_operation_id": plan["operation_id"], "admin": True}
+    service.test_write_mode.disable()
+    with pytest.raises(Exception, match="Schreibfreigabe"):
+        await service.apply(plan["operation_id"], **args)
+    service.test_write_mode.enable(hass, entry.entry_id, entry.entry_id)
+    with pytest.raises(Exception, match="seit der Vorschau"):
+        await service.apply(plan["operation_id"], **args)
+    plan = await service.plan_filter(entry_id=entry.entry_id, bridge=bridge,
+                                     document=desired(entry.entry_id), inventory=inventory())
     args = {"entry_id": entry.entry_id, "expected_revision": plan["source_revision"],
             "confirmed_operation_id": plan["operation_id"], "admin": True}
     with pytest.raises(Exception, match="Bestätigung"):
@@ -141,6 +154,7 @@ async def test_admin_websocket_test_mode_without_grant_file(hass, monkeypatch,
                                                            enable_custom_integrations, hass_ws_client):
     entry = await native_entry(hass, monkeypatch, suffix="websocket")
     hass.states.async_set("light.before", "on")
+    assert er.async_get(hass).async_get_or_create("light", "test", "after", suggested_object_id="after").entity_id == "light.after"
     hass.states.async_set("light.after", "on")
     flow = await hass.config_entries.flow.async_init("homekit_manager", context={"source": "user"})
     await hass.config_entries.flow.async_configure(flow["flow_id"], {})

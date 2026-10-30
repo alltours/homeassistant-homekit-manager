@@ -1,9 +1,9 @@
 """Common operation state machine for native and YAML filter writers.
 
 The normal coordinator has no authority without a local grant or a deliberately
-enabled, short-lived native test mode.
-Only secret-free metadata is persisted. An interrupted apply is unknown until a
-separate read-only reconcile; it is never retried automatically.
+enabled, short-lived native test mode. Only secret-free metadata is persisted.
+An interrupted apply is unknown until a separate read-only reconcile; it is
+never retried automatically.
 """
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ from .safety import WRITE_LOCK_REASON
 from .yaml_adapter import YamlFilterPlan, YamlHomeKitAdapter
 from .write_grant import GrantBlocked, ProductionWriteGrant, read_production_grant
 from .write_test_mode import TestWriteMode, TestModeBlocked, TestModeAuthority
+from .const import NATIVE_FILTER_WRITE_CORE_VERSIONS
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,9 @@ class OperationPlan:
     source_revision: str
     changed_entities: tuple[str, ...]
     payload: NativeFilterPlan | YamlFilterPlan
+    authority_kind: str = "blocked"
+    authority_id: str | None = None
+    change_details: tuple[dict[str, Any], ...] = ()
 
 
 class HomeKitOperationService:
@@ -45,7 +49,30 @@ class HomeKitOperationService:
 
     async def authority_status(self, entry_id: str, source: str) -> dict[str, Any]:
         if self._isolated_write_authority:
-            return {"enabled": True, "reason": "Nur isolierte Testinstanz", "automatic_retry": False}
+            return {"enabled": True, "reason": "Nur isolierte Testinstanz", "authority": "isolated", "automatic_retry": False}
+        from homeassistant.const import __version__
+
+        entry = self.hass.config_entries.async_get_entry(entry_id)
+        if (entry is None or entry.domain != "homekit" or entry.source != source
+                or (dict(entry.data) | dict(entry.options)).get("mode", "bridge") != "bridge"
+                or getattr(entry.state, "value", entry.state) != "loaded"):
+            return {"enabled": False, "reason": "Nur eine geladene bestehende HomeKit-Bridge darf geändert werden", "automatic_retry": False}
+        if ((source == "user" and __version__ not in NATIVE_FILTER_WRITE_CORE_VERSIONS)
+                or (source == "import" and __version__ != "2026.10.4")
+                or source not in {"user", "import"}):
+            return {"enabled": False, "reason": "Filter-Apply ist für diese Quelle/Core-Version nicht verifiziert", "automatic_retry": False}
+        records = await self._records()
+        if any(isinstance(item, dict) and item.get("entry_id") == entry_id
+               and item.get("state") in {"applying", "prepared", "unknown_outcome"}
+               for item in records.values()):
+            return {"enabled": False, "reason": "Früheren ungeklärten Vorgang zuerst lesend abgleichen", "automatic_retry": False}
+        if source == "import":
+            if any(item.source != "import" for item in self.hass.config_entries.async_entries("homekit")):
+                return {"enabled": False, "reason": "Core homekit.reload würde auch native HomeKit-Entries neu laden", "automatic_retry": False}
+            try:
+                await self.hass.async_add_executor_job(lambda: YamlHomeKitAdapter(self.hass.config.config_dir).current_revision())
+            except (OSError, ValueError) as err:
+                return {"enabled": False, "reason": f"YAML-Provenienz ist nicht sicher: {err}", "automatic_retry": False}
         test_authority = self.test_write_mode.current(entry_id, source)
         if test_authority is not None:
             try:
@@ -53,17 +80,19 @@ class HomeKitOperationService:
             except TestModeBlocked as err:
                 return {"enabled": False, "reason": str(err), "automatic_retry": False}
             return {"enabled": True, "reason": "Befristeter nativer Testmodus aktiv",
-                    "authority": "test_mode", "expires_at": test_authority.expires_at.isoformat(),
+                    "authority": "test_mode", "grant_id": test_authority.grant_id,
+                    "expires_at": test_authority.expires_at.isoformat(),
                     "automatic_retry": False}
         try:
             grant = await read_production_grant(self.hass)
-            if grant is None:
-                raise GrantBlocked(WRITE_LOCK_REASON)
-            await grant.verify(self.hass, entry_id, source)
+            if grant is not None:
+                await grant.verify(self.hass, entry_id, source)
         except GrantBlocked as err:
             return {"enabled": False, "reason": str(err), "automatic_retry": False}
-        return {"enabled": True, "reason": "Lokale, befristete Filter-Schreibfreigabe aktiv", "automatic_retry": False,
-                "grant_id": grant.grant_id, "expires_at": grant.expires_at.isoformat()}
+        if grant is not None:
+            return {"enabled": True, "reason": "Lokale, befristete Filter-Schreibfreigabe aktiv", "authority": "local_grant", "automatic_retry": False,
+                    "grant_id": grant.grant_id, "expires_at": grant.expires_at.isoformat()}
+        return {"enabled": False, "reason": WRITE_LOCK_REASON, "automatic_retry": False}
 
     async def _production_grant(self, entry_id: str, source: str) -> ProductionWriteGrant | TestModeAuthority:
         test_authority = self.test_write_mode.current(entry_id, source)
@@ -118,6 +147,7 @@ class HomeKitOperationService:
             adapter = NativeHomeKitAdapter(self.hass)
             payload = adapter.plan_filter(bridge, document, inventory)
             entities = payload.diff.changed_entities
+            details = payload.diff.plan["changes"]
         elif entry.source == "import":
             from homeassistant.const import __version__
             if __version__ != "2026.10.4":
@@ -131,15 +161,30 @@ class HomeKitOperationService:
             adapter = YamlHomeKitAdapter(self.hass.config.config_dir)
             payload = await self.hass.async_add_executor_job(lambda: adapter.plan_filter(entry, diff.after["filter"]))
             entities = diff.changed_entities
+            details = diff.plan["changes"]
         else:
             raise HomeKitWriteBlocked("Unbekannte HomeKit-Konfigurationsquelle")
-        plan = OperationPlan(payload.operation_id, entry_id, str(entry.source), payload.source_revision, tuple(entities), payload)
+        policy = await self.authority_status(entry_id, str(entry.source))
+        plan = OperationPlan(payload.operation_id, entry_id, str(entry.source), payload.source_revision,
+                             tuple(entities), payload, policy.get("authority", "blocked"), policy.get("grant_id"),
+                             tuple(item for item in details if item["action"] in {"add", "remove"}))
         async with self._lock:
             self._plans[plan.operation_id] = plan
             await self._set_state(plan, "validated")
-        policy = await self.authority_status(entry_id, plan.source)
+        migration = None
+        if isinstance(payload, NativeFilterPlan) and payload.migration_evidence is not None:
+            retained = set(payload.diff.after["filter"]["include_entities"])
+            migration = {
+                "selected_before": len(payload.migration_evidence.selected_ids),
+                "hap_published_before": len(payload.migration_evidence.published_ids),
+                "published_removals": sorted(payload.migration_evidence.published_ids - retained),
+                "future_entities_excluded": True,
+                "apple_home_verified": False,
+            }
         return {"operation_id": plan.operation_id, "entry_id": entry_id, "source": plan.source,
                 "source_revision": plan.source_revision, "changed_entities": list(plan.changed_entities),
+                "change_details": list(plan.change_details),
+                "migration": migration,
                 "state": "validated", "apply_enabled": policy["enabled"], "reason": policy["reason"],
                 "operation_policy": policy}
 
@@ -163,6 +208,11 @@ class HomeKitOperationService:
             entry = self.hass.config_entries.async_get_entry(entry_id)
             if entry is None or entry.domain != "homekit" or entry.source != plan.source:
                 raise HomeKitWriteBlocked("Config-Entry-Quelle wurde geändert")
+            policy = await self.authority_status(entry_id, plan.source)
+            if not policy["enabled"]:
+                raise HomeKitWriteDisabled(policy["reason"])
+            if plan.authority_kind != policy.get("authority") or plan.authority_id != policy.get("grant_id"):
+                raise HomeKitWriteDisabled("Schreibfreigabe hat sich seit der Vorschau geändert")
             grant = None if self._isolated_write_authority else await self._production_grant(entry_id, plan.source)
             await self._set_state(plan, "applying", grant_id=grant.grant_id if grant else None)
             try:

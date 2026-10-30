@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.5 (2026-10-29)
+
+- Calculate complete device and area bulk scopes on the server, excluding disabled, hidden, technical, missing-state, missing-registry, unsupported and unverified entities by default. A forged draft cannot newly include these entities through the filter planner.
+- Show actual changed, unchanged and skipped counts with reasons before a bulk action changes the Manager draft. Zero-change actions leave the draft untouched.
+- Show real device-less entities directly under their area; simplify names, aggregate status and mobile controls while retaining technical facts in details.
+- Keep display-option checkboxes compact with full-width touch labels at phone widths.
+- Correct the filter-reason API/UI field mismatch and add version-gated compatibility projection for Core 2026.11.0b0. Unknown future versions remain unverified.
+- Retain filter-only, operation-bound production authorization, exact revision checks, source binding and no automatic retry. No productive installation or HomeKit change is part of this release.
+
 ## 0.10.4 (2026-10-29)
 
 - Published the documentation-only UX target and prioritized roadmap for separate, directly visible device and area bulk-action buttons.

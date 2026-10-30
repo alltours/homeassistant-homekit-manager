@@ -22,7 +22,7 @@ export function screenshotReferenceData() {
       const device = noDevice ? null : `synthetic-device-${deviceOffset + ((index - (area === null ? 190 : 0)) % devices)}`;
       entities.push({
         entity_id: `light.reference_${ordinal}`, name: `${area || 'Ohne Bereich'} – Entität ${index + 1}`,
-        domain: 'light', device_id: device, device_name: device && `Referenzgerät ${device.split('-').at(-1)}`,
+        domain: 'light', device_id: device, device_registry_status: device ? 'main' : 'none', registry_entry_present: true, state_present: true, device_name: device && `Referenzgerät ${device.split('-').at(-1)}`,
         area_id: area && `reference-area-${deviceOffset}`, area_name: area, integration_domain: 'reference_fixture',
         available: index >= unavailable,
         compatibility: {status: index < compatible ? 'supported' : 'conditionally_supported', expected_type: 'Lightbulb', publication_verified: false},
@@ -40,7 +40,7 @@ export function screenshotReferenceData() {
     unavailable_entities: entities.filter(entity => !entity.available).length,
     compatible_entities: entities.filter(entity => entity.compatibility.status === 'supported').length,
     selected_bridge_id: 'fixture-bridge', accessories: 0,
-    integration_version: '0.10.4', core_version: '2026.10.4', snapshot_stale: false,
+    integration_version: '0.10.5', core_version: '2026.10.4', snapshot_stale: false,
     fingerprint: 'synthetic-photo-reference', write_policy: {enabled: false},
   }};
 }

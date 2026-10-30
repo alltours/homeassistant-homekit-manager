@@ -300,7 +300,8 @@ class HomeKitManagerTests(unittest.TestCase):
             self.assertFalse(store.path.exists())
 
     def _planner_item(self, entity_id, configured, compatibility="supported", available=True):
-        return {"entity_id": entity_id, "available": available, "compatibility": {"status": compatibility}, "homekit": {"configured_by_filter": configured}}
+        return {"entity_id": entity_id, "available": available, "registry_entry_present": True, "state_present": True,
+                "compatibility": {"status": compatibility}, "homekit": {"configured_by_filter": configured}}
 
     def test_change_planner_include_exclude_and_unchanged(self):
         bridge = {"entry_id": "b", "filter": {"exclude_entities": ["light.off"]}}

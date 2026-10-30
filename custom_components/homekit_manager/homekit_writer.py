@@ -15,6 +15,7 @@ from .const import NATIVE_FILTER_WRITE_CORE_VERSIONS
 from .filtering import evaluate_filter
 from .safety import WRITE_LOCK_REASON
 from .source_model import revision
+from .positive_list import PositiveListEvidence
 
 
 class HomeKitWriteError(Exception):
@@ -95,6 +96,22 @@ def _candidate_filter(current: Mapping[str, Any], desired: Mapping[str, str]) ->
     return result
 
 
+def _positive_list_filter(current: Mapping[str, Any], desired: Mapping[str, str],
+                          evidence: PositiveListEvidence | None) -> dict[str, Any]:
+    """Build a nonempty whitelist; broad source rules need live HAP proof."""
+    if set(current) - set(_FILTER_LIST_KEYS):
+        raise HomeKitWriteBlocked("Unbekannte HomeKit-Filterfelder verhindern die Positivliste")
+    broad = not current.get("include_entities") or any(current.get(key) for key in (
+        "include_domains", "include_entity_globs", "exclude_domains", "exclude_entity_globs"
+    ))
+    if broad and evidence is None:
+        raise HomeKitWriteBlocked("Bestehender breiter Filter benötigt eine gesondert nachgewiesene Positivlistenmigration")
+    includes = sorted(entity_id for entity_id, status in desired.items() if status == "include")
+    if not includes:
+        raise HomeKitWriteBlocked("Eine leere HomeKit-Positivliste würde in Core alle Entitäten einschließen")
+    return {"include_entities": includes}
+
+
 def _unlisted_entity_default(config: Mapping[str, Any]) -> bool:
     """Selection of an entity matching no listed rule on supported Core versions.
 
@@ -115,11 +132,11 @@ def _unlisted_entity_default(config: Mapping[str, Any]) -> bool:
     return False
 
 
-def _verify_scope(before: Mapping[str, Any], after: Mapping[str, Any], inventory: list[Mapping[str, Any]], desired: Mapping[str, str]) -> None:
+def _verify_scope(before: Mapping[str, Any], after: Mapping[str, Any], inventory: list[Mapping[str, Any]], desired: Mapping[str, str], *, allow_default_change: bool = False) -> None:
     """Ensure non-targeted entities keep the exact effective filter result."""
     from homeassistant.helpers.entityfilter import FILTER_SCHEMA
 
-    if _unlisted_entity_default(before) != _unlisted_entity_default(after):
+    if not allow_default_change and _unlisted_entity_default(before) != _unlisted_entity_default(after):
         raise HomeKitWriteBlocked("Filteränderung würde die Standardauswahl unbekannter Entitäten verändern")
     try:
         old_filter, new_filter = FILTER_SCHEMA(dict(before)), FILTER_SCHEMA(dict(after))
@@ -141,6 +158,7 @@ def build_options_diff(
     inventory: list[Mapping[str, Any]],
     *,
     core_options_validator: Callable[[dict[str, Any]], Any] | None = None,
+    migration_evidence: PositiveListEvidence | None = None,
 ) -> OptionsDiff:
     """Prepare a minimal options diff; never mutate the input bridge."""
     entry_id = bridge.get("entry_id")
@@ -151,12 +169,31 @@ def build_options_diff(
     if not isinstance(current_filter, Mapping):
         raise HomeKitWriteBlocked("HomeKit-Filter ist unbekannt")
     desired = dict(desired_document.get("bridges", {}).get(entry_id, {}).get("entities", {}))
+    positive_list = desired_document.get("bridges", {}).get(entry_id, {}).get("policy") == "positive_list"
+    if migration_evidence is not None:
+        if not positive_list or desired_document["bridges"][entry_id].get("migration_acknowledged") is not True:
+            raise HomeKitWriteBlocked("Positivlistenmigration benötigt eine ausdrückliche Migrationsbestätigung")
+        observed_selected = {item["entity_id"] for item in inventory
+                             if item.get("homekit", {}).get("configured_by_filter") is True}
+        if observed_selected != migration_evidence.selected_ids:
+            raise HomeKitWriteBlocked("Aktueller Core-Filter und Inventar stimmen für die Migration nicht überein")
+        unsafe_includes = {entity_id for entity_id, status in desired.items() if status == "include"} & migration_evidence.registry_blocked_ids
+        if unsafe_includes:
+            raise HomeKitWriteBlocked("Positivliste würde bisher ausgeblendete oder kategorisierte Entitäten neu veröffentlichen: " + ", ".join(sorted(unsafe_includes)))
     plan = plan_changes(dict(bridge) | {"filter": dict(current_filter)}, desired_document, inventory, entry_id)
     if plan["summary"]["blocked"]:
         raise HomeKitWriteBlocked("Änderungsplan ist blockiert")
     after = copy.deepcopy(options)
-    after["filter"] = _candidate_filter(current_filter, desired)
-    _verify_scope(current_filter, after["filter"], inventory, desired)
+    after["filter"] = (_positive_list_filter(current_filter, desired, migration_evidence) if positive_list
+                       else _candidate_filter(current_filter, desired))
+    scope_desired = desired
+    if positive_list:
+        scope_desired = desired | {
+            item["entity_id"]: "exclude" for item in inventory
+            if item.get("entity_id") not in desired and item.get("homekit", {}).get("configured_by_filter") is True
+        }
+    _verify_scope(current_filter, after["filter"], inventory, scope_desired,
+                  allow_default_change=migration_evidence is not None)
     from homeassistant.helpers.entityfilter import FILTER_SCHEMA
     try:
         FILTER_SCHEMA(after["filter"])
@@ -169,7 +206,7 @@ def build_options_diff(
         change["entity_id"] for change in plan["changes"]
         if change["action"] in {"add", "remove"}
     )
-    if not changed_entities:
+    if not changed_entities and migration_evidence is None:
         raise HomeKitWriteBlocked("Der Entwurf enthält keine tatsächliche Entity-Filteränderung")
     return OptionsDiff(entry_id, options, after, changed_keys, changed_entities, plan)
 
@@ -181,13 +218,14 @@ class HomeKitWriter:
     The authority is rechecked at the Core mutation boundary.
     """
 
-    def __init__(self, hass: Any, *, test_environment: bool = False, apply_enabled: bool = False, allow_production: bool = False, production_grant: Any = None, expected_source_revision: str | None = None):
+    def __init__(self, hass: Any, *, test_environment: bool = False, apply_enabled: bool = False, allow_production: bool = False, production_grant: Any = None, expected_source_revision: str | None = None, pre_mutation_check: Callable[[], None] | None = None):
         self.hass = hass
         self.test_environment = test_environment
         self.apply_enabled = bool(apply_enabled)
         self.allow_production = bool(allow_production)
         self.production_grant = production_grant
         self.expected_source_revision = expected_source_revision
+        self.pre_mutation_check = pre_mutation_check
 
     async def async_apply(self, diff: OptionsDiff) -> dict[str, Any]:
         """Apply a Core-validated filter diff only after backend authorization."""
@@ -251,6 +289,8 @@ class HomeKitWriter:
             next_options = dict(current_options)
             for key in diff.changed_keys:
                 next_options[key] = copy.deepcopy(diff.after[key])
+            if self.pre_mutation_check is not None:
+                self.pre_mutation_check()
             self.hass.config_entries.async_update_entry(entry, options=next_options)
             if hasattr(self.hass, "async_block_till_done"):
                 try:

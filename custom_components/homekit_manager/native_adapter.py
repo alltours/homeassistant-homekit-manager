@@ -15,6 +15,7 @@ from homeassistant.helpers.storage import Store
 
 from .homekit_writer import HomeKitWriter, HomeKitWriteBlocked, OptionsDiff, build_options_diff
 from .source_model import HomeKitSource, native_source, revision
+from .positive_list import PositiveListEvidence, collect_migration_evidence, verify_migration_runtime
 
 
 _OPERATION_LOCKS: dict[str, asyncio.Lock] = {}
@@ -33,6 +34,8 @@ class NativeFilterPlan:
     context_revision: str
     diff: OptionsDiff = field(repr=False)
     operation_id: str = field(default_factory=lambda: uuid4().hex)
+    migration_evidence: PositiveListEvidence | None = field(default=None, repr=False)
+    inventory_ids: frozenset[str] = frozenset()
 
 
 class NativeHomeKitAdapter:
@@ -73,10 +76,22 @@ class NativeHomeKitAdapter:
             raise HomeKitWriteBlocked("Bridge-Kontext stimmt nicht mit Core überein")
         current = self.hass.config_entries.async_get_entry(snapshot.entry_id)
         accurate = dict(bridge) | {"data": deepcopy(dict(current.data)), "options": deepcopy(dict(current.options))}
-        diff = build_options_diff(accurate, desired_document, inventory)
+        current_filter = (dict(current.data) | dict(current.options)).get("filter", {})
+        requested = desired_document.get("bridges", {}).get(snapshot.entry_id, {})
+        positive = requested.get("policy") == "positive_list"
+        broad = not current_filter.get("include_entities") or any(current_filter.get(key) for key in (
+            "include_domains", "include_entity_globs", "exclude_domains", "exclude_entity_globs"
+        ))
+        if positive and broad and snapshot.core_version != "2026.10.4":
+            raise HomeKitWriteBlocked("Positivlistenmigration ist nur mit Core 2026.10.4 isoliert verifiziert")
+        inventory_ids = frozenset(item["entity_id"] for item in inventory if item.get("entity_id"))
+        evidence = (collect_migration_evidence(self.hass, current, inventory_ids, current_filter)
+                    if positive and broad and requested.get("migration_acknowledged") is True else None)
+        diff = build_options_diff(accurate, desired_document, inventory, migration_evidence=evidence)
         if not diff.changed_keys:
             raise HomeKitWriteBlocked("Änderungsplan enthält keine native Optionsänderung")
-        return NativeFilterPlan(snapshot.entry_id, snapshot.revision, _context_revision(current), diff)
+        return NativeFilterPlan(snapshot.entry_id, snapshot.revision, _context_revision(current), diff,
+                                migration_evidence=evidence, inventory_ids=inventory_ids)
 
     def reconcile(self, plan: NativeFilterPlan) -> str:
         snapshot = self.read(plan.entry_id)
@@ -106,12 +121,29 @@ class NativeHomeKitAdapter:
                 raise HomeKitWriteBlocked("Native Config-Entry-Revision ist veraltet")
             await self._record(plan, "applying")
             try:
+                def check_migration_evidence() -> None:
+                    if plan.migration_evidence is None:
+                        return
+                    entry = self.hass.config_entries.async_get_entry(plan.entry_id)
+                    current_filter = (dict(entry.data) | dict(entry.options)).get("filter", {})
+                    actual = collect_migration_evidence(self.hass, entry, plan.inventory_ids, current_filter)
+                    if actual.signature != plan.migration_evidence.signature:
+                        raise HomeKitWriteBlocked("HAP-/Inventarstand hat sich seit der Migrationsvorschau verändert")
+
                 result = await HomeKitWriter(self.hass, test_environment=self._isolated_test_authority,
                                              apply_enabled=self._isolated_test_authority,
                                              production_grant=self._production_grant,
-                                             expected_source_revision=plan.source_revision).async_apply(plan.diff)
+                                             expected_source_revision=plan.source_revision,
+                                             pre_mutation_check=check_migration_evidence).async_apply(plan.diff)
                 if self.reconcile(plan) != "verified_options":
                     raise HomeKitWriteBlocked("Native Nachverifikation fehlgeschlagen")
+                if plan.migration_evidence is not None:
+                    entry = self.hass.config_entries.async_get_entry(plan.entry_id)
+                    after = collect_migration_evidence(
+                        self.hass, entry, plan.inventory_ids, plan.diff.after["filter"]
+                    )
+                    verify_migration_runtime(plan.migration_evidence, after,
+                                             frozenset(plan.diff.after["filter"]["include_entities"]))
             except Exception:
                 await self._record(plan, "unknown_outcome")
                 raise

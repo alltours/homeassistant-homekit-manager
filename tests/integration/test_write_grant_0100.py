@@ -12,6 +12,7 @@ from uuid import uuid4
 import pytest
 from homeassistant import config_entries
 from homeassistant.config import async_hass_config_yaml
+from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -44,7 +45,8 @@ def desired(entry_id: str) -> dict:
 
 def inventory() -> list[dict]:
     return [{"entity_id": name, "homekit": {"configured_by_filter": name == "light.before"},
-             "compatibility": {"status": "supported"}} for name in ("light.before", "light.after")]
+             "compatibility": {"status": "supported"}, "registry_entry_present": True, "state_present": True}
+            for name in ("light.before", "light.after")]
 
 
 @pytest.mark.parametrize("change", [
@@ -236,6 +238,12 @@ async def test_native_grant_is_bound_revocable_and_single_use(hass, tmp_path, mo
         await service.apply(plan["operation_id"], **args)
     assert entry.options["filter"]["include_entities"] == ["light.before"]
     save_grant(tmp_path, grant_data(entry.entry_id))
+    with pytest.raises(HomeKitWriteDisabled, match="seit der Vorschau"):
+        await service.apply(plan["operation_id"], **args)
+    plan = await service.plan_filter(entry_id=entry.entry_id, bridge=bridge,
+                                     document=desired(entry.entry_id), inventory=inventory())
+    args = {"entry_id": entry.entry_id, "expected_revision": plan["source_revision"],
+            "confirmed_operation_id": plan["operation_id"], "admin": True}
     result = await service.apply(plan["operation_id"], **args)
     assert result["state"] == "verified"
     assert entry.options["filter"]["include_entities"] == ["light.after", "light.before"]
@@ -318,6 +326,7 @@ async def test_real_admin_websocket_uses_local_grant_without_service_injection(
     await hass.config_entries.async_add(entry)
     await hass.async_block_till_done()
     hass.states.async_set("light.before", "on")
+    assert er.async_get(hass).async_get_or_create("light", "test", "after", suggested_object_id="after").entity_id == "light.after"
     hass.states.async_set("light.after", "off")
     flow = await hass.config_entries.flow.async_init("homekit_manager", context={"source": "user"})
     await hass.config_entries.flow.async_configure(flow["flow_id"], {})
@@ -342,6 +351,11 @@ async def test_real_admin_websocket_uses_local_grant_without_service_injection(
     assert blocked["success"] is False and blocked["error"]["code"] == "write_blocked"
     assert entry.options["filter"]["include_entities"] == ["light.before"]
     save_grant(tmp_path, grant_data(entry.entry_id))
+    await client.send_json_auto_id({"type": "homekit_manager/operation_plan", "entry_id": entry.entry_id,
+                                    "document": desired(entry.entry_id), "expected_fingerprint": manager.fingerprint})
+    refreshed = await client.receive_json()
+    assert refreshed["success"], refreshed
+    plan = refreshed["result"]
     await client.send_json_auto_id({"type": "homekit_manager/operation_apply", "operation_id": plan["operation_id"],
                                     "entry_id": entry.entry_id, "source_revision": plan["source_revision"],
                                     "expected_fingerprint": manager.fingerprint,

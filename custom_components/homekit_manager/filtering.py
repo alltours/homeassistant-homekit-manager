@@ -12,7 +12,7 @@ class FilterResult:
     runtime_candidate: bool | None = None
     registry_reason: str | None = None
     def as_dict(self):
-        return asdict(self) | {"configured_by_filter": self.configured}
+        return asdict(self) | {"configured_by_filter": self.configured, "filter_reason": self.reason}
 
 def _list(config: Mapping[str, Any], key: str) -> set[str]:
     return set(config.get(key, []) or [])

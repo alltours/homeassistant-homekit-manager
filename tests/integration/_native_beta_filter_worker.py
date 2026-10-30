@@ -16,11 +16,14 @@ from unittest.mock import patch
 
 from homeassistant.bootstrap import async_setup_hass
 from homeassistant.components.homekit import HomeKit
+from homeassistant.components.homekit.accessories import TYPES, get_accessory
 from homeassistant.const import __version__ as CORE_VERSION
+from homeassistant.core import State
 from homeassistant.helpers.entityfilter import FILTER_SCHEMA
 from homeassistant.runner import RuntimeConfig
 
 from custom_components.homekit_manager.operations import HomeKitOperationService
+from custom_components.homekit_manager.compatibility import classify_entity
 
 
 ENTRY_ID = "isolated-hap-full-bootstrap"
@@ -50,6 +53,15 @@ async def local_advertiser(_hass):
 
 async def run() -> None:
     assert CORE_VERSION == "2026.11.0b0"
+    # Probe the installed beta's actual accessory dispatch before reporting
+    # support. This does not start a HAP driver or touch the productive host.
+    for device_class, accessory_type in (("ozone", "OzoneSensor"), ("sulphur_dioxide", "SulphurDioxideSensor")):
+        state = State(f"sensor.beta_{device_class}", "20", {"device_class": device_class})
+        with patch.dict(TYPES, {accessory_type: lambda *_args, result=accessory_type: result}):
+            assert get_accessory(None, None, state, 1, {}) == accessory_type
+        projected = classify_entity({"domain": "sensor", "device_class": device_class}, core_version=CORE_VERSION)
+        assert projected.status == "supported" and projected.expected_type == accessory_type
+    assert classify_entity({"domain": "light"}, core_version=CORE_VERSION).status == "supported"
     shared = Path(os.environ["HKM_FULL_BOOTSTRAP_DIR"])
     assert shared.is_dir() and (shared / "controller_pairing.json").is_file()
     with patch("homeassistant.components.homekit.zeroconf.async_get_async_instance", local_advertiser), patch.object(HomeKit, "_async_show_setup_message", lambda _self: None):
@@ -84,6 +96,7 @@ async def run() -> None:
         assert all(predicate(entity_id) for entity_id in SENSORS)
 
         service = HomeKitOperationService(hass)
+        service.test_write_mode.enable(hass, ENTRY_ID, ENTRY_ID)
         bridge = {"entry_id": ENTRY_ID, "source": "user", "filter": dict(entry.options["filter"])}
         inventory = [
             {"entity_id": entity_id, "homekit": {"configured_by_filter": True},
@@ -99,11 +112,9 @@ async def run() -> None:
         }}}
         plan = await service.plan_filter(entry_id=ENTRY_ID, bridge=bridge,
                                          document=document, inventory=inventory)
-        assert plan["apply_enabled"] is False
+        assert plan["apply_enabled"] is True
         assert set(plan["changed_entities"]) == set(SENSORS)
         assert not (shared / ".homekit_manager_write_grant.json").exists()
-        authority = service.test_write_mode.enable(hass, ENTRY_ID, ENTRY_ID)
-        await authority.verify(hass, ENTRY_ID, "user")
         result = await service.apply(
             plan["operation_id"], entry_id=ENTRY_ID,
             expected_revision=plan["source_revision"],

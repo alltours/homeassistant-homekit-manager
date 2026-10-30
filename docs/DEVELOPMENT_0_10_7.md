@@ -48,6 +48,14 @@ nativen Filter, Laufzeit-Verifikationsgrenzen sowie die bestehende Chromium- und
 WebKit-Oberfläche ab. Die 5.000-Entitäten-Pfade bleiben gebunden und event-loop-
 freundlich; eine Performanceverbesserung wird nicht behauptet.
 
+Die isolierte Reconciliation-Regression modelliert sieben eingeschlossene
+Domänen, 60 gespeicherte Ausschlüsse und eine nachträglich auftauchende
+Entität. Sie wird nicht automatisch in die Positivliste aufgenommen. Die
+isolierten Core/HAP-Tests prüfen zusätzlich, dass ein autorisierter Apply nur
+mit unverändertem Inventar-/HAP-Evidenzfingerabdruck erfolgt und ein
+isolierter Rollback native Filter sowie die erhaltene Bridge-/AID-/IID-Identität
+wiederherstellt.
+
 ## Offene Freigabegates
 
 Eine vollständige Python-Integrationstest-Ausführung benötigt Python 3.14.x und

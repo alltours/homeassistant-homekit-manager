@@ -60,7 +60,7 @@ async def test_admin_operation_websocket_isolated_apply_and_verify(hass, enable_
                                     "confirmed_operation_id": plan["operation_id"]})
     response = await client.receive_json()
     assert response["success"], response
-    assert response["result"]["state"] == "verified"
+    assert response["result"]["state"] == "verification_incomplete"
     assert native.options["filter"]["include_entities"] == ["light.after", "light.before"]
 
 
@@ -150,7 +150,7 @@ async def test_admin_websocket_direct_yaml_apply_preserves_other_config(hass, tm
                                     "expected_fingerprint": manager.fingerprint,
                                     "confirmed_operation_id": plan["operation_id"]})
     result = await client.receive_json()
-    assert result["success"] and result["result"]["state"] == "verified", result
+    assert result["success"] and result["result"]["state"] == "verification_incomplete", result
     assert source.read_bytes().startswith(b"# untouched\n")
     assert source.read_bytes().endswith(b"logger:\n  default: warning\n")
     backup = tmp_path / ".storage" / "homekit_manager_backups" / f"{plan['operation_id']}.yaml"

@@ -220,7 +220,7 @@ def build_options_diff(
         change["entity_id"] for change in plan["changes"]
         if change["action"] in {"add", "remove"}
     )
-    if not changed_entities and migration_evidence is None:
+    if not changed_entities and migration_evidence is None and not (positive_list and "filter" in changed_keys):
         raise HomeKitWriteBlocked("Der Entwurf enthält keine tatsächliche Entity-Filteränderung")
     return OptionsDiff(entry_id, options, after, changed_keys, changed_entities, plan)
 

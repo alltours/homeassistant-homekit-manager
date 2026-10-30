@@ -235,7 +235,11 @@ async def test_broad_filter_migration_needs_live_hap_evidence_and_keeps_identity
     assert after.driver.state.mac == mac
     assert after.aid_storage.get_allocated_aid_for_entity_id("light.keep") == keep_aid
     assert after.driver.state.paired
-    assert entry.options["filter"] == {"include_entities": ["light.keep"]}
+    assert entry.options["filter"] == {
+        "include_entities": ["light.keep"], "exclude_entities": [],
+        "include_domains": [], "exclude_domains": [],
+        "include_entity_globs": [], "exclude_entity_globs": [],
+    }
     assert evaluate_filter("light.future", config=entry.options["filter"]).configured is False
     reopened = IpPairing(controller, pairing_data)
     accessories = await asyncio.wait_for(reopened.list_accessories_and_characteristics(), 10)

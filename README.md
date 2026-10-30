@@ -1,11 +1,12 @@
-# HomeKit Manager 0.10.5
+# HomeKit Manager 0.10.6
 
-Version 0.10.5 makes area and device bulk actions conservative and moves their
-scope calculation to the server. Both actions preview the complete node,
-show changed, unchanged and skipped counts, and save confirmed changes only
-to the Manager draft. The devices view groups entities without a device
-directly under their area and hides technical and disabled entries by default.
-Publishing this version does not install it on Home Assistant.
+Version 0.10.6 makes the four-view panel more compact. Closed area and device
+cards show their essential status and both draft-only bulk actions; technical
+counts remain available after expansion. Display options now live inside the
+collapsed filter panel. The HomeKit overview and empty Changes view use short
+summaries with direct navigation to Devices. Filter semantics, bulk eligibility,
+writer authorization and Apply behavior remain as in 0.10.5. Publishing this
+version does not install it on Home Assistant.
 
 Home Assistant custom integration for inspecting existing HomeKit Bridges and
 planning changes in one four-tab panel: HomeKit, Devices, Changes and Settings.
@@ -82,7 +83,7 @@ The authoritative product repository is `https://github.com/alltours/homeassista
 
 Review the [0.10.0 upgrade and rollback guide](docs/UPGRADE_0_10_0.md) before any installation decision. This repository does not prove the currently installed production version or Apple Home behavior. No production installation was performed during this work. Replacing custom-component files does not itself update a running Home Assistant process.
 
-Accessory-mode instances are reported separately and cannot be selected as bridge targets. Cross-source migration and bridge creation/deletion stay blocked. Unverified future Core versions remain unknown and automatic bulk actions fail closed. Browser tests cover Chromium and WebKit; physical iPhone and VoiceOver acceptance remains separate. See the [0.10.5 release notes](docs/RELEASE_0_10_5.md), [UX target](docs/UX_BULK_ACTIONS_0_10_3.md) and [0.10.1 test-mode notes](docs/RELEASE_0_10_1.md) for the exact scope.
+Accessory-mode instances are reported separately and cannot be selected as bridge targets. Cross-source migration and bridge creation/deletion stay blocked. Unverified future Core versions remain unknown and automatic bulk actions fail closed. Browser tests cover Chromium and WebKit; physical iPhone and VoiceOver acceptance remains separate. See the [0.10.6 release notes](docs/RELEASE_0_10_6.md), [0.10.5 safety notes](docs/RELEASE_0_10_5.md) and [0.10.1 test-mode notes](docs/RELEASE_0_10_1.md) for the exact scope.
 
 ## License
 

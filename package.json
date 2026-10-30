@@ -1,10 +1,10 @@
 {
   "name": "homekit-manager-development",
   "private": true,
-  "version": "0.10.5",
+  "version": "0.10.6",
   "scripts": {
     "test:frontend": "node tests/frontend/test_panel.mjs",
-    "test:browser": "playwright test -c tests/frontend/playwright.config.mjs tests/frontend/browser_regression.spec.mjs tests/frontend/screenshot_reference.spec.mjs"
+    "test:browser": "playwright test -c tests/frontend/playwright.config.mjs tests/frontend/browser_regression.spec.mjs tests/frontend/screenshot_reference.spec.mjs tests/frontend/ux_compact.spec.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.55.1",

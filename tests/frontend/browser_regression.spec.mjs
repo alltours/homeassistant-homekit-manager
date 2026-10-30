@@ -13,7 +13,7 @@ for (const [name, width, height] of sizes) {
       const errors = []; page.on('pageerror', error => errors.push(error.message));
       await page.goto('/tests/frontend/browser_fixture.html');
       const panel = page.locator('homekit-manager-panel');
-      await expect(panel.getByText('Fixture Bridge', { exact: true })).toBeVisible();
+      await expect(panel.getByRole('heading', { name: 'Fixture Bridge', exact: true })).toBeVisible();
       for (const [id, label] of views) {
         await panel.getByRole('tab', { name: label, exact: true }).click();
         await expect(panel.getByRole('tab', { name: label, exact: true })).toHaveAttribute('aria-selected', 'true');
@@ -36,7 +36,7 @@ test('search keeps focus, supports areas, all filters work, and pagination reach
   const search = panel.getByRole('searchbox', { name: 'Entitäten suchen' });
   await search.pressSequentially('Kitchen'); await expect(search).toBeFocused(); await expect(search).toHaveValue('Kitchen');
   await search.fill('Hall'); await expect(panel.locator('.result-count')).toContainText('1 von 2');
-  await search.fill(''); await panel.locator('.filters summary').click();
+  await search.fill(''); await panel.locator('.filters > summary').click();
   for (const [key, value] of [['domain', 'light'], ['area', 'Kitchen'], ['device', 'Kitchen device'], ['status', 'included'], ['compatibility', 'supported'], ['availability', 'available'], ['integration', 'sensor_demo']]) {
     await panel.locator(`[data-filter=${key}]`).selectOption(value);
     await expect(panel.locator('.result-count')).toContainText('1 von 2');
@@ -52,7 +52,7 @@ test('an open filter dropdown survives a backend refresh', async ({ page }) => {
   await page.goto('/tests/frontend/browser_fixture.html');
   const panel = page.locator('homekit-manager-panel');
   await panel.getByRole('tab', { name: 'Geräte', exact: true }).click();
-  await panel.locator('.filters summary').click();
+  await panel.locator('.filters > summary').click();
   const select = panel.locator('[data-filter=domain]');
   await select.focus();
   const original = await select.elementHandle();
@@ -60,7 +60,7 @@ test('an open filter dropdown survives a backend refresh', async ({ page }) => {
   expect(await original.evaluate(node => node.isConnected)).toBe(true);
   await expect(select).toBeFocused();
   const beforeBlur = await panel.evaluate(element => element.renderCount);
-  await panel.getByRole('heading', { name: 'Geräte und Entitäten' }).click();
+  await panel.getByRole('heading', { name: 'Geräte verwalten' }).click();
   await expect.poll(() => panel.evaluate(element => element.renderCount)).toBeGreaterThan(beforeBlur);
 });
 
@@ -68,7 +68,7 @@ test('filter dropdown supports waiting, selection, keyboard, outside click and a
   await page.goto('/tests/frontend/browser_fixture.html');
   const panel = page.locator('homekit-manager-panel');
   await panel.getByRole('tab', { name: 'Geräte', exact: true }).click();
-  await panel.locator('.filters summary').click();
+  await panel.locator('.filters > summary').click();
   const domain = panel.locator('[data-filter=domain]');
   await domain.focus();
   const original = await domain.elementHandle();
@@ -93,7 +93,7 @@ test('filter dropdown supports waiting, selection, keyboard, outside click and a
   await expect(panel.locator('.result-count')).toContainText('1 von 2');
   await area.click();
   await expect(area).toBeFocused();
-  await panel.getByRole('heading', { name: 'Geräte und Entitäten' }).click();
+  await panel.getByRole('heading', { name: 'Geräte verwalten' }).click();
   await expect(area).not.toBeFocused();
 });
 
@@ -114,7 +114,7 @@ test('technical details stay open during passive refresh and no-operation status
   await page.goto('/tests/frontend/browser_fixture.html');
   const panel = page.locator('homekit-manager-panel');
   await panel.getByRole('tab', { name: 'Änderungen', exact: true }).click();
-  await expect(panel.locator('[data-activation-state=unknown]')).toHaveText('Keine Anwendung protokolliert');
+  await expect(panel.locator('.empty-changes')).toContainText('Keine Änderungen vorgemerkt');
   await panel.getByRole('tab', { name: 'Geräte', exact: true }).click();
   await panel.locator('[data-group=entities]').click();
   const details = panel.locator('details[data-detail-key="entity:light.kitchen"]');
@@ -131,7 +131,7 @@ test('mobile touch keeps the filter control mounted during refresh', async ({ br
     await page.goto('/tests/frontend/browser_fixture.html');
     const panel = page.locator('homekit-manager-panel');
     await panel.getByRole('tab', { name: 'Geräte', exact: true }).tap();
-    await panel.locator('.filters summary').tap();
+    await panel.locator('.filters > summary').tap();
     const select = panel.locator('[data-filter=domain]');
     await select.tap();
     const original = await select.elementHandle();
@@ -160,10 +160,12 @@ test('availability totals follow current hits and missing device is evidence, no
     element.render();
   });
   await expect(panel.locator('.result-count')).toContainText('2 von 2');
-  await expect(panel.locator('p.muted').filter({ hasText: 'Ohne aktuellen State 1' })).toBeVisible();
+  await panel.locator('.filters > summary').click();
+  await panel.locator('.inventory-summary > summary').click();
+  await expect(panel.locator('.inventory-summary').filter({ hasText: 'Ohne aktuellen State 1' })).toBeVisible();
   await panel.getByRole('searchbox', { name: 'Entitäten suchen' }).fill('Kitchen');
   await expect(panel.locator('.result-count')).toContainText('1 von 2');
-  await expect(panel.locator('p.muted').filter({ hasText: 'Ohne aktuellen State 0' })).toBeVisible();
+  await expect(panel.locator('.inventory-summary').filter({ hasText: 'Ohne aktuellen State 0' })).toBeVisible();
   await panel.getByRole('searchbox', { name: 'Entitäten suchen' }).fill('Temperature');
   await panel.locator('.entity-row details.technical summary').click();
   await expect(panel.locator('.entity-row details.technical')).toContainText('Gerätereferenz');
@@ -209,7 +211,7 @@ test('isolated operation workflow binds plan, confirms exact request and verifie
   await expect(panel.locator('dialog')).toContainText('fixture-operation-1');
   await panel.getByRole('button', { name: 'Genau diese Änderung anwenden' }).click();
   await expect(panel.locator('.status-line')).toContainText('Backend verifiziert');
-  await expect(panel.locator('[data-apply]')).toBeDisabled();
+  await expect(panel.locator('[data-apply]')).toHaveCount(0);
   const calls = await page.evaluate(() => window.fixtureCommands.filter(name => name === 'homekit_manager/operation_apply'));
   expect(calls).toHaveLength(1);
 });
@@ -226,6 +228,7 @@ test('source migration is absent from the 0.10.0 interface', async ({ page }) =>
 test('bridge details expose source-bound configuration values without YAML structure claims', async ({ page }) => {
   await page.goto('/tests/frontend/browser_fixture.html');
   const panel = page.locator('homekit-manager-panel');
+  await panel.locator('.home-details > summary').click();
   await panel.locator('[data-bridge-expand]').click();
   await panel.getByText('Konfigurationswerte anzeigen').click();
   const values = panel.locator('.config-values');
@@ -384,11 +387,12 @@ test('area action spans 5000 entities while search displays one result', async (
 
 test('configuration source and write status are clear without a management switch', async ({page}) => {
   await page.goto('/tests/frontend/browser_fixture.html'); const panel=page.locator('homekit-manager-panel');
-  await expect(panel.locator('.source-option')).toContainText('Native Home-Assistant-Konfiguration');
-  await expect(panel.locator('.status-grid')).toContainText('Schreiben');
+  await panel.locator('.home-details > summary').click();
+  await expect(panel.locator('.home-details')).toContainText('Schreibstatus');
   await expect(panel.locator('[data-management-enable], [data-management-disable]')).toHaveCount(0);
   await panel.getByRole('tab',{name:'Einstellungen',exact:true}).click();
   await panel.getByRole('button',{name:'Konfiguration',exact:true}).click();
+  await expect(panel.locator('.source-option')).toContainText('Native Home-Assistant-Konfiguration');
   await expect(panel.locator('.settings-content')).toContainText('bestehende Konfigurationsquelle');
   expect(await page.evaluate(() => window.fixtureCommands.some(type => type === 'homekit_manager/management_enable' || type === 'homekit_manager/management_disable'))).toBe(false);
 });
@@ -396,9 +400,12 @@ test('configuration source and write status are clear without a management switc
 test('unknown activation stays neutral, all settings remain reachable, keyboard tabs work', async ({page}) => {
   await page.goto('/tests/frontend/browser_fixture.html?activation-error'); const panel=page.locator('homekit-manager-panel');
   await panel.getByRole('tab',{name:'Änderungen',exact:true}).click();
-  await expect(panel.locator('[data-activation-state=unknown]')).toHaveClass(/tone-neutral/);
-  await expect(panel.locator('[data-apply]')).toBeDisabled(); await panel.locator('[data-refresh]').last().click();
-  await expect(panel.locator('[data-activation-state=unknown]')).toHaveClass(/tone-neutral/);
+  await expect(panel.locator('.empty-changes')).toContainText('Keine Änderungen vorgemerkt');
+  await expect(panel.locator('.notice.warning')).toContainText('nicht bestätigt');
+  await expect(panel.locator('[data-apply]')).toHaveCount(0);
+  await panel.locator('.activation-history > summary').click();
+  await panel.locator('.activation-history [data-refresh]').click();
+  await expect(panel.locator('.notice.warning')).toContainText('nicht bestätigt');
   await panel.getByRole('tab',{name:'Änderungen',exact:true}).focus();
   await panel.getByRole('tab',{name:'Änderungen',exact:true}).press('ArrowRight');
   await expect(panel.getByRole('tab',{name:'Einstellungen',exact:true})).toBeFocused();
@@ -447,7 +454,7 @@ test('search, sort, filters and bulk draft span every loaded inventory page', as
   await expect(panel.locator('.result-count')).toContainText('1 von 5000');
   await expect(panel.locator('.entity-row code')).toHaveText('light.paged_4999');
   await search.fill('');
-  await panel.locator('.filters summary').click();
+  await panel.locator('.filters > summary').click();
   for (const [key, value] of [['domain', 'light'], ['status', 'included'], ['compatibility', 'supported'], ['availability', 'available'], ['integration', 'demo']]) {
     await panel.locator(`[data-filter=${key}]`).selectOption(value);
     await expect(panel.locator('.result-count')).toContainText('5000 von 5000');
@@ -537,6 +544,8 @@ test('unassigned entities are direct area members and display options only affec
   await expect(area.locator('.device-row')).toHaveCount(0);
   await expect(area.locator('.unassigned .entity-row')).toHaveCount(5);
   await expect(area.locator('.unassigned')).toContainText('blaue_tonne');
+  await panel.locator('.filters > summary').click();
+  await panel.locator('.display-options > summary').click();
   for (const key of ['disabled', 'hidden', 'technical']) await panel.locator(`[data-display="${key}"]`).check();
   await expect(area.locator('.unassigned .entity-row')).toHaveCount(8);
   expect(await panel.evaluate(element => element.draft.size)).toBe(0);
@@ -562,12 +571,14 @@ test('same-name devices remain distinct and aggregate only regularly manageable 
   await expect(panel.locator('.device-row')).toHaveCount(2);
   await expect(panel.locator('.device-row').first()).toContainText('Decke · Flur');
   await expect(panel.locator('.device-row').last()).toContainText('Decke · Katzengefängnis');
-  await expect(panel.locator('.device-row').first().locator('.state').first()).toHaveText('Eingeschlossen');
+  await expect(panel.locator('.device-row').first().locator('.device-head small')).toContainText('Eingeschlossen');
   await panel.locator('.device-row').first().locator('[data-expand]').click();
   await expect(panel.locator('.device-row').first().locator('.entity-row')).toHaveCount(1);
+  await panel.locator('.filters > summary').click();
+  await panel.locator('.display-options > summary').click();
   await panel.locator('[data-display="hidden"]').check();
   await expect(panel.locator('.device-row').first().locator('.entity-row')).toHaveCount(2);
-  await expect(panel.locator('.device-row').first().locator('.state').first()).toHaveText('Eingeschlossen');
+  await expect(panel.locator('.device-row').first().locator('.device-head small')).toContainText('Eingeschlossen');
 });
 
 test('bulk action with no effective change does not create a draft or dialog', async ({ page }) => {

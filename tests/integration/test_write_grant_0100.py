@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
 import json
 import os
 import subprocess
 import sys
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
@@ -17,15 +17,25 @@ from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.homekit_manager import homekit_writer as writer_module
-from custom_components.homekit_manager.homekit_writer import HomeKitWriteBlocked, HomeKitWriteDisabled, HomeKitWriter, OptionsDiff
+from custom_components.homekit_manager.homekit_writer import (
+    HomeKitWriteBlocked,
+    HomeKitWriteDisabled,
+    HomeKitWriter,
+    OptionsDiff,
+)
 from custom_components.homekit_manager.operations import HomeKitOperationService
 from custom_components.homekit_manager.source_model import native_source
-from custom_components.homekit_manager.write_grant import GRANT_FILENAME, GrantBlocked, ProductionWriteGrant, read_production_grant
+from custom_components.homekit_manager.write_grant import (
+    GRANT_FILENAME,
+    GrantBlocked,
+    ProductionWriteGrant,
+    read_production_grant,
+)
 from custom_components.homekit_manager.yaml_adapter import YamlHomeKitAdapter
 
 
 def grant_data(entry_id: str, source: str = "user") -> dict:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return {"version": 1, "grant_id": uuid4().hex, "entry_id": entry_id, "source": source,
             "core_version": "2026.10.4", "allowed_fields": ["filter"],
             "issued_at": (now - timedelta(minutes=1)).isoformat(),
@@ -54,8 +64,8 @@ def inventory() -> list[dict]:
     lambda data: data.update(entry_id=""),
     lambda data: data.update(source="system"),
     lambda data: data.update(core_version="2026.11.0"),
-    lambda data: data.update(expires_at=(datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()),
-    lambda data: data.update(expires_at=(datetime.now(timezone.utc) + timedelta(days=2)).isoformat()),
+    lambda data: data.update(expires_at=(datetime.now(UTC) - timedelta(seconds=1)).isoformat()),
+    lambda data: data.update(expires_at=(datetime.now(UTC) + timedelta(days=2)).isoformat()),
     lambda data: data.update(unrecognized=True),
 ])
 async def test_invalid_local_grants_fail_closed(hass, tmp_path, change):
@@ -103,8 +113,12 @@ async def test_grant_file_permissions_and_symlink_fail_closed(hass, tmp_path):
 async def test_macos_grant_acl_is_rejected(hass, tmp_path):
     save_grant(tmp_path, grant_data("isolated-entry"))
     grant_path = tmp_path / GRANT_FILENAME
-    applied = subprocess.run(["/bin/chmod", "+a", "everyone allow write", str(grant_path)],  # noqa: S603 - fixed argv, isolated temp path
-                             capture_output=True, check=False)
+    applied = await asyncio.to_thread(
+        subprocess.run,
+        ["/bin/chmod", "+a", "everyone allow write", str(grant_path)],
+        capture_output=True,
+        check=False,
+    )
     if applied.returncode:
         pytest.skip("Testdateisystem unterstützt keine macOS-ACL")
     assert grant_path.stat().st_mode & 0o777 == 0o600
@@ -245,7 +259,7 @@ async def test_native_grant_is_bound_revocable_and_single_use(hass, tmp_path, mo
     args = {"entry_id": entry.entry_id, "expected_revision": plan["source_revision"],
             "confirmed_operation_id": plan["operation_id"], "admin": True}
     result = await service.apply(plan["operation_id"], **args)
-    assert result["state"] == "verification_incomplete"
+    assert result["state"] == "verified"
     assert entry.options["filter"]["include_entities"] == ["light.after", "light.before"]
     with pytest.raises(HomeKitWriteBlocked, match="bereits begonnen"):
         await service.apply(plan["operation_id"], **args)

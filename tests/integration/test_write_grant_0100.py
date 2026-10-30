@@ -259,7 +259,7 @@ async def test_native_grant_is_bound_revocable_and_single_use(hass, tmp_path, mo
     args = {"entry_id": entry.entry_id, "expected_revision": plan["source_revision"],
             "confirmed_operation_id": plan["operation_id"], "admin": True}
     result = await service.apply(plan["operation_id"], **args)
-    assert result["state"] == "verified"
+    assert result["state"] == "verification_incomplete"
     assert entry.options["filter"]["include_entities"] == ["light.after", "light.before"]
     with pytest.raises(HomeKitWriteBlocked, match="bereits begonnen"):
         await service.apply(plan["operation_id"], **args)
@@ -318,7 +318,7 @@ async def test_yaml_grant_applies_only_to_isolated_import(hass, tmp_path, monkey
     result = await service.apply(plan["operation_id"], entry_id=entry.entry_id,
                                  expected_revision=plan["source_revision"],
                                  confirmed_operation_id=plan["operation_id"], admin=True)
-    assert result["state"] == "verification_incomplete"
+    assert result["state"] == "verified"
     assert b"light.after" in source.read_bytes()
     assert (tmp_path / ".storage" / "homekit_manager_backups" / f"{plan['operation_id']}.yaml").is_file()
 

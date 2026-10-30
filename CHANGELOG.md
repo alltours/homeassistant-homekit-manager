@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.7 (2026-10-30)
+
+- Detect and display mismatches between saved Manager intent and the native HomeKit filter even without local unsaved changes.
+- Require an explicit positive-list migration before applying legacy domain/glob filters; preserve a safe, canonical six-key filter representation and block empty positive lists.
+- Keep stored legacy exclusions separate from inferred migration intent and report native-options verification separately from runtime-publication verification.
+- Add regression coverage for the confirmed exclusion gap, migration ambiguity, filter safety and rollback verification. No productive HomeKit change is included.
+
 ## 0.10.6 (2026-10-30)
 
 - Condense closed area and device cards while retaining two visible draft-only bulk actions and the separate aggregate status.

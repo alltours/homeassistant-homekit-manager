@@ -1,6 +1,14 @@
-# HomeKit Manager 0.10.6
+# HomeKit Manager 0.10.7
 
-Version 0.10.6 makes the four-view panel more compact. Closed area and device
+Version 0.10.7 makes the explicit entity positive list the safe migration
+boundary. Saved Manager drafts, native Home Assistant filter configuration and
+the running bridge publication are shown as separate observations. Broad legacy
+filters require an explicit migration plan and confirmation; empty positive
+lists are blocked because Home Assistant interprets an empty filter as include
+all. No installation, reload, pairing change or productive Apply occurs as part
+of building this release.
+
+The 0.10.6 UI baseline makes the four-view panel more compact. Closed area and device
 cards show their essential status and both draft-only bulk actions; technical
 counts remain available after expansion. Display options now live inside the
 collapsed filter panel. The HomeKit overview and empty Changes view use short

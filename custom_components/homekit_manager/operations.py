@@ -216,10 +216,12 @@ class HomeKitOperationService:
             grant = None if self._isolated_write_authority else await self._production_grant(entry_id, plan.source)
             await self._set_state(plan, "applying", grant_id=grant.grant_id if grant else None)
             try:
+                runtime_verification = "verified"
                 if isinstance(plan.payload, NativeFilterPlan):
                     result = await NativeHomeKitAdapter(self.hass, isolated_test_authority=self._isolated_write_authority,
                                                         production_grant=grant).apply(plan.payload)
                     verified = result.get("verification") == "verified_options"
+                    runtime_verification = result.get("runtime_verification", "incomplete")
                 else:
                     adapter = YamlHomeKitAdapter(self.hass.config.config_dir)
                     result = await adapter.async_apply_with_core(self.hass, entry, plan.payload,
@@ -231,8 +233,11 @@ class HomeKitOperationService:
             except Exception:
                 await self._set_state(plan, "unknown_outcome", detail="Apply-Ausgang lesend abgleichen; kein automatischer Retry")
                 raise
-            await self._set_state(plan, "verified")
-            return {"operation_id": plan.operation_id, "entry_id": plan.entry_id, "state": "verified", "pairing_verified": False}
+            result_state = "verified" if runtime_verification == "verified" else "verification_incomplete"
+            await self._set_state(plan, result_state,
+                                  detail=None if result_state == "verified" else "Native Optionen verifiziert; laufende HAP-Veröffentlichung nicht vollständig lesbar")
+            return {"operation_id": plan.operation_id, "entry_id": plan.entry_id, "state": result_state,
+                    "runtime_verification": runtime_verification, "pairing_verified": False}
 
     async def reconcile(self, operation_id: str) -> dict[str, Any]:
         """Read actual state after a lost response; never call a writer."""

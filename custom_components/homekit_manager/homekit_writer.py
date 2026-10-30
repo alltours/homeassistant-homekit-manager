@@ -63,6 +63,13 @@ _locks: dict[str, asyncio.Lock] = {}
 ACTIVATION_TIMEOUT = 30.0
 
 
+def _has_broad_rules(config: Mapping[str, Any]) -> bool:
+    """Return whether Core could select entities not named explicitly."""
+    return any(config.get(key) for key in (
+        "include_domains", "exclude_domains", "include_entity_globs", "exclude_entity_globs"
+    )) or not config.get("include_entities")
+
+
 def _entry_options(bridge: Mapping[str, Any]) -> dict[str, Any]:
     data = bridge.get("data")
     options = bridge.get("options")
@@ -101,15 +108,22 @@ def _positive_list_filter(current: Mapping[str, Any], desired: Mapping[str, str]
     """Build a nonempty whitelist; broad source rules need live HAP proof."""
     if set(current) - set(_FILTER_LIST_KEYS):
         raise HomeKitWriteBlocked("Unbekannte HomeKit-Filterfelder verhindern die Positivliste")
-    broad = not current.get("include_entities") or any(current.get(key) for key in (
-        "include_domains", "include_entity_globs", "exclude_domains", "exclude_entity_globs"
-    ))
+    broad = _has_broad_rules(current)
     if broad and evidence is None:
         raise HomeKitWriteBlocked("Bestehender breiter Filter benötigt eine gesondert nachgewiesene Positivlistenmigration")
     includes = sorted(entity_id for entity_id, status in desired.items() if status == "include")
     if not includes:
         raise HomeKitWriteBlocked("Eine leere HomeKit-Positivliste würde in Core alle Entitäten einschließen")
-    return {"include_entities": includes}
+    # Keep all Core filter keys explicit.  In particular, an empty mapping is
+    # not a safe whitelist: Core treats an empty filter as "include all".
+    return {
+        "include_entities": includes,
+        "exclude_entities": [],
+        "include_domains": [],
+        "exclude_domains": [],
+        "include_entity_globs": [],
+        "exclude_entity_globs": [],
+    }
 
 
 def _unlisted_entity_default(config: Mapping[str, Any]) -> bool:

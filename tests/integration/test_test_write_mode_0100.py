@@ -102,7 +102,7 @@ async def test_native_test_mode_applies_filter_once_and_revokes(hass, monkeypatc
     with pytest.raises(Exception, match="Bestätigung"):
         await service.apply(plan["operation_id"], **(args | {"confirmed_operation_id": "wrong"}))
     result = await service.apply(plan["operation_id"], **args)
-    assert result["state"] == "verified"
+    assert result["state"] == "verification_incomplete"
     assert entry.options["filter"]["include_entities"] == ["light.after", "light.before"]
     assert (await service.reconcile(plan["operation_id"]))["state"] == "verified"
     service.test_write_mode.disable()
@@ -182,7 +182,7 @@ async def test_admin_websocket_test_mode_without_grant_file(hass, monkeypatch,
                                     "expected_fingerprint": manager.fingerprint,
                                     "confirmed_operation_id": plan["operation_id"]})
     applied = await client.receive_json()
-    assert applied["success"] and applied["result"]["state"] == "verified"
+    assert applied["success"] and applied["result"]["state"] == "verification_incomplete"
     assert entry.options["filter"]["include_entities"] == ["light.after", "light.before"]
     await client.send_json_auto_id({"type": "homekit_manager/test_write_mode_disable"})
     disabled = await client.receive_json()

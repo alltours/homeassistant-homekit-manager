@@ -41,6 +41,8 @@ from .homekit_writer import HomeKitWriteDisabled
 from .operations import HomeKitOperationService
 from .const import INTEGRATION_VERSION, NATIVE_FILTER_WRITE_CORE_VERSIONS
 from homeassistant.const import __version__ as CORE_VERSION
+from .selection_reconciliation import reconcile_selection
+from .positive_list import read_runtime_publication
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -70,6 +72,12 @@ class HomeKitManagerCoordinator:
         # is in memory only; the existing local grant remains a separate path.
         self.operation_service = HomeKitOperationService(hass)
         self.operation_policy: dict[str, Any] = {"enabled": False, "reason": WRITE_LOCK_REASON, "automatic_retry": False}
+        self.selection_reconciliation: dict[str, Any] = {
+            "state": "unknown",
+            "aligned": False,
+            "message": "Native HomeKit-Auswahl noch nicht geprüft.",
+            "differences": {"count": 0, "desired_not_native": [], "native_not_desired": [], "unknown_entities": []},
+        }
         self.management_statuses: dict[str, dict[str, Any]] = {}
         self.migration_status: dict[str, Any] = {
             "state": "unknown",
@@ -241,6 +249,33 @@ class HomeKitManagerCoordinator:
                 mark_phase("source_io")
                 findings = build_diagnostics(inventory, bridge_data, {"valid": snapshot.valid, "error": snapshot.error})
                 fingerprint = build_fingerprint(bridge_data, inventory, snapshot.document)
+                active_publication = self._active_publication(selected_id, inventory) if selected_id else {
+                    "state": "unknown", "reason": "Keine eindeutig ausgewählte Bridge"
+                }
+                if selected_id:
+                    self.selection_reconciliation = reconcile_selection(
+                        snapshot.document, selected_id, inventory, bridge_filter, active_publication
+                    )
+                else:
+                    self.selection_reconciliation = {
+                        "state": "unknown", "aligned": False,
+                        "message": "Keine eindeutig ausgewählte HomeKit-Bridge vorhanden.",
+                        "differences": {"count": 0, "desired_not_native": [], "native_not_desired": [], "unknown_entities": []},
+                    }
+                if self.selection_reconciliation.get("state") == "mismatch":
+                    differences = self.selection_reconciliation.get("differences", {})
+                    findings.append({
+                        "code": "manager_native_mismatch",
+                        "severity": "critical",
+                        "title": "Manager-Auswahl stimmt nicht mit HomeKit-Konfiguration überein",
+                        "detail": self.selection_reconciliation.get("message", "Native Konfiguration und Manager-Entwurf weichen ab."),
+                        "desired_not_native": differences.get("desired_not_native", []),
+                        "native_not_desired": differences.get("native_not_desired", []),
+                        "recommendation": "Entwurf und native Konfiguration lesend vergleichen; keine automatische Migration durchführen.",
+                    })
+                for bridge_item in bridge_data:
+                    if bridge_item.get("entry_id") == selected_id:
+                        bridge_item["active_publication"] = active_publication
                 operation_policy = await self.operation_service.authority_status(selected_id, selected.source) if selected else {"enabled": False, "reason": "Keine Bridge ausgewählt", "automatic_retry": False}
                 if selected and selected.source == "import" and any(entry.source != "import" for entry in entries):
                     operation_policy = {"enabled": False, "reason": "Core homekit.reload würde auch native HomeKit-Entries neu laden", "automatic_retry": False}
@@ -312,7 +347,19 @@ class HomeKitManagerCoordinator:
             "events_by_type": dict(self.events_by_type),
             "refresh_requests": self.refresh_requests,
             "diagnostics": diagnostics_summary(self.diagnostic_findings),
+            "configuration_alignment": self.selection_reconciliation,
+            "desired_selection": self.selection_reconciliation.get("desired", {}),
+            "native_selection": self.selection_reconciliation.get("native", {}),
+            "active_publication": self.selection_reconciliation.get("active", {"state": "unknown"}),
+            "open_changes": self.selection_reconciliation.get("differences", {}).get("count", 0),
         }
+
+    def _active_publication(self, entry_id: str, inventory: list[dict[str, Any]]) -> dict[str, Any]:
+        """Read the running bridge mapping without touching HAP storage files."""
+        entry = self.hass.config_entries.async_get_entry(entry_id)
+        return read_runtime_publication(self.hass, entry, frozenset(
+            item["entity_id"] for item in inventory if item.get("entity_id")
+        ))
 
     def diagnostics(self) -> dict[str, Any]:
         """Return the current diagnostic snapshot without applying corrections."""
@@ -491,7 +538,7 @@ class HomeKitManagerCoordinator:
         raise ValueError("Quellenmigration ist weder für 0.9.24 noch 0.10.0 vorgesehen")
 
     def _yaml_status_payload(self, snapshot, backup_exists=False):
-        return {"document": snapshot.document, "schema_version": snapshot.document.get("schema_version"), "file_version": snapshot.file_version, "last_modified": snapshot.last_modified, "exists": snapshot.exists, "valid": snapshot.valid, "error": snapshot.error, "backup_exists": backup_exists, "included": self.configuration_sources.get("manager_include", False), "active_mode": self._active_mode(self.selected_bridge()), "fingerprint": self.fingerprint, "is_applied": False}
+        return {"document": snapshot.document, "schema_version": snapshot.document.get("schema_version"), "file_version": snapshot.file_version, "last_modified": snapshot.last_modified, "exists": snapshot.exists, "valid": snapshot.valid, "error": snapshot.error, "backup_exists": backup_exists, "included": self.configuration_sources.get("manager_include", False), "active_mode": self._active_mode(self.selected_bridge()), "fingerprint": self.fingerprint, "is_applied": False, "configuration_alignment": self.selection_reconciliation}
 
     async def async_yaml_status(self) -> dict[str, Any]:
         async with self._refresh_lock:
@@ -524,6 +571,35 @@ class HomeKitManagerCoordinator:
         bridge = self.selected_bridge()
         entry_id = bridge.get("entry_id") if bridge else None
         result = plan_changes(bridge, validated["document"], self.inventory, entry_id)
+        if bridge and entry_id:
+            current_filter = bridge.get("filter") or {}
+            requested = validated["document"].get("bridges", {}).get(entry_id, {})
+            if requested.get("policy") == "positive_list":
+                native_selected = sorted(
+                    item["entity_id"] for item in self.inventory
+                    if item.get("homekit", {}).get("configured_by_filter") is True
+                )
+                requested_includes = sorted(
+                    entity_id for entity_id, status in requested.get("entities", {}).items()
+                    if status == "include"
+                )
+                saved = self.yaml_snapshot.document.get("bridges", {}).get(entry_id, {})
+                result["migration_preview"] = {
+                    "current_native_filter": current_filter,
+                    "current_native_selected": native_selected,
+                    "stored_manager_exclusions": sorted(
+                        entity_id for entity_id, status in saved.get("entities", {}).items()
+                        if status == "exclude"
+                    ),
+                    "proposed_positive_list": requested_includes,
+                    "to_add": sorted(set(requested_includes) - set(native_selected)),
+                    "to_remove": sorted(set(native_selected) - set(requested_includes)),
+                    "active_publication": self.selection_reconciliation.get("active", {"state": "unknown"}),
+                    "security_warnings": [
+                        "Breite Domain-/Glob-Regeln werden erst nach gesonderter Bestätigung entfernt.",
+                        "Gespeicherte Ausschlüsse werden nicht automatisch als vollständige Benutzerabsicht interpretiert.",
+                    ],
+                }
         result.update({"valid": True, "fingerprint": self.fingerprint, "yaml_file_version": self.yaml_snapshot.file_version})
         return result
 

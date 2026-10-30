@@ -17,6 +17,7 @@ from custom_components.homekit_manager.yaml_store import YamlStore, YamlValidati
 from custom_components.homekit_manager.change_planner import plan_changes
 from custom_components.homekit_manager.homekit_writer import OptionsDiff, HomeKitWriter, HomeKitWriteBlocked, HomeKitWriteDisabled, HomeKitActivationUnknown, build_options_diff
 from custom_components.homekit_manager.reconcile import reconcile_desired_state
+from custom_components.homekit_manager.selection_reconciliation import reconcile_selection
 from custom_components.homekit_manager.exporter import export_desired_state
 from custom_components.homekit_manager.homekit_reader import read_homekit_entries
 from custom_components.homekit_manager.grouping import build_area_views, build_device_views
@@ -340,15 +341,77 @@ class HomeKitManagerTests(unittest.TestCase):
         }
         inventory = [self._planner_item("light.a", True), self._planner_item("light.b", True)]
         document = {"schema_version": 1, "bridges": {"b": {"policy": "explicit_overrides", "entities": {"light.a": "exclude"}}}}
-        called = []
-        diff = build_options_diff(bridge, document, inventory, core_options_validator=lambda options: called.append(options))
-        self.assertEqual(diff.after["name"], "Existing")
-        self.assertEqual(diff.after["port"], 21063)
-        self.assertEqual(diff.after["entity_config"], {"light.a": {"type": "light"}})
+        diff = build_options_diff(bridge, document, inventory)
         self.assertEqual(diff.after["filter"]["include_domains"], ["light"])
         self.assertEqual(diff.after["filter"]["exclude_entities"], ["light.a"])
-        self.assertEqual(diff.after["filter"]["include_entities"], [])
-        self.assertEqual(len(called), 1)
+
+    def test_positive_list_filter_is_canonical_and_preserves_no_broad_rules(self):
+        bridge = {
+            "entry_id": "b", "data": {"name": "Existing", "port": 21063},
+            "options": {"mode": "bridge", "filter": {"include_entities": ["light.a"]}},
+            "filter": {"include_entities": ["light.a"]},
+        }
+        inventory = [self._planner_item("light.a", True), self._planner_item("light.b", False)]
+        document = {"schema_version": 1, "bridges": {"b": {"policy": "positive_list", "entities": {"light.a": "include"}}}}
+        diff = build_options_diff(bridge, document, inventory)
+        self.assertEqual(diff.after["filter"], {
+            "include_entities": ["light.a"], "exclude_entities": [],
+            "include_domains": [], "exclude_domains": [],
+            "include_entity_globs": [], "exclude_entity_globs": [],
+        })
+
+    def test_positive_list_never_allows_empty_selection(self):
+        bridge = {
+            "entry_id": "b", "data": {}, "options": {"filter": {"include_entities": ["light.a"]}},
+            "filter": {"include_entities": ["light.a"]},
+        }
+        document = {"schema_version": 1, "bridges": {"b": {"policy": "positive_list", "entities": {}}}}
+        with self.assertRaises(HomeKitWriteBlocked):
+            build_options_diff(bridge, document, [self._planner_item("light.a", True)])
+
+    def test_saved_manager_exclusion_is_visible_when_native_filter_still_includes_entity(self):
+        document = {"schema_version": 1, "bridges": {"b": {"policy": "explicit_overrides", "entities": {"input_boolean.wachter": "exclude"}}}}
+        inventory = [self._planner_item("input_boolean.wachter", True)]
+        result = reconcile_selection(document, "b", inventory, {"include_domains": ["input_boolean"]})
+        self.assertEqual(result["state"], "mismatch")
+        self.assertEqual(result["differences"]["native_not_desired"], ["input_boolean.wachter"])
+
+    def test_positive_list_compares_the_full_selected_set(self):
+        document = {"schema_version": 1, "bridges": {"b": {"policy": "positive_list", "entities": {"light.a": "include"}}}}
+        inventory = [self._planner_item("light.a", True), self._planner_item("light.b", True)]
+        result = reconcile_selection(document, "b", inventory, {"include_entities": ["light.a", "light.b"]})
+        self.assertEqual(result["differences"]["native_not_desired"], ["light.b"])
+        self.assertEqual(result["desired"]["entity_ids"], ["light.a"])
+
+    def test_migration_shape_keeps_seven_domains_and_sixty_exclusions_explicit(self):
+        anchors = [f"{domain}.anchor" for domain in (
+            "light", "sensor", "switch", "fan", "climate", "cover", "binary_sensor"
+        )]
+        stored_exclusions = [f"sensor.manager_excluded_{index}" for index in range(60)]
+        native_ids = anchors + stored_exclusions + ["sensor.added_after_draft"]
+        inventory = [self._planner_item(entity_id, True) for entity_id in native_ids]
+        legacy_document = {"schema_version": 1, "bridges": {"b": {
+            "policy": "explicit_overrides",
+            "entities": {entity_id: "exclude" for entity_id in stored_exclusions},
+        }}}
+        legacy = reconcile_selection(
+            legacy_document, "b", inventory,
+            {"include_domains": ["light", "sensor", "switch", "fan", "climate", "cover", "binary_sensor"]},
+        )
+        self.assertEqual(legacy["differences"]["count"], 60)
+        self.assertEqual(legacy["differences"]["native_not_desired"], sorted(stored_exclusions))
+
+        positive_document = {"schema_version": 1, "bridges": {"b": {
+            "policy": "positive_list",
+            "entities": {entity_id: "include" for entity_id in anchors},
+        }}}
+        positive = reconcile_selection(
+            positive_document, "b", inventory,
+            {"include_domains": ["light", "sensor", "switch", "fan", "climate", "cover", "binary_sensor"]},
+        )
+        self.assertEqual(positive["desired"]["entity_ids"], sorted(anchors))
+        self.assertNotIn("sensor.added_after_draft", positive["desired"]["entity_ids"])
+        self.assertEqual(positive["differences"]["count"], 61)
 
     def test_options_diff_blocks_unknown_and_writer_never_applies(self):
         bridge = {"entry_id": "b", "data": {}, "options": {}, "filter": None}

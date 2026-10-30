@@ -54,8 +54,8 @@ async def test_native_operation_requires_backend_gate_admin_and_exact_confirmati
         await service.apply(plan["operation_id"], **args)
     with pytest.raises(HomeKitWriteBlocked):
         await service.apply(plan["operation_id"], **(args | {"confirmed_operation_id": "wrong"}), admin=True)
-    assert (await service.apply(plan["operation_id"], **args, admin=True))["state"] == "verified"
-    assert (await service.status(plan["operation_id"]))["state"] == "verified"
+    assert (await service.apply(plan["operation_id"], **args, admin=True))["state"] == "verification_incomplete"
+    assert (await service.status(plan["operation_id"]))["state"] == "verification_incomplete"
     assert (await service.reconcile(plan["operation_id"]))["state"] == "verified"
     reopened = HomeKitOperationService(hass)
     assert (await reopened.reconcile(plan["operation_id"]))["state"] == "verified"
@@ -148,5 +148,5 @@ async def test_reconcile_waits_for_running_native_apply(hass, monkeypatch):
     await asyncio.sleep(0)
     assert not reconciling.done()
     release.set()
-    assert (await applying)["state"] == "verified"
+    assert (await applying)["state"] == "verification_incomplete"
     assert (await reconciling)["state"] == "verified"

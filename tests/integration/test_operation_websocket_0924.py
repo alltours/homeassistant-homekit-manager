@@ -60,7 +60,7 @@ async def test_admin_operation_websocket_isolated_apply_and_verify(hass, enable_
                                     "confirmed_operation_id": plan["operation_id"]})
     response = await client.receive_json()
     assert response["success"], response
-    assert response["result"]["state"] == "verified"
+    assert response["result"]["state"] == "verification_incomplete"
     assert native.options["filter"]["include_entities"] == ["light.after", "light.before"]
 
 
@@ -115,16 +115,16 @@ async def test_admin_websocket_direct_yaml_apply_preserves_other_config(hass, tm
     monkeypatch.setattr("homeassistant.components.homekit.async_port_is_available", lambda _port: True)
     source = tmp_path / "configuration.yaml"
     before = (
-        "# untouched\n"
-        "homekit:\n"
-        "  - name: Direct WS Bridge\n"
-        "    port: 21090\n"
-        "    filter:\n"
-        "      include_entities:\n"
-        "        - light.before\n"
-        "logger:\n"
-        "  default: warning\n"
-    ).encode()
+        b"# untouched\n"
+        b"homekit:\n"
+        b"  - name: Direct WS Bridge\n"
+        b"    port: 21090\n"
+        b"    filter:\n"
+        b"      include_entities:\n"
+        b"        - light.before\n"
+        b"logger:\n"
+        b"  default: warning\n"
+    )
     source.write_bytes(before)
     assert await async_setup_component(hass, "homekit", await async_hass_config_yaml(hass))
     await hass.async_block_till_done()

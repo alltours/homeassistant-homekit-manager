@@ -90,7 +90,14 @@ def test_positive_list_preserves_selected_entities_and_excludes_future_entities(
     diff = _positive_diff({"include_entities": ["light.keep", "light.remove"]},
                           {"light.keep": "include", "light.new": "include"})
     assert diff.changed_entities == ("light.new", "light.remove")
-    assert diff.after["filter"] == {"include_entities": ["light.keep", "light.new"]}
+    assert diff.after["filter"] == {
+        "include_entities": ["light.keep", "light.new"],
+        "exclude_entities": [],
+        "include_domains": [],
+        "exclude_domains": [],
+        "include_entity_globs": [],
+        "exclude_entity_globs": [],
+    }
     assert evaluate_filter("light.future", config=diff.after["filter"]).configured is False
 
 

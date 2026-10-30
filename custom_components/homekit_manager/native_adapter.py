@@ -13,9 +13,10 @@ from uuid import uuid4
 
 from homeassistant.helpers.storage import Store
 
+from .const import NATIVE_FILTER_WRITE_CORE_VERSIONS
 from .homekit_writer import HomeKitWriter, HomeKitWriteBlocked, OptionsDiff, build_options_diff
 from .source_model import HomeKitSource, native_source, revision
-from .positive_list import PositiveListEvidence, collect_migration_evidence, verify_migration_runtime
+from .positive_list import PositiveListEvidence, collect_migration_evidence, read_runtime_publication, verify_migration_runtime
 
 
 _OPERATION_LOCKS: dict[str, asyncio.Lock] = {}
@@ -82,8 +83,10 @@ class NativeHomeKitAdapter:
         broad = not current_filter.get("include_entities") or any(current_filter.get(key) for key in (
             "include_domains", "include_entity_globs", "exclude_domains", "exclude_entity_globs"
         ))
-        if positive and broad and snapshot.core_version != "2026.10.4":
-            raise HomeKitWriteBlocked("Positivlistenmigration ist nur mit Core 2026.10.4 isoliert verifiziert")
+        if positive and broad and snapshot.core_version not in NATIVE_FILTER_WRITE_CORE_VERSIONS:
+            raise HomeKitWriteBlocked(
+                "Positivlistenmigration ist für diese Home-Assistant-Core-Version nicht verifiziert"
+            )
         inventory_ids = frozenset(item["entity_id"] for item in inventory if item.get("entity_id"))
         evidence = (collect_migration_evidence(self.hass, current, inventory_ids, current_filter)
                     if positive and broad and requested.get("migration_acknowledged") is True else None)
@@ -144,11 +147,26 @@ class NativeHomeKitAdapter:
                     )
                     verify_migration_runtime(plan.migration_evidence, after,
                                              frozenset(plan.diff.after["filter"]["include_entities"]))
+                entry = self.hass.config_entries.async_get_entry(plan.entry_id)
+                runtime = read_runtime_publication(self.hass, entry, plan.inventory_ids)
+                expected_ids = frozenset(plan.diff.after["filter"].get("include_entities", []))
+                if runtime["state"] == "verified" and not expected_ids:
+                    raise HomeKitWriteBlocked("Eine verifizierte Positivliste darf nicht leer sein")
+                if runtime["state"] == "verified" and runtime["entity_ids"]:
+                    unexpected = set(runtime["entity_ids"]) - expected_ids
+                    if unexpected:
+                        raise HomeKitWriteBlocked(
+                            "Nicht ausgewählte Entitäten sind nach Apply als HAP-Accessories aktiv: "
+                            + ", ".join(sorted(unexpected))
+                        )
+                runtime_verification = "verified" if runtime["state"] == "verified" and set(runtime["entity_ids"]) == expected_ids else "incomplete"
             except Exception:
                 await self._record(plan, "unknown_outcome")
                 raise
             await self._record(plan, "verified_options")
-            return result | {"verification": "verified_options", "pairing_verified": False, "operation_id": plan.operation_id}
+            return result | {"verification": "verified_options", "runtime_verification": runtime_verification,
+                             "runtime_reason": runtime.get("reason"), "pairing_verified": False,
+                             "operation_id": plan.operation_id}
 
     async def reconcile_operation(self, operation_id: str) -> str:
         """Recover status after a lost response; never repeat a write."""
@@ -166,7 +184,7 @@ class NativeHomeKitAdapter:
         return "unknown_outcome"
 
     async def recover(self, plan: NativeFilterPlan) -> str:
-        """Isolated option reversal; not a guarantee for HAP or Apple Home."""
+        """Isolated option reversal with native/HAP identity verification."""
         if not self._isolated_test_authority:
             from .homekit_writer import HomeKitWriteDisabled
             from .safety import WRITE_LOCK_REASON
@@ -176,7 +194,18 @@ class NativeHomeKitAdapter:
         inverse = OptionsDiff(plan.entry_id, deepcopy(plan.diff.after), deepcopy(plan.diff.before),
                               plan.diff.changed_keys, plan.diff.changed_entities, plan.diff.plan)
         await HomeKitWriter(self.hass, test_environment=True, apply_enabled=True).async_apply(inverse)
-        if self.read(plan.entry_id).revision != plan.source_revision:
+        restored = self.hass.config_entries.async_get_entry(plan.entry_id)
+        restored_filter = dict(restored.options).get("filter") if restored else None
+        if restored is None or restored_filter != plan.diff.before.get("filter") or getattr(restored.state, "value", restored.state) != "loaded":
             raise HomeKitWriteBlocked("Native Options-Wiederherstellung nicht verifiziert")
+        if plan.migration_evidence is not None:
+            restored_evidence = collect_migration_evidence(
+                self.hass, restored, plan.inventory_ids, restored_filter
+            )
+            verify_migration_runtime(
+                plan.migration_evidence,
+                restored_evidence,
+                plan.migration_evidence.published_ids,
+            )
         await self._record(plan, "verified_options_restore")
         return "verified_options_restore"

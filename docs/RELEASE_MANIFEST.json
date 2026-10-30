@@ -149,8 +149,8 @@
     },
     {
       "path": "native_adapter.py",
-      "sha256": "e64ddbac4fc68596dc482e69e8c93019b989457bdbce6ba11730b82fe3a1ebcb",
-      "size": 11966
+      "sha256": "de6c124734a05f46b80e84f39a07c5e3935162106565c860402fac3ca39be109",
+      "size": 12343
     },
     {
       "path": "operations.py",

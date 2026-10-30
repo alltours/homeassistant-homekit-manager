@@ -13,6 +13,7 @@ from typing import Any, Mapping
 
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entityfilter import FILTER_SCHEMA
+from .runtime_diagnostics import diagnose_runtime, runtime_publication_summary
 
 
 class PositiveListBlocked(ValueError):
@@ -25,35 +26,8 @@ def read_runtime_publication(hass: Any, entry: Any, inventory_ids: frozenset[str
     The result is deliberately conservative: an unreadable or ambiguous HAP
     mapping is ``unknown`` rather than an empty publication.
     """
-    runtime = getattr(getattr(entry, "runtime_data", None), "homekit", None)
-    bridge = getattr(runtime, "bridge", None)
-    storage = getattr(runtime, "aid_storage", None)
-    accessories = getattr(bridge, "accessories", None)
-    if storage is None or not isinstance(accessories, dict):
-        return {"state": "unknown", "entity_ids": [], "entity_count": 0,
-                "reason": "Die laufende HAP-Zuordnung ist nicht lesbar."}
-    aid_to_entity: dict[int, str] = {}
-    try:
-        for entity_id in inventory_ids:
-            aid = storage.get_allocated_aid_for_entity_id(entity_id)
-            if aid is not None:
-                if aid in aid_to_entity and aid_to_entity[aid] != entity_id:
-                    return {"state": "unknown", "entity_ids": [], "entity_count": 0,
-                            "reason": "Eine HAP-AID ist mehreren Entitäten zugeordnet."}
-                aid_to_entity[aid] = entity_id
-    except (AttributeError, KeyError, TypeError, ValueError):
-        return {"state": "unknown", "entity_ids": [], "entity_count": 0,
-                "reason": "Die laufende HAP-AID-Zuordnung ist nicht lesbar."}
-    entity_ids: list[str] = []
-    for aid in accessories:
-        if aid not in aid_to_entity:
-            return {"state": "unknown", "entity_ids": sorted(entity_ids),
-                    "entity_count": len(entity_ids),
-                    "reason": "Ein laufendes Accessory ist keiner Entität eindeutig zuordenbar."}
-        entity_ids.append(aid_to_entity[aid])
-    return {"state": "verified", "entity_ids": sorted(entity_ids),
-            "entity_count": len(entity_ids),
-            "reason": "Laufende HAP-Accessories lesend zugeordnet."}
+    diagnosis = diagnose_runtime(hass, entry, inventory_ids)
+    return runtime_publication_summary(diagnosis)
 
 
 @dataclass(frozen=True)

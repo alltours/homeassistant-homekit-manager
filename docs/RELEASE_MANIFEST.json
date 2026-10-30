@@ -1,6 +1,6 @@
 {
-  "integration_version": "0.10.7",
-  "file_count": 48,
+  "integration_version": "0.10.8",
+  "file_count": 50,
   "files": [
     {
       "path": "__init__.py",
@@ -44,8 +44,8 @@
     },
     {
       "path": "const.py",
-      "sha256": "cd9c7f4c782e8e28077df553e0c4327f29ec80b637c9dcba6fff2bd22f8a5a12",
-      "size": 2690
+      "sha256": "9820aa7688e21ab3fd8e4c3904847fc8b354258fcaf02e3702720c34e524dc56",
+      "size": 2746
     },
     {
       "path": "conversion.py",
@@ -54,8 +54,8 @@
     },
     {
       "path": "coordinator.py",
-      "sha256": "8c6ffffac36b375da26274e240a21b618ca6e1cba0f8cf627563a26917124481",
-      "size": 47136
+      "sha256": "c7b67e44bd889bf447b3f0695c596b092e54ffd04ded12ae1de9af5c152d7aa5",
+      "size": 51457
     },
     {
       "path": "device_config.py",
@@ -123,13 +123,18 @@
       "size": 7798
     },
     {
+      "path": "inventory_export.py",
+      "sha256": "8613232aa4bc3516f19a32552e2b8e75d060b42ba7d64e5d82d59be7c4503f0a",
+      "size": 4248
+    },
+    {
       "path": "management_store.py",
       "sha256": "0f67563d21b49d814402ab1b108df71e3b4cc6230c4b5c2cc492a524f7d1fc13",
       "size": 1719
     },
     {
       "path": "manifest.json",
-      "sha256": "12808a52bdcb8fe778114e5d2566142a2b9ef9684fc62423b885c24fde795075",
+      "sha256": "33598a7364df74492748d8ae958d0142a8ca80b0e7057f267b47fd48c10aeeff",
       "size": 516
     },
     {
@@ -169,8 +174,8 @@
     },
     {
       "path": "positive_list.py",
-      "sha256": "c50d6594d86c458112e59cb4a952dda51807e39ca0ba1e3b53d763dd459002cc",
-      "size": 8339
+      "sha256": "68cc0e9116ab3152e833a84931be2aaac84bf6e48f6917cdf9cfffa30770667c",
+      "size": 6841
     },
     {
       "path": "reconcile.py",
@@ -181,6 +186,11 @@
       "path": "rules.py",
       "sha256": "e674e11eafeedfe3a72d931b40a8905060649213e9746642afb288302e5be297",
       "size": 3679
+    },
+    {
+      "path": "runtime_diagnostics.py",
+      "sha256": "a83d7dca27f3872199f57ea9409e0058ac656b582fbb3b21b59d9c12aff51f03",
+      "size": 8600
     },
     {
       "path": "safety.py",
@@ -214,8 +224,8 @@
     },
     {
       "path": "websocket.py",
-      "sha256": "b16c1c6e95366f00c1a3bf5708da3d4e573f5c0fa020aeb5e18c5b69fb63f533",
-      "size": 27744
+      "sha256": "1993cd46ec02a5e7389a315e7ee3b4fdd575258da3c3dc3b3887d3e1e45a5a77",
+      "size": 28619
     },
     {
       "path": "write_grant.py",
@@ -229,8 +239,8 @@
     },
     {
       "path": "www/homekit-manager.js",
-      "sha256": "ce20b2fdb88390de5911d4382d126542189bae3bb7e955605e85641f90241795",
-      "size": 105992
+      "sha256": "8ab70f59c959b8fcaf006634c3dedf06e3e4d4ccf8c58907ab886b2b5c1f7974",
+      "size": 108538
     },
     {
       "path": "yaml_adapter.py",

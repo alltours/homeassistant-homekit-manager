@@ -7,7 +7,7 @@ from __future__ import annotations
 import probatio
 from homeassistant.components import websocket_api
 from .const import (
-    BRIDGES_COMMAND, SELECT_BRIDGE_COMMAND, INVENTORY_COMMAND, PREVIEW_COMMAND, SAVE_DRAFT_COMMAND, APPLY_OPTIONS_DIFF_COMMAND,
+    BRIDGES_COMMAND, SELECT_BRIDGE_COMMAND, INVENTORY_COMMAND, INVENTORY_EXPORT_COMMAND, PREVIEW_COMMAND, SAVE_DRAFT_COMMAND, APPLY_OPTIONS_DIFF_COMMAND,
     VALIDATE_DRAFT_COMMAND, YAML_STATUS_COMMAND, PREPARE_OPTIONS_DIFF_COMMAND,
     RECONCILE_COMMAND, EXPORT_COMMAND,
     MODE_STATUS_COMMAND, SET_MODE_COMMAND,
@@ -60,6 +60,25 @@ async def websocket_inventory(hass, connection, msg):
             coordinator.management_status(),
         ]
     connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({
+    probatio.Required("type"): INVENTORY_EXPORT_COMMAND,
+    probatio.Optional("format", default="json"): str,
+})
+@websocket_api.async_response
+async def websocket_inventory_export(hass, connection, msg):
+    """Export the last complete atomic inventory snapshot without writes."""
+    coordinator = hass.data["homekit_manager"]["coordinator"]
+    format_name = msg.get("format", "json")
+    if format_name not in {"json", "csv"}:
+        connection.send_error(msg["id"], "invalid_format", "Inventar kann nur als JSON oder CSV exportiert werden")
+        return
+    try:
+        connection.send_result(msg["id"], coordinator.inventory_export(format_name))
+    except ValueError as err:
+        connection.send_error(msg["id"], "invalid_format", str(err))
 
 @websocket_api.require_admin
 @websocket_api.websocket_command({
@@ -512,7 +531,7 @@ async def websocket_export(hass, connection, msg):
     except (YamlValidationError, ValueError) as err:
         connection.send_error(msg["id"], "invalid_format", str(err))
 
-REGISTERED_HANDLERS = (websocket_inventory, websocket_bulk_preview, websocket_bridges, websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_activation_status, websocket_mode_status, websocket_set_mode, websocket_migration_plan, websocket_migration_status, websocket_migration_start, websocket_management_status, websocket_management_enable, websocket_management_disable, websocket_test_write_mode_enable, websocket_test_write_mode_disable, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_apply_options_diff, websocket_operation_plan, websocket_operation_apply, websocket_operation_status, websocket_operation_reconcile, websocket_prepare_options_diff, websocket_reconcile, websocket_export)
+REGISTERED_HANDLERS = (websocket_inventory, websocket_inventory_export, websocket_bulk_preview, websocket_bridges, websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_activation_status, websocket_mode_status, websocket_set_mode, websocket_migration_plan, websocket_migration_status, websocket_migration_start, websocket_management_status, websocket_management_enable, websocket_management_disable, websocket_test_write_mode_enable, websocket_test_write_mode_disable, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_apply_options_diff, websocket_operation_plan, websocket_operation_apply, websocket_operation_status, websocket_operation_reconcile, websocket_prepare_options_diff, websocket_reconcile, websocket_export)
 
 
 def async_register_websocket_commands(hass, coordinator) -> None:

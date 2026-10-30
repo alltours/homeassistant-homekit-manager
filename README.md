@@ -1,4 +1,28 @@
-# HomeKit Manager 0.10.7
+# HomeKit Manager 0.10.8
+
+Version 0.10.8 adds a read-only inventory and runtime-diagnosis layer for the
+existing 0.10.7 positive-list workflow. The integration exports one
+deterministic snapshot as JSON or CSV, including entities without a device or
+area, and marks incomplete snapshots explicitly. State attributes, sensor
+values, pairing keys and HAP secrets are not exported.
+
+Native filter selection, explicit Manager decisions and runtime HAP
+publication remain separate evidence. A current filter match or a currently
+published accessory is not treated as user intent. Runtime mapping is
+feature-detected against the running Home Assistant Core; partial or ambiguous
+mapping stays `unknown` instead of being reported as a verified negative.
+
+The diagnostics view shows the snapshot revision, completeness, accessory /
+service / characteristic counts where readable, ambiguous mappings and JSON /
+CSV export actions. Export and diagnosis are read-only and do not reload the
+bridge, allocate HAP objects, access pairing secrets or change any config
+entry.
+
+The positive-list assistant remains confirmation-driven. Recommendations and
+device/area previews never create includes. New devices and new entities are
+not automatically included, existing exclusions remain explicit, and an empty
+positive list remains blocked by the 0.10.7 safety gates. See the release notes
+and migration documentation before any later, separately authorized Apply.
 
 Version 0.10.7 makes the explicit entity positive list the safe migration
 boundary. Saved Manager drafts, native Home Assistant filter configuration and

@@ -1,6 +1,7 @@
 """Event-driven read-only coordinator."""
 from __future__ import annotations
 import asyncio
+from collections import Counter
 import logging
 import time
 from pathlib import Path
@@ -43,6 +44,8 @@ from .const import INTEGRATION_VERSION, NATIVE_FILTER_WRITE_CORE_VERSIONS
 from homeassistant.const import __version__ as CORE_VERSION
 from .selection_reconciliation import reconcile_selection
 from .positive_list import read_runtime_publication
+from .runtime_diagnostics import diagnose_runtime, runtime_publication_summary
+from .inventory_export import build_inventory_export, export_inventory_snapshot
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -113,6 +116,16 @@ class HomeKitManagerCoordinator:
         self.events_ignored = 0
         self.events_by_type: dict[str, int] = {}
         self.refresh_requests = 0
+        self.snapshot_revision = 0
+        self.snapshot_timestamp: str | None = None
+        self.snapshot_complete = False
+        self.snapshot_checks: dict[str, Any] = {}
+        self.runtime_diagnosis: dict[str, Any] = {
+            "state": "unknown",
+            "completeness": "unknown",
+            "reason": "Runtime-Diagnose noch nicht ausgeführt.",
+            "entity_status": {},
+        }
         self._last_refresh_monotonic = 0.0
         self._management_lock = asyncio.Lock()
         self._subscribe_events()
@@ -207,7 +220,31 @@ class HomeKitManagerCoordinator:
             try:
                 from homeassistant.helpers import area_registry, device_registry, entity_registry
                 devices_registry = device_registry.async_get(self.hass)
-                records = build_inventory(entity_registry.async_get(self.hass), devices_registry, area_registry.async_get(self.hass), {state.entity_id: state for state in self.hass.states.async_all()})
+                entity_registry_obj = entity_registry.async_get(self.hass)
+                area_registry_obj = area_registry.async_get(self.hass)
+                states = {state.entity_id: state for state in self.hass.states.async_all()}
+                records = build_inventory(entity_registry_obj, devices_registry, area_registry_obj, states)
+                registry_ids = {
+                    entity_id for entity_id in getattr(entity_registry_obj, "entities", {})
+                    if isinstance(entity_id, str) and "." in entity_id
+                }
+                state_ids = {
+                    entity_id for entity_id in states
+                    if isinstance(entity_id, str) and "." in entity_id
+                }
+                record_ids = [record.entity_id for record in records]
+                record_id_set = set(record_ids)
+                duplicate_ids = sorted(entity_id for entity_id, count in Counter(record_ids).items() if count > 1)
+                expected_ids = registry_ids | state_ids
+                self.snapshot_checks = {
+                    "registry_entity_count": len(registry_ids),
+                    "state_entity_count": len(state_ids),
+                    "expected_entity_count": len(expected_ids),
+                    "inventory_entity_count": len(record_ids),
+                    "missing_entity_ids": sorted(expected_ids - record_id_set),
+                    "duplicate_entity_ids": duplicate_ids,
+                }
+                self.snapshot_complete = not self.snapshot_checks["missing_entity_ids"] and not self.snapshot_checks["duplicate_entity_ids"] and len(record_id_set) == len(expected_ids)
                 device_reconciliation = reconcile_devices((vars(record) for record in records), devices_registry)
                 mark_phase("registry_inventory")
                 entries = read_homekit_entries(self.hass)
@@ -249,9 +286,24 @@ class HomeKitManagerCoordinator:
                 mark_phase("source_io")
                 findings = build_diagnostics(inventory, bridge_data, {"valid": snapshot.valid, "error": snapshot.error})
                 fingerprint = build_fingerprint(bridge_data, inventory, snapshot.document)
-                active_publication = self._active_publication(selected_id, inventory) if selected_id else {
-                    "state": "unknown", "reason": "Keine eindeutig ausgewählte Bridge"
-                }
+                if selected_id:
+                    runtime_entry = self.hass.config_entries.async_get_entry(selected_id)
+                    runtime_diagnosis = diagnose_runtime(self.hass, runtime_entry, inventory)
+                    active_publication = runtime_publication_summary(runtime_diagnosis)
+                else:
+                    runtime_diagnosis = {
+                        "state": "unknown", "completeness": "unknown",
+                        "reason": "Keine eindeutig ausgewählte Bridge",
+                        "entity_status": {item["entity_id"]: "unknown" for item in inventory},
+                        "accessories": [], "accessory_count": None,
+                        "mapped_accessory_count": 0, "ambiguous_accessory_count": 0,
+                        "service_count": None, "characteristic_count": None,
+                    }
+                    active_publication = runtime_publication_summary(runtime_diagnosis)
+                for item in inventory:
+                    runtime_status = runtime_diagnosis.get("entity_status", {}).get(item["entity_id"], "unknown")
+                    item["homekit"]["runtime_publication"] = runtime_status
+                    item["homekit"]["published"] = runtime_status
                 if selected_id:
                     self.selection_reconciliation = reconcile_selection(
                         snapshot.document, selected_id, inventory, bridge_filter, active_publication
@@ -276,6 +328,7 @@ class HomeKitManagerCoordinator:
                 for bridge_item in bridge_data:
                     if bridge_item.get("entry_id") == selected_id:
                         bridge_item["active_publication"] = active_publication
+                        bridge_item["runtime_diagnosis"] = runtime_diagnosis
                 operation_policy = await self.operation_service.authority_status(selected_id, selected.source) if selected else {"enabled": False, "reason": "Keine Bridge ausgewählt", "automatic_retry": False}
                 if selected and selected.source == "import" and any(entry.source != "import" for entry in entries):
                     operation_policy = {"enabled": False, "reason": "Core homekit.reload würde auch native HomeKit-Entries neu laden", "automatic_retry": False}
@@ -289,10 +342,13 @@ class HomeKitManagerCoordinator:
                 self.selected_bridge_id = selected_id
                 self.yaml_snapshot, self.configuration_sources = snapshot, sources
                 self.diagnostic_findings, self.fingerprint = findings, fingerprint
+                self.runtime_diagnosis = runtime_diagnosis
                 self.operation_policy = operation_policy
                 self.last_error = None
                 self.last_updated = datetime.now(timezone.utc).isoformat()
                 self.refresh_count += 1
+                self.snapshot_revision = self.refresh_count
+                self.snapshot_timestamp = self.last_updated
                 self.refresh_duration_ms = round((time.perf_counter() - started) * 1000, 2)
                 self.refresh_cpu_ms = round((time.process_time() - cpu_started) * 1000, 2)
                 self.refresh_phases_ms = phases
@@ -346,11 +402,16 @@ class HomeKitManagerCoordinator:
             "events_ignored": self.events_ignored,
             "events_by_type": dict(self.events_by_type),
             "refresh_requests": self.refresh_requests,
+            "snapshot_revision": self.snapshot_revision,
+            "snapshot_timestamp": self.snapshot_timestamp,
+            "snapshot_complete": self.snapshot_complete,
+            "snapshot_checks": dict(self.snapshot_checks),
             "diagnostics": diagnostics_summary(self.diagnostic_findings),
             "configuration_alignment": self.selection_reconciliation,
             "desired_selection": self.selection_reconciliation.get("desired", {}),
             "native_selection": self.selection_reconciliation.get("native", {}),
             "active_publication": self.selection_reconciliation.get("active", {"state": "unknown"}),
+            "runtime_diagnosis": self.runtime_diagnosis,
             "open_changes": self.selection_reconciliation.get("differences", {}).get("count", 0),
         }
 
@@ -364,6 +425,21 @@ class HomeKitManagerCoordinator:
     def diagnostics(self) -> dict[str, Any]:
         """Return the current diagnostic snapshot without applying corrections."""
         return {"findings": self.diagnostic_findings, "grouped_findings": group_diagnostics(self.diagnostic_findings), "summary": diagnostics_summary(self.diagnostic_findings), "fingerprint": self.fingerprint}
+
+    def inventory_export(self, format_name: str = "json") -> dict[str, Any]:
+        """Export the current atomic snapshot without state values or secrets."""
+        snapshot = build_inventory_export(
+            self.inventory, self.overview(), self.yaml_snapshot.document,
+            self.runtime_diagnosis,
+        )
+        return {
+            "format": format_name,
+            "filename": f"homekit-manager-inventory-{self.snapshot_revision}.{format_name}",
+            "complete": snapshot["complete"],
+            "snapshot_revision": self.snapshot_revision,
+            "fingerprint": self.fingerprint,
+            "content": export_inventory_snapshot(snapshot, format_name),
+        }
 
     def activation_status(self, entry_id: str | None = None, request_id: str | None = None) -> dict[str, Any]:
         """Report evidence without resolving unknown into success or failure."""

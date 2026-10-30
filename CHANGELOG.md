@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.8 (2026-10-30)
+
+- Add a deterministic, complete Home Assistant entity inventory snapshot with JSON and CSV export. Registry-only, state-only, device-less and area-less entities remain visible; state attributes and personal values are never exported.
+- Add a read-only native HAP runtime adapter with feature detection, redacted accessory fingerprints, service/characteristic counts and explicit `published_verified`, `not_published_verified`, `unknown`, `unsupported` and `mapping_ambiguous` states.
+- Surface snapshot completeness, runtime evidence and the three independent states (native filter, Manager decision and runtime publication) in the diagnostics and entity views.
+- Preserve draft-only positive-list selection, existing exclusions and all 0.10.7 apply gates. Runtime diagnosis and inventory export never reload, initialize or mutate HomeKit, pairings or persistence.
+
 ## 0.10.7 (2026-10-30)
 
 - Detect and display mismatches between saved Manager intent and the native HomeKit filter even without local unsaved changes.

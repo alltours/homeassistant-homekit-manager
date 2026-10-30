@@ -1,0 +1,20 @@
+{
+  "before": {
+    "area_heights": [
+      290.578125,
+      290.578125
+    ],
+    "fully_visible_areas": 0,
+    "display_options_height": 261.1875,
+    "filter_height": 58
+  },
+  "after": {
+    "area_heights": [
+      119.84375,
+      119.84375
+    ],
+    "fully_visible_areas": 2,
+    "display_options_height": 55,
+    "filter_height": 58
+  }
+}

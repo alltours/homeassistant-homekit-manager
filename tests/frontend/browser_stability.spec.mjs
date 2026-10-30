@@ -7,7 +7,7 @@ test("panel remains stable during a five minute observation", async ({ page }) =
   await page.goto("/tests/frontend/browser_fixture.html");
   const panel = page.locator("homekit-manager-panel");
   await expect(panel).toBeVisible();
-  await expect(panel.getByText("Fixture Bridge", { exact: true })).toBeVisible();
+  await expect(panel.getByRole("heading", { name: "Fixture Bridge", exact: true })).toBeVisible();
   await expect.poll(() => panel.evaluate(element => element.loading)).toBe(false);
   const initial = await panel.evaluate((element) => element.renderCount);
   await page.evaluate(async () => {

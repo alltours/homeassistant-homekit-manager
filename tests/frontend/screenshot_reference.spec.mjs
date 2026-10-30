@@ -9,7 +9,7 @@ for (const [name,width,height] of viewports) {
     await page.setViewportSize({width,height}); await page.emulateMedia({colorScheme:'dark'});
     await page.goto('/tests/frontend/browser_fixture.html?activation-error');
     const panel=page.locator('homekit-manager-panel');
-    await expect(panel.getByText('Fixture Bridge',{exact:true})).toBeVisible();
+    await expect(panel.getByRole('heading',{name:'Fixture Bridge',exact:true})).toBeVisible();
     const reference=screenshotReferenceData();
     expect(reference.entities).toHaveLength(1172);expect(reference.overview.device_count).toBe(129);expect(reference.overview.configured_entities).toBe(368);
     await panel.evaluate((element, data)=>{
@@ -23,17 +23,22 @@ for (const [name,width,height] of viewports) {
     for (const [view,label] of [['home','HomeKit'],['devices','Geräte'],['changes','Änderungen'],['settings','Einstellungen']]) {
       await panel.getByRole('tab',{name:label,exact:true}).click();
       if (view==='home') {
-        await expect(panel.locator('.status-grid')).toContainText('Schreiben');
-        await expect(panel.locator('.status-grid')).toContainText('1');
-        await expect(panel.locator('.lock-note')).toContainText('gesperrt');
+        await expect(panel.locator('.home-numbers')).toContainText('1');
+        await panel.locator('.home-details > summary').click();
+        await expect(panel.locator('.home-details')).toContainText('Schreibstatus');
+        await expect(panel.locator('.home-details')).toContainText('Gesperrt');
       }
       if (view==='devices') {
         await expect(panel.locator('.area-card')).toHaveCount(11);
         const unassigned=panel.locator('.area-card').filter({has:page.locator('[data-area="Ohne Bereich"]')});
         await expect(unassigned.locator('.area-heading')).toContainText('72 Geräte · 581 Entitäten');
-        await expect(unassigned.locator('.area-metrics dd')).toHaveText(['248','168']);
+        await unassigned.locator('.area-heading').click();
+        await unassigned.locator('.area-content > details.technical > summary').click();
+        await expect(unassigned.locator('.area-content > details.technical dd').first()).toHaveText('248');
         const kitchen=panel.locator('.area-card').filter({has:page.locator('[data-area="Küche"]')});
-        await expect(kitchen.locator('.area-metrics dd')).toHaveText(['6','13']);
+        await kitchen.locator('.area-heading').click();
+        await kitchen.locator('.area-content > details.technical > summary').click();
+        await expect(kitchen.locator('.area-content > details.technical dd').first()).toHaveText('6');
         const totals=await panel.evaluate(element=>({global:element.counts(element.entities).devices,areas:[...new Set(element.entities.map(e=>e.area_name))].map(area=>element.counts(element.entities.filter(e=>e.area_name===area)).devices)}));
         expect(totals.global).toBe(129);expect(Math.max(...totals.areas)).toBeLessThanOrEqual(totals.global);
       }
@@ -57,7 +62,7 @@ for (const [name,width,height] of viewports) {
       }
       if (view==='settings') {
         await expect(panel.locator('.settings-nav button')).toHaveCount(6);
-        await expect(panel.locator('.settings-content')).toContainText('0.10.5');
+        await expect(panel.locator('.settings-content')).toContainText('0.10.6');
       }
       const geometry=await panel.evaluate(element=>{const nav=element.shadowRoot.querySelector('.main-nav');return {page:document.documentElement.scrollWidth-innerWidth,nav:nav.scrollWidth-nav.clientWidth};});
       expect(geometry.page).toBeLessThanOrEqual(1);expect(geometry.nav).toBeLessThanOrEqual(1);

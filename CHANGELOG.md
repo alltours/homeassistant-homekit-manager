@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.6 (2026-10-30)
+
+- Condense closed area and device cards while retaining two visible draft-only bulk actions and the separate aggregate status.
+- Move display options and secondary inventory counts into the collapsed filter panel; preserve choices and open detail state on passive refresh.
+- Simplify the HomeKit overview and empty Changes view; retain positive-list, active test-mode and uncertain-operation warnings.
+- Keep source, writer authority and diagnostics in reachable technical details and Settings. No HomeKit filter, pairing or writer behavior changes.
+
 ## 0.10.5 (2026-10-29)
 
 - Calculate complete device and area bulk scopes on the server, excluding disabled, hidden, technical, missing-state, missing-registry, unsupported and unverified entities by default. A forged draft cannot newly include these entities through the filter planner.

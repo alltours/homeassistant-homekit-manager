@@ -7,12 +7,12 @@ try {
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.goto(url);
   const panel=page.locator('homekit-manager-panel');
-  await panel.getByText('Audit Bridge',{exact:true}).waitFor();
+  await panel.getByRole('heading',{name:'Audit Bridge',exact:true}).waitFor();
   for(const name of ['HomeKit','Geräte','Änderungen','Einstellungen']) {
     await panel.getByRole('tab',{name,exact:true}).click();
     assert.equal(await panel.locator('h2').first().isVisible(),true);
   }
-  assert.equal(await panel.locator('.settings-content').innerText().then(s=>s.includes('0.10.5')),true);
+  assert.equal(await panel.locator('.settings-content').innerText().then(s=>s.includes('0.10.6')),true);
   await panel.getByRole('tab',{name:'Geräte',exact:true}).click();
   await panel.locator('[data-group=entities]').click();
   await panel.getByRole('searchbox').pressSequentially('Audit');

@@ -5,6 +5,11 @@ from pathlib import Path
 import pytest
 from port_allocator import release_http_port, reserve_http_port
 
+# Integration tests exercise the same private-file contract as the production
+# YAML/write-grant path.  Establish it before any test-created source files
+# exist; individual fixtures still restore the process umask after each test.
+os.umask(0o077)
+
 
 @pytest.fixture
 def hass_config_dir(hass_tmp_config_dir):

@@ -6,20 +6,30 @@ recovery; it is not, by itself, an atomic commit across Core and HAP state.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import tempfile
-from typing import Any, Mapping
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
 from uuid import uuid4
-
 
 JOURNAL_SCHEMA_VERSION = 1
 TERMINAL_STATES = frozenset({"COMMITTED", "ROLLED_BACK", "FAILED", "MANUAL_RECOVERY_REQUIRED"})
+VALID_STATES = frozenset({
+    "PREFLIGHT", "LOCKED", "SNAPSHOT_CREATED", "PREPARED", "QUIESCING",
+    "SOURCE_SWITCHING", "RELOADING", "VERIFYING", "ROLLBACK_REQUIRED",
+    "ROLLING_BACK", *TERMINAL_STATES,
+})
+VALID_RECOVERY_STATUSES = frozenset({
+    "not_required", "failed_before_native_change", "rollback_required",
+    "rollback_failed", "RECOVERY_COMPLETED", "ROLLBACK_COMPLETED",
+    "RECOVERY_BLOCKED", "MANUAL_RECOVERY_REQUIRED",
+})
 SENSITIVE_WORDS = re.compile(r"(?:password|token|secret|pairing|private|pin|key)", re.IGNORECASE)
 
 
@@ -36,7 +46,7 @@ class JournalDurabilityError(JournalError):
 
 
 def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _redact_text(value: str | None) -> str | None:
@@ -86,7 +96,7 @@ class JournalRecord:
         target: str,
         baseline_fingerprint: str,
         config_revision: str,
-    ) -> "JournalRecord":
+    ) -> JournalRecord:
         return cls(
             transaction_id=str(uuid4()),
             bridge_id=bridge_id,
@@ -117,7 +127,7 @@ class JournalRecord:
         }
 
     @classmethod
-    def from_dict(cls, value: Mapping[str, Any]) -> "JournalRecord":
+    def from_dict(cls, value: Mapping[str, Any]) -> JournalRecord:
         if value.get("schema_version") != JOURNAL_SCHEMA_VERSION:
             raise JournalCorruptError("Unbekannte Journal-Version")
         required = (
@@ -139,6 +149,10 @@ class JournalRecord:
             raise JournalCorruptError("Unvollständige Journal-Struktur")
         if not all(isinstance(value.get(key), str) and value.get(key) for key in required[:7]):
             raise JournalCorruptError("Ungültige Journal-Identität")
+        if value["source"] not in {"user", "import"} or value["target"] not in {"user", "import"}:
+            raise JournalCorruptError("Ungültige HomeKit-Quelle im Journal")
+        if value["state"] not in VALID_STATES:
+            raise JournalCorruptError("Unbekannter Journal-Zustand")
         operations = value["completed_operations"]
         checksums = value["checksums"]
         if not isinstance(operations, list) or not all(isinstance(item, str) for item in operations):
@@ -152,6 +166,10 @@ class JournalRecord:
         error = value.get("error")
         if error is not None and not isinstance(error, str):
             raise JournalCorruptError("Ungültige Fehlerdiagnose")
+        if not isinstance(value["recovery_status"], str) or value["recovery_status"] not in VALID_RECOVERY_STATUSES:
+            raise JournalCorruptError("Unbekannter Recovery-Status")
+        if not all(isinstance(value.get(key), str) and value[key] for key in ("created_at", "updated_at")):
+            raise JournalCorruptError("Ungültige Journal-Zeitstempel")
         return cls(
             transaction_id=value["transaction_id"],
             bridge_id=value["bridge_id"],
@@ -177,7 +195,7 @@ class JournalRecord:
         checksums: Mapping[str, str] | None = None,
         recovery_status: str | None = None,
         error: str | None = None,
-    ) -> "JournalRecord":
+    ) -> JournalRecord:
         operations = list(self.completed_operations)
         if completed_operation and completed_operation not in operations:
             operations.append(completed_operation)
@@ -211,10 +229,27 @@ def canonical_fingerprint(value: Mapping[str, Any]) -> str:
 class JournalStore:
     """Atomically persist and recover one journal image."""
 
-    def __init__(self, path: str | Path):
+    def __init__(
+        self,
+        path: str | Path,
+        *,
+        fault_injector: Callable[[str, Path], None] | None = None,
+    ):
         self.path = Path(path)
+        self.fault_injector = fault_injector
+
+    def _fault(self, point: str) -> None:
+        if self.fault_injector:
+            self.fault_injector(point, self.path)
 
     def load(self) -> JournalRecord | None:
+        if self.path.is_symlink():
+            raise JournalCorruptError("Journal darf kein Symlink sein")
+        try:
+            if self.path.exists() and self.path.stat().st_nlink != 1:
+                raise JournalCorruptError("Journal darf kein Hardlink sein")
+        except OSError as err:
+            raise JournalError("Journal-Metadaten konnten nicht gelesen werden") from err
         try:
             content = self.path.read_text(encoding="utf-8")
         except FileNotFoundError:
@@ -240,6 +275,7 @@ class JournalStore:
         self.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         temporary: str | None = None
         try:
+            self._fault("BEFORE_JOURNAL_WRITE")
             with tempfile.NamedTemporaryFile(
                 mode="wb",
                 dir=self.path.parent,
@@ -250,15 +286,20 @@ class JournalStore:
                 temporary = handle.name
                 handle.write(payload)
                 handle.flush()
+                self._fault("DURING_JOURNAL_WRITE")
                 os.fsync(handle.fileno())
+                self._fault("AFTER_JOURNAL_WRITE")
             Path(temporary).chmod(0o600)
+            self._fault("BEFORE_JOURNAL_RENAME")
             os.replace(temporary, self.path)
             temporary = None
+            self._fault("AFTER_JOURNAL_RENAME")
             directory_fd = os.open(self.path.parent, os.O_RDONLY)
             try:
                 os.fsync(directory_fd)
             finally:
                 os.close(directory_fd)
+            self._fault("AFTER_JOURNAL_SYNC")
         except OSError as err:
             raise JournalDurabilityError("Journal konnte nicht dauerhaft gespeichert werden") from err
         finally:

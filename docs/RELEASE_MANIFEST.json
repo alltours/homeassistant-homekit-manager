@@ -1,5 +1,5 @@
 {
-  "integration_version": "0.10.15",
+  "integration_version": "0.10.16",
   "file_count": 58,
   "files": [
     {
@@ -44,7 +44,7 @@
     },
     {
       "path": "const.py",
-      "sha256": "a208ca1943423f1a439e3bfcc122c918796ba13b8c3f48b1d7a3f20c8c81b707",
+      "sha256": "3d88d6f50e2166b51da9673aa20851bf1716e18289ee48881624a2a4dacd9537",
       "size": 2747
     },
     {
@@ -144,7 +144,7 @@
     },
     {
       "path": "manifest.json",
-      "sha256": "cf9a596c28db3826bad11940568be4c99449e15cf950be05a85ec3325715755f",
+      "sha256": "33d4468bfad9b3834828beb524cd4c974da75f1985c298c29cccc5c033f7ad7b",
       "size": 517
     },
     {
@@ -159,8 +159,8 @@
     },
     {
       "path": "migration_journal.py",
-      "sha256": "a7b6aa66f20dffd1f6e2b4902b386e3d9ae4510b7a4b5b1126ba01a7ae0c6b8b",
-      "size": 9828
+      "sha256": "aa4310fa6ce33b941ac9b20b3e52dd35eb46e1e8a0adad437d5193e31ce55502",
+      "size": 11899
     },
     {
       "path": "migration_lock.py",
@@ -174,8 +174,8 @@
     },
     {
       "path": "migration_snapshot.py",
-      "sha256": "5587fc2879ffb15f4c291768b693e2aa8a6c222fc1f8413cb8d674ca7ff11595",
-      "size": 4604
+      "sha256": "8f8b8024b22cac258e0f62b263cd0e9b8f2cf66ef80b817386e0299f37d675fd",
+      "size": 8337
     },
     {
       "path": "migration_store.py",

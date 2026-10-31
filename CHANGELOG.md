@@ -1,5 +1,16 @@
 # Changelog
 
+# 0.10.16 (development)
+
+- Add fail-closed migration journal and snapshot integrity validation,
+  including symlink/hardlink rejection, schema validation and checksums.
+- Add isolated Core journal write fault tests for ENOSPC, EIO and EACCES and
+  corruption tests covering both migration directions.
+- Make migration prepare/switch failures explicit in the full-Core worker so a
+  failed persistence step cannot be mistaken for a crashed migration.
+- Keep the native source migration experimental and blocked in the production
+  Manager integration.
+
 # 0.10.15 (development)
 
 - Add full Home Assistant Core multi-bridge crash-recovery coverage for the

@@ -1,4 +1,10 @@
-# HomeKit Manager 0.10.15 (development)
+# HomeKit Manager 0.10.16 (development)
+
+Version 0.10.16 adds fail-closed persistence-integrity checks around the
+experimental Core-owned migration boundary, including strict journal loading,
+snapshot checksums, simulated Core journal I/O faults and corruption tests.
+The native migration path remains experimental and unavailable in the
+production Manager integration.
 
 Version 0.10.14 adds an isolated Core-owned migration boundary around the
 existing dual-mode administration surface for `UI / Bridge`

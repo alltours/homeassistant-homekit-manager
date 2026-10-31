@@ -133,7 +133,13 @@ async def wait_for_entries(hass, expected_sources: dict[str, str]):
         "HomeKit entries did not reach the expected state: "
         + repr(
             [
-                (entry.entry_id, entry.data.get("name"), entry.source, entry.state.value)
+                (
+                    entry.entry_id,
+                    entry.data.get("name"),
+                    entry.source,
+                    entry.state.value,
+                    entry.reason,
+                )
                 for entry in entries
             ]
         )
@@ -282,7 +288,12 @@ async def _verify_both(shared: Path, hass, expected_a_source: str) -> None:
         await _reconnect(shared, name, baseline)
 
     observation = hass.data.get("homekit_migration", {})
-    assert observation.get("entry_id") in {None, entries["Bridge A"].entry_id}
+    if observation.get("action") == "manual_recovery":
+        # A corrupted request may contain an untrusted entry id.  It must not
+        # be interpreted as Bridge B, but the test must not bless it as A.
+        assert observation.get("entry_id") != entries["Bridge B"].entry_id
+    else:
+        assert observation.get("entry_id") in {None, entries["Bridge A"].entry_id}
 
 
 async def run() -> None:
@@ -291,6 +302,7 @@ async def run() -> None:
     phase = os.environ["HKM_CORE_MULTIBRIDGE_PHASE"]
     name = "Bridge A"
     yaml_bridge = direction == "yaml_to_ui"
+    expected_source_override = os.environ.get("HKM_CORE_MULTIBRIDGE_EXPECT_SOURCE")
 
     if phase == "pair":
         port_a, port_b = free_loopback_port(), free_loopback_port()
@@ -333,6 +345,10 @@ async def run() -> None:
 
         await hass.async_start()
         await hass.async_block_till_done()
+        if phase == "verify_corrupt":
+            observation = hass.data.get("homekit_migration", {})
+            assert observation.get("action") == "manual_recovery", observation
+            assert observation.get("state") == "MANUAL_RECOVERY_REQUIRED", observation
         if phase == "migrate":
             entries = await wait_for_entries(
                 hass,
@@ -345,7 +361,6 @@ async def run() -> None:
             )
             entry_a = entries["Bridge A"]
             baseline = _load_baseline(shared, "Bridge A")
-            write_configuration(shared, yaml_bridge=True, name=name, port=entry_a.data["port"])
             await hass.config_entries.async_unload(entry_a.entry_id)
             await hass.async_block_till_done()
             target = (
@@ -371,8 +386,14 @@ async def run() -> None:
                 "allowlist": baseline["logical"]["allowlist"],
                 "mac": baseline["logical"]["mac"],
             }
-            await async_prepare(hass, request)
-            await async_switch(hass, request["transaction_id"])
+            prepared = await async_prepare(hass, request)
+            if prepared.get("state") != "PREPARED":
+                raise RuntimeError(f"HomeKit migration prepare failed: {prepared!r}")
+            if target == config_entries.SOURCE_IMPORT:
+                write_configuration(shared, yaml_bridge=True, name=name, port=entry_a.data["port"])
+            switched = await async_switch(hass, request["transaction_id"])
+            if switched.get("state") != "SOURCE_SWITCHED":
+                raise RuntimeError(f"HomeKit migration switch failed: {switched!r}")
             await hass.async_block_till_done()
             (shared / "fault-reached").write_text("AFTER_SOURCE_MUTATION", encoding="utf-8")
             os.kill(os.getpid(), signal.SIGKILL)
@@ -380,9 +401,12 @@ async def run() -> None:
         await _verify_both(
             shared,
             hass,
-            config_entries.SOURCE_IMPORT
-            if direction == "ui_to_yaml"
-            else config_entries.SOURCE_USER,
+            expected_source_override
+            or (
+                config_entries.SOURCE_IMPORT
+                if direction == "ui_to_yaml"
+                else config_entries.SOURCE_USER
+            ),
         )
         await hass.async_stop(force=True)
 

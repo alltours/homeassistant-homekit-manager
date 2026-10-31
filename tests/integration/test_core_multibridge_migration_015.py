@@ -15,7 +15,13 @@ WORKER = Path(__file__).with_name("_core_multibridge_migration_worker_015.py")
 
 
 def _run(
-    directory: str, direction: str, phase: str, *, fault: str | None = None
+    directory: str,
+    direction: str,
+    phase: str,
+    *,
+    fault: str | None = None,
+    error_name: str | None = None,
+    expected_source: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     environment = dict(
         os.environ,
@@ -29,6 +35,10 @@ def _run(
     if fault:
         environment["HKM_CORE_MIGRATION_TEST_MODE"] = "1"
         environment["HKM_CORE_MIGRATION_TEST_FAULT"] = fault
+    if error_name:
+        environment["HKM_CORE_MIGRATION_TEST_ERRNO"] = error_name
+    if expected_source:
+        environment["HKM_CORE_MULTIBRIDGE_EXPECT_SOURCE"] = expected_source
     return subprocess.run(
         [sys.executable, "-X", "faulthandler", str(WORKER)],
         cwd=ROOT,

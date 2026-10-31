@@ -1,6 +1,6 @@
 {
   "integration_version": "0.10.13",
-  "file_count": 57,
+  "file_count": 58,
   "files": [
     {
       "path": "__init__.py",
@@ -54,8 +54,13 @@
     },
     {
       "path": "coordinator.py",
-      "sha256": "ac9ca6d9b9f3134aafed004fe7e2bf60cc2af61815aec34b0d79b53515d30969",
-      "size": 52030
+      "sha256": "f059eaa8c7f0a32ee0fd40eada21210fa49bdb472a5ff58fc0ee71558abc2eb3",
+      "size": 52173
+    },
+    {
+      "path": "core_migration.py",
+      "sha256": "0ce2609a6f1a38508eb2534f5eba50cddc285d7c31c8ba327338a9a05e573655",
+      "size": 3172
     },
     {
       "path": "device_config.py",

@@ -61,6 +61,11 @@ The historical aggregate of 57 is therefore not claimed as fully reassembled
 from raw evidence. The currently reproducible failures were all classified and
 resolved or explicitly separated by a deterministic test gate.
 
+The final remote quality run `41250127009` is green for quality, browser, and
+beta. The HACS/Hassfest run `41250127197` is also green. The experimental Core
+job remains intentionally skipped because the repository has no trusted pinned
+Core archive variables; it is not counted as a passed migration gate.
+
 ## Non-product defects observed in logs
 
 The isolated Core emits optional-environment warnings for missing turbojpeg

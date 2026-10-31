@@ -44,8 +44,12 @@ Hassfest are `CI VERIFIED`. The first general CI run `41247564342` was
 `FAILED` before the follow-up correction; its experimental Core job was
 skipped, as expected, because no trusted archive variables are configured.
 
-The corrected commit requires a new GitHub Actions run before the final CI
-state can be called `CI VERIFIED`. Local evidence remains `TEST VERIFIED`.
+The final corrected CI run for commit `32ecec3` is
+`41250127009`: quality, browser, and beta jobs all completed successfully.
+The experimental Core job was skipped because no trusted archive variables are
+configured; that is an explicit `BLOCKED`/not-configured gate, not a green
+claim. The HACS workflow run `41250127197` completed successfully with both
+HACS and Hassfest successful. These remote gates are `CI VERIFIED`.
 
 ## Parallelization policy
 

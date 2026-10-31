@@ -124,8 +124,8 @@ tests are the `experimental_core` migration tests, which require the separate
 pinned Core prototype. The subsequent beta HAP bootstrap, native filter,
 reload, and reconnect sequence also passed — `TEST VERIFIED`.
 
-The first GitHub HACS workflow run `41247564145` completed successfully. Its
-`hacs` and `hassfest` jobs are `CI VERIFIED`. The first general CI run
-`41247564342` failed before the final infrastructure corrections; its corrected
-replacement run is not yet available at report time, so that final state is
-`NOT VERIFIED`.
+The final GitHub CI run for commit `32ecec3` was `41250127009`: quality,
+browser, and beta all completed successfully — `CI VERIFIED`. The separate
+experimental Core job was skipped because no trusted archive variables are
+configured — `BLOCKED`/not configured. HACS workflow run `41250127197` completed
+successfully with both `hacs` and `hassfest` jobs — `CI VERIFIED`.

@@ -2,7 +2,7 @@
 
 Home Assistant does not expose a stable public API for a custom integration to
 move an existing HomeKit bridge between YAML, SOURCE_IMPORT and SOURCE_USER.
-This module retains compatibility for status clients while 0.10.11 excludes
+This module retains compatibility for status clients while 0.10.13 excludes
 native source migration entirely.
 """
 from __future__ import annotations
@@ -19,7 +19,7 @@ MODE_LABELS = {
 }
 
 CORE_CONTRACT_BLOCKER = (
-    "Quellenmigration ist in 0.10.11 nicht freigegeben. "
+    "Quellenmigration ist in 0.10.13 nicht freigegeben. "
     "Home Assistant Core 2026.10.4/2026.11.0b0 bietet keine stabile öffentliche API für "
     "einen externen Wechsel zwischen YAML/SOURCE_IMPORT, SOURCE_USER und einer "
     "Custom-Integration-Draft-Schicht. Ein automatischer Wechsel könnte "

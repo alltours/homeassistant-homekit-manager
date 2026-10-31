@@ -1,6 +1,20 @@
 # Changelog
 
-# 0.10.12 (development)
+# 0.10.13 (development)
+
+- Add fail-closed transactional migration scaffolding with durable
+  write-ahead journal, fsync/atomic replacement, redacted snapshots,
+  cross-process bridge locks and conservative recovery classification.
+- Add real-process `SIGKILL`/`SIGTERM` fault-injection tests and explicit
+  rollback tests. Ambiguous states require manual recovery.
+- Run the isolated HAP source-switch POC through the asynchronous engine while
+  retaining the production migration block.
+- Stabilize the isolated beta-Core bootstrap by asserting entity readiness only
+  after the Home Assistant start lifecycle boundary; no assertion retry masks a
+  functional failure.
+- Keep native source execution unavailable outside isolated test permits.
+
+## 0.10.12
 
 - Harden HomeKit source inspection for `!include_dir_merge_list` and
   `!include_dir_merge_named`; directory members are read-only, deterministic

@@ -23,6 +23,11 @@ from homeassistant.config import async_hass_config_yaml
 from homeassistant.const import __version__
 from homeassistant.setup import async_setup_component
 
+from custom_components.homekit_manager.migration_engine import MigrationEngine, MigrationPlan
+from custom_components.homekit_manager.migration_journal import JournalStore
+from custom_components.homekit_manager.migration_lock import BridgeMigrationLock
+from custom_components.homekit_manager.migration_snapshot import MigrationSnapshot, SnapshotStore
+
 ENTRY_ID = "isolated-native-source-migration"
 ENTITY_ID = "input_boolean.native_migration_test"
 BRIDGE_NAME = "Native Source Migration"
@@ -101,6 +106,94 @@ async def _unload_for_source_change(hass, entry) -> None:
             return
         await asyncio.sleep(0.05)
     raise AssertionError("HAP port did not become available after isolated unload")
+
+
+async def _run_engine_source_switch(hass, shared: Path, entry, identity: dict, before: dict, target: str):
+    """Run the durable engine around the test-only Core source mutation."""
+    from homeassistant.config_entries import SOURCE_IMPORT, SOURCE_USER
+
+    source = SOURCE_USER if entry.source == SOURCE_USER else SOURCE_IMPORT
+    target_source = SOURCE_IMPORT if target == SOURCE_IMPORT else SOURCE_USER
+    snapshot = MigrationSnapshot.build(
+        transaction_id="pending",
+        bridge_id=entry.entry_id,
+        logical={
+            "entry_id": entry.entry_id,
+            "source": source,
+            "target": target_source,
+            "mac": before["mac"],
+            "aids": before["aids"],
+            "iids": before["entity_iids"],
+        },
+        files={"configuration.yaml": shared / "configuration.yaml"},
+    )
+    engine = MigrationEngine(
+        journal=JournalStore(shared / "migration.journal.json"),
+        snapshots=SnapshotStore(shared / "migration.snapshot.json"),
+        lock=BridgeMigrationLock(shared / "migration.bridge.lock", entry.entry_id),
+        experimental_test_permit=True,
+    )
+
+    async def quiesce():
+        await _unload_for_source_change(hass, entry)
+
+    async def source_switch():
+        if target_source == SOURCE_IMPORT:
+            (shared / "configuration.yaml").write_text(
+                _yaml_source(identity["port"]), encoding="utf-8"
+            )
+            (shared / "native_migration.yaml").write_text(
+                _yaml_fragment(identity["port"]), encoding="utf-8"
+            )
+            entry.source = SOURCE_IMPORT
+        else:
+            (shared / "configuration.yaml").write_text(_base_config(), encoding="utf-8")
+            (shared / "native_migration.yaml").unlink()
+            entry.source = SOURCE_USER
+            hass.config_entries.async_update_entry(
+                entry,
+                data={"name": BRIDGE_NAME, "port": identity["port"]},
+                options={"mode": "bridge", "filter": {"include_entities": [ENTITY_ID]}},
+            )
+        await _save_config_entries(hass)
+
+    async def reload():
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    async def verify():
+        after = await _pair_or_reconnect(hass, shared, entry, False)
+        assert after["source"] == target_source
+        assert after["entry_id"] == before["entry_id"] == identity["entry_id"]
+        assert after["mac"] == before["mac"] == identity["mac"]
+        assert after["aids"] == before["aids"] == identity["aids"]
+        assert after["entity_iids"] == before["entity_iids"] == identity["entity_iids"]
+
+    async def noop():
+        return None
+
+    result = await engine.execute_async(
+        MigrationPlan(
+            bridge_id=entry.entry_id,
+            source=source,
+            target=target_source,
+            baseline_fingerprint=snapshot.fingerprint,
+            config_revision=identity["entry_id"],
+        ),
+        steps={
+            "lock": noop,
+            "snapshot": noop,
+            "prepare": noop,
+            "quiesce": quiesce,
+            "source_switch": source_switch,
+            "reload": reload,
+            "verify": verify,
+            "commit": noop,
+        },
+        snapshot=snapshot,
+        expected_revision=lambda: identity["entry_id"],
+    )
+    assert result.state == "COMMITTED"
 
 
 async def _prepare_hass(hass, shared: Path, yaml_enabled: bool):
@@ -280,23 +373,7 @@ async def test_worker(hass, monkeypatch, socket_enabled):
 
     if phase == "migrate_ui_yaml":
         assert entry.source == SOURCE_USER
-        (shared / "configuration.yaml").write_text(
-            _yaml_source(identity["port"]), encoding="utf-8"
-        )
-        (shared / "native_migration.yaml").write_text(
-            _yaml_fragment(identity["port"]), encoding="utf-8"
-        )
-        await _unload_for_source_change(hass, entry)
-        entry.source = SOURCE_IMPORT
-        await _save_config_entries(hass)
-        assert await hass.config_entries.async_setup(entry.entry_id)
-        await hass.async_block_till_done()
-        after = await _pair_or_reconnect(hass, shared, entry, False)
-        assert after["source"] == SOURCE_IMPORT
-        assert after["entry_id"] == before["entry_id"] == identity["entry_id"]
-        assert after["mac"] == before["mac"] == identity["mac"]
-        assert after["aids"] == before["aids"] == identity["aids"]
-        assert after["entity_iids"] == before["entity_iids"] == identity["entity_iids"]
+        await _run_engine_source_switch(hass, shared, entry, identity, before, SOURCE_IMPORT)
     elif phase == "restart_yaml":
         assert entry.source == SOURCE_IMPORT
         assert before["source"] == SOURCE_IMPORT
@@ -306,24 +383,7 @@ async def test_worker(hass, monkeypatch, socket_enabled):
         assert before["entity_iids"] == identity["entity_iids"]
     elif phase == "migrate_yaml_ui":
         assert entry.source == SOURCE_IMPORT
-        (shared / "configuration.yaml").write_text(_base_config(), encoding="utf-8")
-        (shared / "native_migration.yaml").unlink()
-        await _unload_for_source_change(hass, entry)
-        entry.source = SOURCE_USER
-        hass.config_entries.async_update_entry(
-            entry,
-            data={"name": BRIDGE_NAME, "port": identity["port"]},
-            options={"mode": "bridge", "filter": {"include_entities": [ENTITY_ID]}},
-        )
-        await _save_config_entries(hass)
-        assert await hass.config_entries.async_setup(entry.entry_id)
-        await hass.async_block_till_done()
-        after = await _pair_or_reconnect(hass, shared, entry, False)
-        assert after["source"] == SOURCE_USER
-        assert after["entry_id"] == before["entry_id"] == identity["entry_id"]
-        assert after["mac"] == before["mac"] == identity["mac"]
-        assert after["aids"] == before["aids"] == identity["aids"]
-        assert after["entity_iids"] == before["entity_iids"] == identity["entity_iids"]
+        await _run_engine_source_switch(hass, shared, entry, identity, before, SOURCE_USER)
     elif phase == "restart_ui":
         assert entry.source == SOURCE_USER
         assert before["source"] == SOURCE_USER

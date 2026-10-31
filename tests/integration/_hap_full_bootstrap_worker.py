@@ -70,7 +70,6 @@ async def run() -> None:
         ))
         assert hass is not None
         await hass.async_block_till_done()
-        assert hass.states.get(ENTITY_ID) is not None
         if phase == "pair":
             port = free_loopback_port()
             entry = config_entries.ConfigEntry(
@@ -97,6 +96,10 @@ async def run() -> None:
             assert entry.data["port"] == port
         await hass.async_start()
         await hass.async_block_till_done()
+        # Entity platforms are started by async_start.  Checking the state
+        # before that lifecycle boundary is a transient bootstrap race on the
+        # beta Core and does not prove that the configured runtime is ready.
+        assert hass.states.get(ENTITY_ID) is not None
         assert entry.state.value == "loaded"
         homekit = entry.runtime_data.homekit
         assert homekit.status == 1

@@ -144,8 +144,8 @@
     },
     {
       "path": "migration.py",
-      "sha256": "807c652802cff28dde7a4683b9a14648f3458cdc12d01e920d09b48be9b471d4",
-      "size": 3174
+      "sha256": "f9ed98ab76e67027e6c0badc23ec174a4b1a1a24ff95802e9a3e97f9482b1147",
+      "size": 3168
     },
     {
       "path": "migration_store.py",

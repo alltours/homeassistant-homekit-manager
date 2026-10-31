@@ -50,6 +50,10 @@ async def test_worker(hass, monkeypatch, socket_enabled):
     phase = os.environ["HKM_RESTART_PHASE"]
     hass.config.config_dir = str(shared)
     (shared / ".storage").mkdir(mode=0o700, exist_ok=True)
+    # Core 2026.11 caches the ConfigEntryStore path at construction time.  The
+    # HA test fixture creates it before this worker selects its isolated
+    # directory, so recreate the manager before writing the pair phase.
+    hass.config_entries = config_entries.ConfigEntries(hass, {"_": "isolated restart"})
     advertiser = LocalAdvertiser()
 
     async def local_advertiser(_hass):
@@ -123,3 +127,8 @@ async def test_worker(hass, monkeypatch, socket_enabled):
         assert homekit.driver.state.mac == before["mac"]
         assert aid == before["aid"] and iids == before["iids"]
     await pairing.shutdown()
+    # Core 2026.11 keeps pyhap's connection-cleanup timer alive until the
+    # HomeKit runtime is explicitly stopped.  Do this in the worker so the
+    # two-process restart test verifies a clean lifecycle, not a leaked loop.
+    await homekit.async_stop()
+    await hass.async_block_till_done()

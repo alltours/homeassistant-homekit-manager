@@ -162,21 +162,26 @@ State garantiert. Ohne diesen Nachweis bleibt sie blockiert.
 
 | Testart | Ergebnis |
 |---|---|
-| Python-Unit-Tests auf HA Core 2026.10.4 | **166 bestanden**, 7 Warnungen. |
-| Python-Unit-Tests auf HA Core 2026.11.0b0 | **166 bestanden**, 7 Warnungen; inklusive Dual-Mode-/Conversion-Verträgen gegen den Beta-Core. |
+| Python-Unit-Tests auf HA Core 2026.10.4 | **166 bestanden**, 0 fehlgeschlagen, 0 übersprungen, 7 Warnungen. |
+| Python-Unit-Tests auf HA Core 2026.11.0b0 | **166 bestanden**, 0 fehlgeschlagen, 0 übersprungen, 4 Warnungen; inklusive Dual-Mode-/Conversion-Verträgen gegen den Beta-Core. |
 | Core-Integrationstest auf HA Core 2026.10.4 | **114 bestanden**, einschließlich Config-Flow, WebSocket, YAML, HAP-Loopback und Browser-Backend. |
+| Core-Integrationstest auf HA Core 2026.11.0b0 | **114 bestanden**, 0 fehlgeschlagen, 0 übersprungen, 4 Warnungen; mit dem dokumentierten Testadapter für den entfernten Logger-Hook. YAML-Apply bleibt auf dieser Beta absichtlich blockiert und wird als Blockade geprüft. |
 | YAML-Core-Import/Reload | Vorhandene isolierte Tests bestehen auf dem kompatiblen Venv und prüfen `SOURCE_IMPORT`, Entry-ID und Reload. |
 | HAP-Loopback | Vorhandener isolierter YAML-Loopback weist MAC-, Pairing-, AID- und IID-Erhalt innerhalb derselben YAML-Quelle nach; kein Quellenmigrationsnachweis. |
 | Frontend-Unit-Test und JS-Syntax | Bestanden (`npm run test:frontend`, `node --check`). |
 | Browser Chromium/WebKit | **104 bestanden** (`npm run test:browser`), einschließlich des neuen Dual-Mode-Tests. |
-| Release-Reproduzierbarkeit | **3 bestanden** (`tests/test_release.py`), 51 Dateien; ZIP SHA-256 `4bd232462751eb2d629cd4df1126129b79241739b8c304c16f5caa0afd3205b0`. |
+| Release-Reproduzierbarkeit | **3 bestanden** (`tests/test_release.py`), 51 Dateien; SHA-256 wird nach dem finalen Commit neu erzeugt. |
 | Ruff-Qualitätsprüfung | Bestanden für geänderte Backend-/Testdateien. |
 
-Die Beta-Integrationstests konnten in der vorhandenen Umgebung nicht vollständig
-gestartet werden, weil `pytest-homeassistant-custom-component 0.13.375` gegen
-Core `2026.11.0b0` eine interne Logger-Funktion erwartet, die der Beta-Core
-nicht mehr exportiert. Das ist ein Test-Tooling-Blocker, kein produktiver
-Funktionsfehler.
+Für Core `2026.11.0b0` ist `pytest-homeassistant-custom-component 0.13.375`
+weiterhin die verfügbare Plugin-Version; sie importiert einen Logger-Hook, den
+der Beta-Core entfernt hat. `scripts/run_beta_integration.py` lädt deshalb
+unter `tests/integration/_beta_pytest_adapter/sitecustomize.py` einen eng
+begrenzten No-op-Kompatibilitätshook. Der Adapter ändert keinen Core-Code,
+deaktiviert keine Assertions und wird nicht in das Release-ZIP aufgenommen.
+Damit ist die vollständige Beta-Integration reproduzierbar ausführbar; die
+YAML-Schreibpfade werden auf dieser nicht freigegebenen Core-Version weiterhin
+serverseitig blockiert und auf Byte-Unverändertheit geprüft.
 
 ## Sicherheitsbewertung
 
@@ -209,8 +214,9 @@ automatische Migration bestehender Installationen.
 3. Core-interne Klassen und Dateiformate dürfen nicht als öffentliche API
    behandelt werden. Bei Core-Updates müssen Schema, Config-Flow und
    Persistenztests erneut geprüft werden.
-4. Der Beta-Integrationstest benötigt eine zu `2026.11.0b0` passende
-   pytest-Plugin-Version.
+4. Die Beta-Testumgebung benötigt den dokumentierten Testadapter, solange
+   `pytest-homeassistant-custom-component` den entfernten Logger-Hook noch
+   importiert. Das ist Testinfrastruktur und kein Produktbestandteil.
 
 ## Release-Bewertung
 

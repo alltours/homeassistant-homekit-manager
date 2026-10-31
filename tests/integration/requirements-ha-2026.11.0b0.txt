@@ -1,6 +1,6 @@
-# Isolated native filter and loopback HAP compatibility probe only.
-# The published pytest helper currently pins Core 2026.10.4, so this probe
-# uses Core's real bootstrap and does not load that helper.
+# Complete isolated integration suite for Core 2026.11.0b0. The pinned pytest
+# helper has one removed logger import; scripts/run_beta_integration.py loads a
+# test-only compatibility adapter for that import and performs no Core patch.
 homeassistant==2026.11.0b0
 home-assistant-frontend==20260930.5
 HAP-python==5.0.0
@@ -11,4 +11,6 @@ fnv-hash-fast==2.0.3
 homekit-audio-proxy==1.2.1
 base36==0.1.1
 ha-ffmpeg==3.2.2
+pytest==9.0.3
+pytest-homeassistant-custom-component==0.13.375
 ruamel.yaml==0.18.17

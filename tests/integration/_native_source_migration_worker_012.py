@@ -24,10 +24,16 @@ from homeassistant.config import async_hass_config_yaml
 from homeassistant.const import __version__
 from homeassistant.setup import async_setup_component
 
-from custom_components.homekit_manager.migration_engine import MigrationEngine, MigrationPlan
+from custom_components.homekit_manager.migration_engine import (
+    MigrationEngine,
+    MigrationPlan,
+)
 from custom_components.homekit_manager.migration_journal import JournalStore
 from custom_components.homekit_manager.migration_lock import BridgeMigrationLock
-from custom_components.homekit_manager.migration_snapshot import MigrationSnapshot, SnapshotStore
+from custom_components.homekit_manager.migration_snapshot import (
+    MigrationSnapshot,
+    SnapshotStore,
+)
 
 ENTRY_ID = "isolated-native-source-migration"
 ENTITY_ID = "input_boolean.native_migration_test"
@@ -244,7 +250,23 @@ async def _prepare_hass(hass, shared: Path, yaml_enabled: bool, preserve_files: 
             hass, "homekit", await async_hass_config_yaml(hass)
         )
         await hass.async_block_till_done()
-    entry = hass.config_entries.async_get_entry(ENTRY_ID)
+    expected_entry_id = ENTRY_ID
+    identity_path = shared / "public_identity.json"
+    if identity_path.exists():
+        expected_entry_id = json.loads(identity_path.read_text(encoding="utf-8")).get(
+            "entry_id", ENTRY_ID
+        )
+    entry = hass.config_entries.async_get_entry(expected_entry_id)
+    if entry is None and yaml_enabled:
+        identity = json.loads(identity_path.read_text(encoding="utf-8"))
+        entry = next(
+            (
+                candidate
+                for candidate in hass.config_entries.async_entries("homekit")
+                if candidate.data.get("port") == identity["port"]
+            ),
+            None,
+        )
     assert entry is not None
     if entry.state.value != "loaded":
         assert await hass.config_entries.async_setup(entry.entry_id)
@@ -259,7 +281,7 @@ async def _recover_after_crash(hass, shared: Path, entry, identity: dict) -> Non
     record = store.load()
     assert record is not None
     original = await _pair_or_reconnect(hass, shared, entry, False)
-    original_source = config_entries.SOURCE_USER
+    original_source = identity.get("source", config_entries.SOURCE_USER)
 
     if record.state in {"PREFLIGHT", "LOCKED", "SNAPSHOT_CREATED", "PREPARED"}:
         assert entry.source == original_source
@@ -278,6 +300,9 @@ async def _recover_after_crash(hass, shared: Path, entry, identity: dict) -> Non
         completed_operation="recovery_start",
         recovery_status="ROLLBACK_REQUIRED",
     ))
+    if os.environ.get("HKM_NATIVE_SOURCE_MIGRATION_FAULT") == "DURING_ROLLBACK":
+        (shared / "fault-reached").write_text("DURING_ROLLBACK", encoding="utf-8")
+        os.kill(os.getpid(), signal.SIGKILL)
     assert await hass.config_entries.async_unload(entry.entry_id)
     from homeassistant.components.homekit.util import async_port_is_available
 
@@ -285,16 +310,28 @@ async def _recover_after_crash(hass, shared: Path, entry, identity: dict) -> Non
         if async_port_is_available(entry.data["port"]):
             break
         await asyncio.sleep(0.05)
-    (shared / "configuration.yaml").write_text(_base_config(), encoding="utf-8")
+    if original_source == config_entries.SOURCE_IMPORT:
+        (shared / "configuration.yaml").write_text(
+            (shared / "baseline_configuration.yaml").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        baseline_fragment = shared / "baseline_native_migration.yaml"
+        if baseline_fragment.exists():
+            (shared / "native_migration.yaml").write_text(
+                baseline_fragment.read_text(encoding="utf-8"), encoding="utf-8"
+            )
+    else:
+        (shared / "configuration.yaml").write_text(_base_config(), encoding="utf-8")
     fragment = shared / "native_migration.yaml"
-    if fragment.exists():
+    if original_source != config_entries.SOURCE_IMPORT and fragment.exists():
         fragment.unlink()
     entry.source = original_source
-    hass.config_entries.async_update_entry(
-        entry,
-        data={"name": BRIDGE_NAME, "port": identity["port"]},
-        options={"mode": "bridge", "filter": {"include_entities": [ENTITY_ID]}},
-    )
+    if original_source == config_entries.SOURCE_USER:
+        hass.config_entries.async_update_entry(
+            entry,
+            data={"name": BRIDGE_NAME, "port": identity["port"]},
+            options={"mode": "bridge", "filter": {"include_entities": [ENTITY_ID]}},
+        )
     await _save_config_entries(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -321,6 +358,8 @@ async def _pair_or_reconnect(hass, shared: Path, entry, pair: bool):
 
     homekit = entry.runtime_data.homekit
     assert homekit.driver is not None and homekit.status == 1
+    if pair:
+        assert not homekit.driver.state.paired
     aid = homekit.aid_storage.get_allocated_aid_for_entity_id(ENTITY_ID)
     assert aid is not None
     await homekit.aid_storage.async_save()
@@ -413,29 +452,53 @@ async def test_worker(hass, monkeypatch, socket_enabled):
     )
     monkeypatch.setattr(HomeKit, "_async_show_setup_message", lambda _self: None)
 
-    if phase == "pair_ui":
+    if phase in {"pair_ui", "pair_yaml"}:
         shared.mkdir(mode=0o700, exist_ok=True)
         port = _free_port()
-        (shared / "configuration.yaml").write_text(_base_config(), encoding="utf-8")
+        yaml_pairing = phase == "pair_yaml"
+        (shared / "configuration.yaml").write_text(
+            _yaml_source(port) if yaml_pairing else _base_config(), encoding="utf-8"
+        )
+        if yaml_pairing:
+            (shared / "native_migration.yaml").write_text(
+                _yaml_fragment(port), encoding="utf-8"
+            )
+            (shared / "baseline_configuration.yaml").write_text(
+                _yaml_source(port), encoding="utf-8"
+            )
+            (shared / "baseline_native_migration.yaml").write_text(
+                _yaml_fragment(port), encoding="utf-8"
+            )
         hass.config.config_dir = str(shared)
         (shared / ".storage").mkdir(mode=0o700, exist_ok=True)
         hass.config_entries = config_entries.ConfigEntries(hass, {"_": "native migration"})
-        entry = config_entries.ConfigEntry(
-            version=1,
-            minor_version=1,
-            domain="homekit",
-            title=f"{BRIDGE_NAME}:{port}",
-            data={"name": BRIDGE_NAME, "port": port},
-            options={"mode": "bridge", "filter": {"include_entities": [ENTITY_ID]}},
-            source=SOURCE_USER,
-            entry_id=ENTRY_ID,
-            unique_id=None,
-            discovery_keys={},
-            subentries_data=None,
-        )
         hass.states.async_set(ENTITY_ID, "off")
         await hass.async_block_till_done()
-        await hass.config_entries.async_add(entry)
+        if yaml_pairing:
+            await async_setup_component(
+                hass, "homekit", await async_hass_config_yaml(hass)
+            )
+            await hass.async_block_till_done()
+            entry = next(
+                candidate
+                for candidate in hass.config_entries.async_entries("homekit")
+                if candidate.data.get("port") == port
+            )
+        else:
+            entry = config_entries.ConfigEntry(
+                version=1,
+                minor_version=1,
+                domain="homekit",
+                title=f"{BRIDGE_NAME}:{port}",
+                data={"name": BRIDGE_NAME, "port": port},
+                options={"mode": "bridge", "filter": {"include_entities": [ENTITY_ID]}},
+                source=SOURCE_USER,
+                entry_id=ENTRY_ID,
+                unique_id=None,
+                discovery_keys={},
+                subentries_data=None,
+            )
+            await hass.config_entries.async_add(entry)
         await hass.async_block_till_done()
         assert entry.state.value == "loaded"
         observation = await _pair_or_reconnect(hass, shared, entry, True)
@@ -448,7 +511,11 @@ async def test_worker(hass, monkeypatch, socket_enabled):
         return
 
     identity = json.loads((shared / "public_identity.json").read_text())
-    yaml_enabled = phase in {"restart_yaml", "migrate_yaml_ui"}
+    yaml_enabled = (
+        (shared / "native_migration.yaml").exists()
+        if phase == "recover"
+        else phase in {"restart_yaml", "migrate_yaml_ui"}
+    )
     entry = await _prepare_hass(hass, shared, yaml_enabled, preserve_files=phase == "recover")
     before = await _pair_or_reconnect(hass, shared, entry, False)
 
@@ -469,6 +536,10 @@ async def test_worker(hass, monkeypatch, socket_enabled):
         await _run_engine_source_switch(hass, shared, entry, identity, before, SOURCE_USER)
     elif phase == "restart_ui":
         assert entry.source == SOURCE_USER
+        assert [
+            candidate.entry_id
+            for candidate in hass.config_entries.async_entries("homekit")
+        ] == [entry.entry_id]
         assert before["source"] == SOURCE_USER
         assert before["entry_id"] == identity["entry_id"]
         assert before["mac"] == identity["mac"]

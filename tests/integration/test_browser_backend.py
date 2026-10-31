@@ -9,7 +9,12 @@ import pytest
 from aiohttp import web
 from homeassistant.components import frontend
 from homeassistant.components.http import HomeAssistantView
+from homeassistant import loader
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+# Import the package explicitly so the custom-component loader can discover it
+# even when this browser test is run in isolation.
+import custom_components.homekit_manager  # noqa: F401
 
 
 @pytest.mark.parametrize("browser_name", ["chromium", "webkit"])
@@ -21,6 +26,7 @@ async def test_browser_uses_registered_panel_and_real_backend(hass, enable_custo
     native.add_to_hass(hass)
     before = deepcopy(dict(native.options))
     hass.states.async_set("light.audit_lamp", "on", {"friendly_name": "Audit Lamp"})
+    await loader.async_get_custom_components(hass)
     flow = await hass.config_entries.flow.async_init("homekit_manager", context={"source": "user"})
     await hass.config_entries.flow.async_configure(flow["flow_id"], {})
     registration = hass.data[frontend.DATA_PANELS]["homekit_manager"].config["_panel_custom"]
@@ -45,7 +51,9 @@ async def test_browser_uses_registered_panel_and_real_backend(hass, enable_custo
     try:
         out, err = await asyncio.wait_for(process.communicate(), timeout=75)
     except asyncio.TimeoutError:
-        process.kill(); await process.wait(); raise
+        process.kill()
+        await process.wait()
+        raise
     assert process.returncode == 0, out.decode() + err.decode()
     assert "real HA backend: ok" in out.decode()
     assert dict(native.options) == before

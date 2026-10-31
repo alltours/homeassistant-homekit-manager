@@ -69,6 +69,7 @@ async def run() -> None:
             log_file=str(shared / "home-assistant.log"),
         ))
         assert hass is not None
+        await hass.async_block_till_done()
         assert hass.states.get(ENTITY_ID) is not None
         if phase == "pair":
             port = free_loopback_port()

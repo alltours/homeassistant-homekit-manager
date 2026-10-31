@@ -501,6 +501,11 @@ async def test_previous_mode_metadata_cannot_migrate_existing_native_entry(hass,
     assert manager.mode_status()["active_mode"] == "homekit_bridge"
     assert manager.mode_status()["desired_mode"] == "yaml"
     assert manager.mode_status()["transition"] == "blocked"
+    dual_mode = manager.mode_status()["dual_mode"]
+    assert dual_mode["administration_mode"] == "ui_bridge"
+    assert dual_mode["native_configuration_source"]["key"] == "user"
+    assert dual_mode["plans"]["yaml"]["status"] == "draft_only"
+    assert dual_mode["plans"]["yaml"]["can_execute"] is False
     result = await manager.async_start_migration("yaml", confirmed=True)
     assert result["status"]["state"] == "blocked"
     assert native.source == config_entries.SOURCE_USER

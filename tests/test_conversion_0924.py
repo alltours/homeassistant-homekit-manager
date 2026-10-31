@@ -34,6 +34,17 @@ def test_multiple_bridge_values_stay_separate():
                            core_version=CORE).yaml_bridge() for item in bridges] == bridges
 
 
+def test_beta_core_schema_is_checked_for_the_same_supported_projection():
+    options = {"mode": "bridge", "filter": {"include_entities": ["light.one"]}}
+    converted = native_to_yaml(
+        {"name": "Bridge One", "port": 21073},
+        options,
+        core_version="2026.11.0b0",
+    )
+    assert converted.core_version == "2026.11.0b0"
+    assert converted.yaml_bridge()["filter"]["include_entities"] == ["light.one"]
+
+
 @pytest.mark.parametrize("field", ["future_option", "index", "pairing_key"])
 def test_unknown_top_level_field_is_blocked(field):
     with pytest.raises(ConversionBlocked):

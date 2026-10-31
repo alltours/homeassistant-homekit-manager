@@ -12,6 +12,7 @@ from uuid import uuid4
 import pytest
 from homeassistant import config_entries
 from homeassistant.config import async_hass_config_yaml
+from homeassistant.const import __version__
 from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -31,7 +32,7 @@ from custom_components.homekit_manager.write_grant import (
     ProductionWriteGrant,
     read_production_grant,
 )
-from custom_components.homekit_manager.yaml_adapter import YamlHomeKitAdapter
+from custom_components.homekit_manager.yaml_adapter import YamlAdapterBlocked, YamlHomeKitAdapter
 
 
 def grant_data(entry_id: str, source: str = "user") -> dict:
@@ -281,6 +282,11 @@ async def test_yaml_grant_applies_only_to_isolated_import(hass, tmp_path, monkey
     queued_plan = adapter.plan_filter(entry, {"include_entities": ["light.before", "light.after"]})
     queued_grant = await read_production_grant(hass)
     before = source.read_bytes()
+    if __version__ != "2026.10.4":
+        with pytest.raises(YamlAdapterBlocked, match="Core-Version"):
+            await adapter.async_apply_with_core(hass, entry, queued_plan, production_grant=queued_grant)
+        assert source.read_bytes() == before
+        return
     original_executor = hass.async_add_executor_job
 
     async def revoke_before_queued_write(job, *args):

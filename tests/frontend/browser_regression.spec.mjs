@@ -216,13 +216,26 @@ test('isolated operation workflow binds plan, confirms exact request and verifie
   expect(calls).toHaveLength(1);
 });
 
-test('source migration is absent from the 0.10.0 interface', async ({ page }) => {
+test('source migration is absent from the 0.10.11 interface', async ({ page }) => {
   await page.goto('/tests/frontend/browser_fixture.html');
   const panel = page.locator('homekit-manager-panel');
   await panel.getByRole('tab', { name: 'Einstellungen', exact: true }).click();
   await expect(panel.locator('[data-migration-target]')).toHaveCount(0);
   await expect(panel.locator('[data-migration-start]')).toHaveCount(0);
   expect(await page.evaluate(() => window.fixtureCommands.includes('homekit_manager/migration_start'))).toBe(false);
+});
+
+test('dual-mode assistant separates administration mode from native source', async ({ page }) => {
+  await page.goto('/tests/frontend/browser_fixture.html');
+  const panel = page.locator('homekit-manager-panel');
+  await panel.getByRole('tab', { name: 'Einstellungen', exact: true }).click();
+  await panel.getByRole('button', { name: 'Konfiguration', exact: true }).click();
+  await expect(panel.locator('.dual-mode-card')).toContainText('Verwaltungsmodus');
+  await expect(panel.locator('.dual-mode-card')).toContainText('Home Assistant UI / Config Entry');
+  await panel.locator('[data-admin-mode="yaml"]').click();
+  await expect(panel.locator('.dual-mode-card')).toContainText('YAML nur als sicherer Entwurf verfügbar');
+  await expect(panel.locator('.dual-mode-card')).toContainText('QuellenmigrationGesperrt');
+  await expect(panel.locator('.dual-mode-card')).toContainText('Diese Quelle bleibt autoritativ und wird durch die Auswahl nicht geändert.');
 });
 
 test('bridge details expose source-bound configuration values without YAML structure claims', async ({ page }) => {
@@ -392,8 +405,8 @@ test('configuration source and write status are clear without a management switc
   await expect(panel.locator('[data-management-enable], [data-management-disable]')).toHaveCount(0);
   await panel.getByRole('tab',{name:'Einstellungen',exact:true}).click();
   await panel.getByRole('button',{name:'Konfiguration',exact:true}).click();
-  await expect(panel.locator('.source-option')).toContainText('Native Home-Assistant-Konfiguration');
-  await expect(panel.locator('.settings-content')).toContainText('bestehende Konfigurationsquelle');
+  await expect(panel.locator('.dual-mode-card')).toContainText('Home Assistant UI / Config Entry');
+  await expect(panel.locator('.settings-content')).toContainText('native Konfigurationsquelle werden getrennt angezeigt');
   expect(await page.evaluate(() => window.fixtureCommands.some(type => type === 'homekit_manager/management_enable' || type === 'homekit_manager/management_disable'))).toBe(false);
 });
 
@@ -410,7 +423,7 @@ test('unknown activation stays neutral, all settings remain reachable, keyboard 
   await panel.getByRole('tab',{name:'Änderungen',exact:true}).press('ArrowRight');
   await expect(panel.getByRole('tab',{name:'Einstellungen',exact:true})).toBeFocused();
   for(const section of ['general','configuration','diagnostics','rules','history','performance']) {
-    await panel.locator(`[data-settings-view=${section}]`).click(); await expect(panel.locator('.settings-nav')).toBeVisible(); await expect(panel.locator('.settings-content h3')).toBeVisible();
+    await panel.locator(`[data-settings-view=${section}]`).click(); await expect(panel.locator('.settings-nav')).toBeVisible(); await expect(panel.locator('.settings-content h3').first()).toBeVisible();
   }
 });
 

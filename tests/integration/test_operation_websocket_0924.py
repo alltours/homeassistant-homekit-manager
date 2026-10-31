@@ -1,6 +1,7 @@
 """Admin WebSocket through manager coordinator to isolated Core writer."""
 from homeassistant import config_entries
 from homeassistant.config import async_hass_config_yaml
+from homeassistant.const import __version__
 from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
 
@@ -86,14 +87,19 @@ async def test_admin_operation_websocket_isolated_yaml_apply_and_verify(hass, tm
     manager.operation_service = HomeKitOperationService(hass, isolated_write_authority=True)
     client = await hass_ws_client()
     document = {"schema_version": 1, "bridges": {imported.entry_id: {"policy": "explicit_overrides", "entities": {"light.after": "include"}}}}
+    before = source.read_bytes()
     await client.send_json_auto_id({"type": "homekit_manager/operation_plan", "entry_id": imported.entry_id,
                                     "document": document, "expected_fingerprint": manager.fingerprint})
     preview = await client.receive_json()
+    if __version__ != "2026.10.4":
+        assert preview["success"] is False
+        assert preview["error"]["message"] == "YAML-Apply ist für diese Core-Version nicht verifiziert"
+        assert source.read_bytes() == before
+        return
     assert preview["success"], preview
     plan = preview["result"]
     assert plan["source"] == config_entries.SOURCE_IMPORT
     assert plan["apply_enabled"] is True
-    before = source.read_bytes()
     await client.send_json_auto_id({"type": "homekit_manager/operation_apply", "operation_id": plan["operation_id"],
                                     "entry_id": imported.entry_id, "source_revision": plan["source_revision"],
                                     "expected_fingerprint": manager.fingerprint,
@@ -143,6 +149,11 @@ async def test_admin_websocket_direct_yaml_apply_preserves_other_config(hass, tm
     await client.send_json_auto_id({"type": "homekit_manager/operation_plan", "entry_id": entry.entry_id,
                                     "document": document, "expected_fingerprint": manager.fingerprint})
     preview = await client.receive_json()
+    if __version__ != "2026.10.4":
+        assert preview["success"] is False
+        assert preview["error"]["message"] == "YAML-Apply ist für diese Core-Version nicht verifiziert"
+        assert source.read_bytes() == before
+        return
     assert preview["success"], preview
     plan = preview["result"]
     await client.send_json_auto_id({"type": "homekit_manager/operation_apply", "operation_id": plan["operation_id"],

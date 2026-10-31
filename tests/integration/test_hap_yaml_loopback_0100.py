@@ -10,9 +10,11 @@ from aiohomekit.controller.ip.discovery import IpDiscovery
 from aiohomekit.controller.ip.pairing import IpPairing
 from aiohomekit.zeroconf import HomeKitService
 from homeassistant.config import async_hass_config_yaml
+from homeassistant.const import __version__
 from homeassistant.setup import async_setup_component
 import pytest
 
+from custom_components.homekit_manager.homekit_writer import HomeKitWriteBlocked
 from custom_components.homekit_manager.operations import HomeKitOperationService
 
 
@@ -106,6 +108,28 @@ async def test_yaml_filter_reload_retains_local_hap_pairing_and_ids(hass, tmp_pa
     inventory = [{"entity_id": name, "homekit": {"configured_by_filter": name == "light.before"},
                   "compatibility": {"status": "supported"}, "registry_entry_present": True,
                   "state_present": True} for name in ("light.before", "light.after")]
+    if __version__ != "2026.10.4":
+        with pytest.raises(HomeKitWriteBlocked, match="Core-Version nicht verifiziert"):
+            await service.plan_filter(entry_id=entry.entry_id, bridge=bridge,
+                                      document=document, inventory=inventory)
+        assert await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+        second_entry = hass.config_entries.async_get_entry(entry.entry_id)
+        second = second_entry.runtime_data.homekit
+        assert second is not first and second.status == 1
+        assert second.driver.state.mac == mac
+        assert second.aid_storage.get_allocated_aid_for_entity_id("light.before") == before_aid
+        assert second.driver.state.paired
+        reopened = IpPairing(controller, pairing_data)
+        after_accessories = await asyncio.wait_for(reopened.list_accessories_and_characteristics(), 10)
+        after_accessory = next(item for item in after_accessories if item["aid"] == before_aid)
+        after_iids = sorted(
+            iid for item in after_accessory["services"]
+            for iid in [item["iid"], *(char["iid"] for char in item["characteristics"])]
+        )
+        assert after_iids == before_iids
+        await reopened.shutdown()
+        return
     plan = await service.plan_filter(entry_id=entry.entry_id, bridge=bridge, document=document, inventory=inventory)
     assert (await service.apply(plan["operation_id"], entry_id=entry.entry_id,
                                 expected_revision=plan["source_revision"],

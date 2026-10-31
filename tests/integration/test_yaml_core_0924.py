@@ -2,6 +2,7 @@
 import pytest
 from homeassistant import config_entries
 from homeassistant.config import async_hass_config_yaml
+from homeassistant.const import __version__
 from homeassistant.setup import async_setup_component
 
 from custom_components.homekit_manager.yaml_adapter import YamlAdapterBlocked, YamlHomeKitAdapter
@@ -33,6 +34,12 @@ async def test_isolated_yaml_file_apply_is_imported_by_core(hass, tmp_path, monk
 
     adapter = YamlHomeKitAdapter(tmp_path)
     plan = adapter.plan_filter(entry, {"include_entities": ["light.before", "light.after"]})
+    before = source.read_bytes()
+    if __version__ != "2026.10.4":
+        with pytest.raises(YamlAdapterBlocked, match="Core-Version"):
+            await adapter.async_apply_with_core(hass, entry, plan, isolated_authority=True)
+        assert source.read_bytes() == before
+        return
     result = await adapter.async_apply_with_core(hass, entry, plan, isolated_authority=True)
     assert result.state == "verified_core"
     updated = hass.config_entries.async_get_entry(entry.entry_id)
@@ -42,6 +49,7 @@ async def test_isolated_yaml_file_apply_is_imported_by_core(hass, tmp_path, monk
 
     # In this Core version the reload service also reloads native entries.
     # A mixed installation must be blocked before changing the YAML file.
+    before = source.read_bytes()
     native = config_entries.ConfigEntry(
         version=1, minor_version=1, domain="homekit", title="Native Neighbor",
         data={"name": "Native Neighbor", "port": 21081}, options={"mode": "bridge", "filter": {}},
@@ -50,7 +58,6 @@ async def test_isolated_yaml_file_apply_is_imported_by_core(hass, tmp_path, monk
     )
     await hass.config_entries.async_add(native)
     await hass.async_block_till_done()
-    before = source.read_bytes()
     next_plan = adapter.plan_filter(updated, {"include_entities": ["light.before"]})
     with pytest.raises(YamlAdapterBlocked, match="native HomeKit"):
         await adapter.async_apply_with_core(hass, updated, next_plan, isolated_authority=True)
@@ -86,6 +93,11 @@ async def test_direct_configuration_yaml_apply_is_imported_by_core(hass, tmp_pat
     original_id = entry.entry_id
     adapter = YamlHomeKitAdapter(tmp_path)
     plan = adapter.plan_filter(entry, {"include_entities": ["light.before", "light.after"]})
+    if __version__ != "2026.10.4":
+        with pytest.raises(YamlAdapterBlocked, match="Core-Version"):
+            await adapter.async_apply_with_core(hass, entry, plan, isolated_authority=True)
+        assert source.read_bytes() == before
+        return
     result = await adapter.async_apply_with_core(hass, entry, plan, isolated_authority=True)
     assert result.state == "verified_core"
     assert result.backup_path.read_bytes() == before

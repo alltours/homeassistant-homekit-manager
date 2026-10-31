@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 from aiohttp import web
+from homeassistant import loader
 from homeassistant.components import frontend
 from homeassistant.components.http import HomeAssistantView
-from homeassistant import loader
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 # Import the package explicitly so the custom-component loader can discover it
@@ -50,7 +50,7 @@ async def test_browser_uses_registered_panel_and_real_backend(hass, enable_custo
     process = await asyncio.create_subprocess_exec("node", str(root / "tests/frontend/backend_e2e.mjs"), url, browser_name, cwd=root, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     try:
         out, err = await asyncio.wait_for(process.communicate(), timeout=75)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         process.kill()
         await process.wait()
         raise

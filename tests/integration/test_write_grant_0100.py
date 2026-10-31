@@ -32,7 +32,10 @@ from custom_components.homekit_manager.write_grant import (
     ProductionWriteGrant,
     read_production_grant,
 )
-from custom_components.homekit_manager.yaml_adapter import YamlAdapterBlocked, YamlHomeKitAdapter
+from custom_components.homekit_manager.yaml_adapter import (
+    YamlAdapterBlocked,
+    YamlHomeKitAdapter,
+)
 
 
 def grant_data(entry_id: str, source: str = "user") -> dict:

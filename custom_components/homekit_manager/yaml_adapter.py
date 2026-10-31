@@ -6,27 +6,29 @@ remain read-only. Production use requires a separate local write grant.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import asyncio
 import ctypes
 import errno
 import fcntl
-from hashlib import sha256
-from io import StringIO
-import asyncio
 import json
 import os
-from pathlib import Path
 import re
 import stat
 import sys
 import threading
 import uuid
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field
+from hashlib import sha256
+from io import StringIO
+from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Callable, Mapping
+from typing import Any
 
 from ruamel.yaml import YAML
 
 from .safety import has_extended_acl
+
 
 class YamlAdapterBlocked(ValueError):
     """The source, structure, or requested change is not provably safe."""
@@ -296,8 +298,8 @@ class YamlHomeKitAdapter:
             raise YamlAdapterBlocked("Produktiver HomeKit-YAML-Writer ist gesperrt")
         if production_grant is not None:
             await production_grant.verify(hass, plan.entry_id, "import")
-        from homeassistant.const import __version__
         from homeassistant.config_entries import SOURCE_IMPORT
+        from homeassistant.const import __version__
         if __version__ != "2026.10.4" or entry.source != SOURCE_IMPORT or entry.entry_id != plan.entry_id:
             raise YamlAdapterBlocked("Core-Version, Quelle oder Entry weicht vom Plan ab")
         if (dict(entry.data) | dict(getattr(entry, "options", {}))).get("mode", "bridge") != "bridge":

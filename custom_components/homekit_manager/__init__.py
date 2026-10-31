@@ -46,9 +46,8 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
     """Set up a read-only config entry."""
-    if DOMAIN not in hass.data:
-        if not await async_setup(hass, {}):
-            return False
+    if DOMAIN not in hass.data and not await async_setup(hass, {}):
+        return False
     hass.data[DOMAIN].setdefault("entries", set()).add(entry.entry_id)
     return True
 

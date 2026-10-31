@@ -1,5 +1,13 @@
-from custom_components.homekit_manager.const import MODE_HOMEKIT_BRIDGE, MODE_HOMEKIT_MANAGER, MODE_YAML
-from custom_components.homekit_manager.migration import build_migration_matrix, build_migration_plan, completed_verification
+from custom_components.homekit_manager.const import (
+    MODE_HOMEKIT_BRIDGE,
+    MODE_HOMEKIT_MANAGER,
+    MODE_YAML,
+)
+from custom_components.homekit_manager.migration import (
+    build_migration_matrix,
+    build_migration_plan,
+    completed_verification,
+)
 
 
 def test_all_storage_directions_are_explicit():

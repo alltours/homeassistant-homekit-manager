@@ -1,9 +1,15 @@
 """The actual Core 2026.10.4 config-entry lifecycle, with HAP network off."""
-import pytest
 from types import SimpleNamespace
+
+import pytest
 from homeassistant import config_entries
 
-from custom_components.homekit_manager.homekit_writer import HomeKitWriter, OptionsDiff, HomeKitWriteBlocked, HomeKitWriteDisabled
+from custom_components.homekit_manager.homekit_writer import (
+    HomeKitWriteBlocked,
+    HomeKitWriteDisabled,
+    HomeKitWriter,
+    OptionsDiff,
+)
 from custom_components.homekit_manager.native_adapter import NativeHomeKitAdapter
 
 

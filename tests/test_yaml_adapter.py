@@ -1,14 +1,14 @@
 """Real filesystem exercises of the supported YAML sources."""
 from __future__ import annotations
 
-from hashlib import sha256
 import ctypes
 import os
 import subprocess
 import sys
-from types import SimpleNamespace
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
+from hashlib import sha256
+from types import SimpleNamespace
 
 import pytest
 
@@ -135,7 +135,7 @@ def test_macos_source_acl_is_read_only(yaml_files):
     adapter = YamlHomeKitAdapter(root)
     plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
     before = source.read_bytes()
-    applied = subprocess.run(["/bin/chmod", "+a", "everyone allow write", str(source)],  # noqa: S603 - fixed argv, isolated temp path
+    applied = subprocess.run(["/bin/chmod", "+a", "everyone allow write", str(source)],
                              capture_output=True, check=False)
     if applied.returncode:
         pytest.skip("Testdateisystem unterstützt keine macOS-ACL")
@@ -159,22 +159,22 @@ def test_conflict_blocks_stale_file_and_restore(yaml_files):
 def test_direct_configuration_yaml_preserves_unrelated_bytes_and_restores(tmp_path):
     root = tmp_path / "configuration.yaml"
     before = (
-        "default_config:\n"
-        "# Keep this unrelated comment exactly\n"
-        "homekit:\n"
-        "  - name: Bridge One\n"
-        "    port: 21070\n"
-        "    filter:\n"
-        "      include_entities:\n"
-        "        - light.one\n"
-        "  - name: Bridge Two\n"
-        "    port: 21071\n"
-        "    filter:\n"
-        "      include_entities:\n"
-        "        - light.two\n"
-        "logger:\n"
-        "  default: warning\n"
-    ).encode()
+        b"default_config:\n"
+        b"# Keep this unrelated comment exactly\n"
+        b"homekit:\n"
+        b"  - name: Bridge One\n"
+        b"    port: 21070\n"
+        b"    filter:\n"
+        b"      include_entities:\n"
+        b"        - light.one\n"
+        b"  - name: Bridge Two\n"
+        b"    port: 21071\n"
+        b"    filter:\n"
+        b"      include_entities:\n"
+        b"        - light.two\n"
+        b"logger:\n"
+        b"  default: warning\n"
+    )
     root.write_bytes(before)
     adapter = YamlHomeKitAdapter(tmp_path)
     plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.one", "light.new"]})

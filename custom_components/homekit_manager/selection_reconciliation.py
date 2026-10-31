@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Any, Mapping
-
+from collections.abc import Mapping
+from typing import Any
 
 FILTER_KEYS = (
     "include_entities",
@@ -50,7 +50,7 @@ def _decision_entries(
     native explicit includes`` case observable as 60 concrete rows instead of
     an unexplained aggregate.
     """
-    policy, includes, excludes = _desired_ids(document, entry_id)
+    policy, includes, _excludes = _desired_ids(document, entry_id)
     by_id = {item.get("entity_id"): item for item in inventory if item.get("entity_id")}
     native_ids = _native_ids(inventory)
     native_explicit = {

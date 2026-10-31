@@ -1,14 +1,18 @@
 """Common operation lifecycle against real isolated Core entries."""
 import asyncio
+
 import pytest
 from homeassistant import config_entries
 from homeassistant.config import async_hass_config_yaml
 from homeassistant.const import __version__
 from homeassistant.setup import async_setup_component
 
-from custom_components.homekit_manager.homekit_writer import HomeKitWriteBlocked, HomeKitWriteDisabled
-from custom_components.homekit_manager.operations import HomeKitOperationService
+from custom_components.homekit_manager.homekit_writer import (
+    HomeKitWriteBlocked,
+    HomeKitWriteDisabled,
+)
 from custom_components.homekit_manager.native_adapter import NativeHomeKitAdapter
+from custom_components.homekit_manager.operations import HomeKitOperationService
 
 
 def desired(entry_id):

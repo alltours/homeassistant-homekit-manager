@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 ADMIN_MODE_UI = "ui_bridge"
 ADMIN_MODE_YAML = "yaml"
 ADMIN_MODES = (ADMIN_MODE_UI, ADMIN_MODE_YAML)

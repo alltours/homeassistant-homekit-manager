@@ -41,7 +41,7 @@ def test_internal_source_switch_preserves_isolated_hap_identity_across_restarts(
                 environment["PYTEST_ADDOPTS"] = (
                     f'{environment.get("PYTEST_ADDOPTS", "")} {required_plugins}'.strip()
                 )
-            result = subprocess.run(  # noqa: S603 - fixed local pytest worker
+            result = subprocess.run(
                 [sys.executable, "-m", "pytest", "-q", str(WORKER)],
                 cwd=ROOT,
                 env=environment,

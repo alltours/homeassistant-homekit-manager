@@ -1,9 +1,10 @@
 """Value conversion only: never migrate an existing HAP identity or pairing."""
 from __future__ import annotations
 
+from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 
 class ConversionBlocked(ValueError):

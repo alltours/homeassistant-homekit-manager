@@ -4,9 +4,12 @@ The native resolver also allocates accessory identities. We deliberately do not
 call it: this module reports eligibility, never actual Apple Home publication.
 """
 from __future__ import annotations
+
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
-from typing import Any, Mapping
-from .const import SUPPORTED_DOMAINS, SUPPORTED_CORE_VERSION
+from typing import Any
+
+from .const import SUPPORTED_CORE_VERSION, SUPPORTED_DOMAINS
 
 CORE_REFERENCE_VERSION = SUPPORTED_CORE_VERSION
 VERIFIED_COMPATIBILITY_VERSIONS = frozenset({"2026.10.4", "2026.11.0b0"})

@@ -1,7 +1,8 @@
 """Deterministic, suggestion-only entity rules."""
 from __future__ import annotations
 
-from typing import Any, Iterable, Mapping
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 
 def _matches(entity: Mapping[str, Any], match: Mapping[str, Any]) -> bool:
@@ -33,10 +34,10 @@ def evaluate_rules(
     """Evaluate rules deterministically; output is never applied automatically."""
     normalized = []
     if not isinstance(rules, (list, tuple)):
-        raise ValueError("Regeln müssen als Liste angegeben werden")
+        raise ValueError("Regeln müssen als Liste angegeben werden")  # noqa: TRY004 - public validation contract
     for index, rule in enumerate(rules):
         if not isinstance(rule, Mapping) or not isinstance(rule.get("match", {}), Mapping):
-            raise ValueError(f"Regel {index} muss gültige Filter enthalten")
+            raise ValueError(f"Regel {index} muss gültige Filter enthalten")  # noqa: TRY004 - public validation contract
         priority = rule.get("priority", 0)
         if type(priority) is not int or not isinstance(rule.get("enabled", True), bool):
             raise ValueError(f"Regel {index} hat eine ungültige Priorität oder Aktivierung")

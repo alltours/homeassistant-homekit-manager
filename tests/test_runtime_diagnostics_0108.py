@@ -1,17 +1,21 @@
-import unittest
 import sys
-from types import SimpleNamespace
+import unittest
 
 # Load these value-only modules without executing the integration package's HA
 # setup module. The full suite covers package imports in the HA test environment.
 from pathlib import Path
+from types import SimpleNamespace
+
 package = "custom_components.homekit_manager"
 if package not in sys.modules:
     module = type(sys)(package)
     module.__path__ = [str(Path(__file__).parents[1] / "custom_components" / "homekit_manager")]
     sys.modules[package] = module
 
-from custom_components.homekit_manager.runtime_diagnostics import diagnose_runtime, runtime_publication_summary  # noqa: E402
+from custom_components.homekit_manager.runtime_diagnostics import (
+    diagnose_runtime,
+    runtime_publication_summary,
+)
 
 
 class RuntimeDiagnostics0108Tests(unittest.TestCase):

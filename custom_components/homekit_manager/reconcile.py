@@ -1,7 +1,8 @@
 """Read-only reconciliation after a user edits HomeKit manually."""
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 
 def reconcile_desired_state(

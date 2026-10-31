@@ -6,11 +6,12 @@ serialized to the UI or a journal because Core may add sensitive fields.
 """
 from __future__ import annotations
 
+import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from hashlib import sha256
-import json
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any
 
 from .const import NATIVE_FILTER_WRITE_CORE_VERSIONS
 

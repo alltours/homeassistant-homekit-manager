@@ -2,11 +2,10 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 from tempfile import TemporaryDirectory
-
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKER = Path(__file__).with_name("_hap_full_bootstrap_worker.py")
@@ -17,7 +16,7 @@ def test_full_bootstrap_reloads_persisted_entry_and_hap_pairing():
         for phase in ("pair", "reconnect"):
             environment = dict(os.environ, HKM_FULL_BOOTSTRAP_DIR=directory,
                                HKM_FULL_BOOTSTRAP_PHASE=phase)
-            result = subprocess.run(  # noqa: S603 - fixed interpreter and local worker
+            result = subprocess.run(
                 [sys.executable, "-X", "faulthandler", str(WORKER)],
                 cwd=ROOT, env=environment, capture_output=True, text=True,
                 timeout=240, check=False,

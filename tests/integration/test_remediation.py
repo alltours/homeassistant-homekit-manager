@@ -6,9 +6,13 @@ from unittest.mock import Mock
 import pytest
 from homeassistant.components import frontend, websocket_api
 from pytest_homeassistant_custom_component.common import MockConfigEntry, MockUser
+
 from custom_components.homekit_manager.compatibility import classify_entity
 from custom_components.homekit_manager.homekit_writer import HomeKitWriteDisabled
-from custom_components.homekit_manager.yaml_store import validate_document, YamlValidationError
+from custom_components.homekit_manager.yaml_store import (
+    YamlValidationError,
+    validate_document,
+)
 
 
 async def setup_manager(hass):
@@ -25,9 +29,9 @@ def test_malformed_status_is_a_controlled_validation_error(status):
 
 @pytest.mark.parametrize("domain,device_class,features", [("camera", None, 0), ("lock", None, 0), ("media_player", "tv", 0), ("remote", None, 4)])
 def test_accessory_mode_matches_native_core_eligibility(domain, device_class, features):
-    from homeassistant.core import State
     from homeassistant.components.homekit.util import state_needs_accessory_mode
     from homeassistant.components.remote import RemoteEntityFeature
+    from homeassistant.core import State
     if domain == "remote":
         features = int(RemoteEntityFeature.ACTIVITY)
     attrs = {"device_class": device_class, "supported_features": features}

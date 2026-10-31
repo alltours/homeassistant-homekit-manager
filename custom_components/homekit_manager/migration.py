@@ -7,10 +7,15 @@ native source migration entirely.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from .const import MANAGEMENT_MODES, MODE_HOMEKIT_BRIDGE, MODE_HOMEKIT_MANAGER, MODE_YAML
+from .const import (
+    MANAGEMENT_MODES,
+    MODE_HOMEKIT_BRIDGE,
+    MODE_HOMEKIT_MANAGER,
+    MODE_YAML,
+)
 
 MODE_LABELS = {
     MODE_HOMEKIT_BRIDGE: "Standard",
@@ -62,7 +67,7 @@ def build_migration_plan(source: str, target: str, bridge_id: str | None) -> dic
         "steps": [],
         "progress_mode": "not_applicable",
         "requires_confirmation": False,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
     }
 
 
@@ -76,5 +81,5 @@ def completed_verification(plan: dict[str, Any], bridge_id: str | None) -> dict[
         "bridge_entry_id": bridge_id,
         "changed": False,
         "migration_performed": False,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(UTC).isoformat(),
     }

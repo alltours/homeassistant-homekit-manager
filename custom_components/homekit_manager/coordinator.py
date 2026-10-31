@@ -1,23 +1,57 @@
 """Event-driven read-only coordinator."""
 from __future__ import annotations
+
 import asyncio
-from collections import Counter
 import logging
 import time
+from collections import Counter
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
-from uuid import uuid4
 from typing import Any
+from uuid import uuid4
+
+from homeassistant.const import __version__ as CORE_VERSION
 from homeassistant.core import callback
-from .compatibility import classify_entity
-from .homekit_reader import read_homekit_entries
-from .inventory import build_inventory
-from .device_reconciliation import reconcile_devices
+
+from .activation_store import ActivationStore
 from .change_planner import plan_changes
-from .fingerprint import build_fingerprint
-from .homekit_writer import build_options_diff, HomeKitWriteBlocked, HomeKitWriter as HomeKitWriter
-from .reconcile import reconcile_desired_state
+from .compatibility import classify_entity
+from .config_source import inspect_configuration_sources
+from .const import (
+    INTEGRATION_VERSION,
+    MANAGEMENT_MODES,
+    MODE_HOMEKIT_BRIDGE,
+    MODE_HOMEKIT_MANAGER,
+    MODE_YAML,
+    NATIVE_FILTER_WRITE_CORE_VERSIONS,
+)
+from .device_reconciliation import reconcile_devices
+from .diagnostics import build_diagnostics, diagnostics_summary, group_diagnostics
+from .dual_mode import build_dual_mode_status
 from .exporter import export_desired_state
+from .fingerprint import build_fingerprint
+from .grouping import build_area_views, build_device_views
+from .history import make_history_entry, restore_as_draft
+from .history_store import HistoryStore
+from .homekit_reader import read_homekit_entries
+from .homekit_writer import (  # noqa: F401 - compatibility seam for legacy monkeypatch callers
+    HomeKitWriteBlocked,
+    HomeKitWriteDisabled,
+    HomeKitWriter,
+    build_options_diff,
+)
+from .inventory import build_inventory
+from .inventory_export import build_inventory_export, export_inventory_snapshot
+from .management_store import ManagementStore
+from .migration import build_migration_matrix, build_migration_plan
+from .migration_store import MigrationStore
+from .mode_store import ModeStore
+from .operations import HomeKitOperationService
+from .positive_list import read_runtime_publication
+from .reconcile import reconcile_desired_state
+from .runtime_diagnostics import diagnose_runtime, runtime_publication_summary
+from .safety import WRITE_LOCK_REASON, write_policy
+from .selection_reconciliation import reconcile_selection
 from .yaml_store import (
     YamlSnapshot,
     YamlStore,
@@ -26,27 +60,6 @@ from .yaml_store import (
     YamlWriteError,
     empty_document,
 )
-from .const import MANAGEMENT_MODES, MODE_HOMEKIT_BRIDGE, MODE_HOMEKIT_MANAGER, MODE_YAML
-from .mode_store import ModeStore
-from .grouping import build_area_views, build_device_views
-from .diagnostics import build_diagnostics, diagnostics_summary, group_diagnostics
-from .history import make_history_entry, restore_as_draft
-from .history_store import HistoryStore
-from .config_source import inspect_configuration_sources
-from .migration import build_migration_plan, build_migration_matrix
-from .migration_store import MigrationStore
-from .management_store import ManagementStore
-from .activation_store import ActivationStore
-from .safety import WRITE_LOCK_REASON, write_policy
-from .homekit_writer import HomeKitWriteDisabled
-from .operations import HomeKitOperationService
-from .const import INTEGRATION_VERSION, NATIVE_FILTER_WRITE_CORE_VERSIONS
-from homeassistant.const import __version__ as CORE_VERSION
-from .selection_reconciliation import reconcile_selection
-from .positive_list import read_runtime_publication
-from .runtime_diagnostics import diagnose_runtime, runtime_publication_summary
-from .inventory_export import build_inventory_export, export_inventory_snapshot
-from .dual_mode import build_dual_mode_status
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -219,7 +232,11 @@ class HomeKitManagerCoordinator:
                 phases[name] = round((now - phase_started) * 1000, 2)
                 phase_started = now
             try:
-                from homeassistant.helpers import area_registry, device_registry, entity_registry
+                from homeassistant.helpers import (
+                    area_registry,
+                    device_registry,
+                    entity_registry,
+                )
                 devices_registry = device_registry.async_get(self.hass)
                 entity_registry_obj = entity_registry.async_get(self.hass)
                 area_registry_obj = area_registry.async_get(self.hass)
@@ -258,7 +275,7 @@ class HomeKitManagerCoordinator:
                     selected_id = next(iter(bridge_ids), None) if len(bridges) == 1 else None
                 selected = next((entry for entry in bridges if entry.entry_id == selected_id), None)
                 bridge_filter = selected.filter if selected else None
-                from .filtering import evaluate_filter, build_core_filter
+                from .filtering import build_core_filter, evaluate_filter
                 core_filter = build_core_filter(bridge_filter)
                 inventory = []
                 for record in records:
@@ -346,7 +363,7 @@ class HomeKitManagerCoordinator:
                 self.runtime_diagnosis = runtime_diagnosis
                 self.operation_policy = operation_policy
                 self.last_error = None
-                self.last_updated = datetime.now(timezone.utc).isoformat()
+                self.last_updated = datetime.now(UTC).isoformat()
                 self.refresh_count += 1
                 self.snapshot_revision = self.refresh_count
                 self.snapshot_timestamp = self.last_updated
@@ -456,7 +473,7 @@ class HomeKitManagerCoordinator:
         """Durably record Manager evidence; never change HomeKit or retry it."""
         if state not in {"validated", "prepared", "activating", "saved", "active", "failed", "unknown"}:
             raise ValueError("Unbekannter Aktivierungszustand")
-        status = {"entry_id": entry_id, "request_id": request_id, "state": state, "updated_at": datetime.now(timezone.utc).isoformat(), **details}
+        status = {"entry_id": entry_id, "request_id": request_id, "state": state, "updated_at": datetime.now(UTC).isoformat(), **details}
         statuses = self.activation_statuses | {entry_id: status}
         await self.activation_store.async_save(statuses)
         self.activation_statuses = statuses
@@ -590,7 +607,7 @@ class HomeKitManagerCoordinator:
             if not confirmed:
                 return status | {"state": "awaiting_confirmation", "message": "Bestätigung erforderlich: Nur die Verwaltungszuordnung wird gespeichert; HomeKit bleibt unverändert."}
             entry_id = bridge["entry_id"]
-            status.update(source=status["configuration_source"], updated_at=datetime.now(timezone.utc).isoformat(), state="verifying", step="validate", request_id=uuid4().hex, message="Verwaltungszuordnung wird unabhängig von der HomeKit-Konfiguration geprüft.")
+            status.update(source=status["configuration_source"], updated_at=datetime.now(UTC).isoformat(), state="verifying", step="validate", request_id=uuid4().hex, message="Verwaltungszuordnung wird unabhängig von der HomeKit-Konfiguration geprüft.")
             self.management_statuses[entry_id] = status.copy()
             try:
                 await self.management_store.async_save(self.management_statuses)

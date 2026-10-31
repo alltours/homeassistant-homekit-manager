@@ -1,8 +1,11 @@
 """Pure inventory assembly from Home Assistant registries and states."""
 from __future__ import annotations
-from dataclasses import dataclass
+
+from collections.abc import Mapping
 from copy import deepcopy
-from typing import Any, Mapping
+from dataclasses import dataclass
+from typing import Any
+
 
 def _value(obj: Any, key: str, default=None):
     if isinstance(obj, Mapping):

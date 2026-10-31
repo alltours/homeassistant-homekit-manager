@@ -6,13 +6,15 @@ runtime, never visibility on a physical Apple Home controller.
 """
 from __future__ import annotations
 
+import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from hashlib import sha256
-import json
-from typing import Any, Mapping
+from typing import Any
 
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entityfilter import FILTER_SCHEMA
+
 from .runtime_diagnostics import diagnose_runtime, runtime_publication_summary
 
 

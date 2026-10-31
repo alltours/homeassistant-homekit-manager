@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 import socket
+from pathlib import Path
 
+import pytest
 from aiohomekit.controller.controller import Controller
 from aiohomekit.controller.ip.discovery import IpDiscovery
 from aiohomekit.controller.ip.pairing import IpPairing
@@ -12,7 +13,6 @@ from aiohomekit.zeroconf import HomeKitService
 from homeassistant.config import async_hass_config_yaml
 from homeassistant.const import __version__
 from homeassistant.setup import async_setup_component
-import pytest
 
 from custom_components.homekit_manager.homekit_writer import HomeKitWriteBlocked
 from custom_components.homekit_manager.operations import HomeKitOperationService

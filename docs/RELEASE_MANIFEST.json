@@ -4,8 +4,8 @@
   "files": [
     {
       "path": "__init__.py",
-      "sha256": "2574381eb1c7db1489f0b8be714a7b683a003516e019ee98a07d48e33ed470df",
-      "size": 2540
+      "sha256": "c37c8994e1f67e848273723c07064631874f2e3a197bcda781b126bf8ea91cee",
+      "size": 2528
     },
     {
       "path": "activation_store.py",
@@ -19,23 +19,23 @@
     },
     {
       "path": "bulk.py",
-      "sha256": "28e6baa9fa1abfc7d0e6d59d8a55ea4e339fc5a0d65ec4c201814b08f1e2373e",
-      "size": 4113
+      "sha256": "7052fe2d1204ee5240ee3055ffc76da1fcf7a2a398ddf968e7b16477eb69c04c",
+      "size": 4122
     },
     {
       "path": "change_planner.py",
-      "sha256": "8cf8010a3b0ddab876c3028b66061d17fc639287b70095352bf258da24f723f8",
-      "size": 6384
+      "sha256": "e5719cf705a9e89cc3fb2a4b3c36ac1e6355415d203c65faf3672576b42ea7db",
+      "size": 6411
     },
     {
       "path": "compatibility.py",
-      "sha256": "b4b6a6c9af9373e05967719a93adcc2aae320f8f5dd1a626a7e9eb0bbc7fe545",
-      "size": 7580
+      "sha256": "eaec4be5c2057392345d556ce420ef1c1d229fe2cf54eda3c8ea0a976879c8d6",
+      "size": 7609
     },
     {
       "path": "config_flow.py",
-      "sha256": "dc5808229a66b28d83d29b6ec8a9410a7c326526966f9cd8a53e813e96039d26",
-      "size": 679
+      "sha256": "f02e7c76732926c7d8389c23db7c198f31cc77c8a2c8bf9a868d084034a3646c",
+      "size": 682
     },
     {
       "path": "config_source.py",
@@ -44,33 +44,33 @@
     },
     {
       "path": "const.py",
-      "sha256": "9b046ff88e617dca1f43c7cc1f0cfef7311416ae231683d2634a33026b87bb28",
-      "size": 2747
+      "sha256": "a052c819ac40647ed0af4444103d8b8722de38427ce2d6fd9a99ed566e375720",
+      "size": 2748
     },
     {
       "path": "conversion.py",
-      "sha256": "3484e92592c2a7c55ae98ee038edbcae55789fb46bf9b498137f79ff9287c85a",
-      "size": 3120
+      "sha256": "bac9c8db1a836c1716cd7973f513b458050a445d017a99563a80eee70dbd17bb",
+      "size": 3147
     },
     {
       "path": "coordinator.py",
-      "sha256": "ee2559cf39f3ebfebaa9b2a1cc0a062f7ed2078259e34aefaf7c574afc0ab72e",
-      "size": 51817
+      "sha256": "451b12fd05e0741361201441dbb30e96d02cda9ea95a63bdd3c4051cc630169e",
+      "size": 51923
     },
     {
       "path": "device_config.py",
-      "sha256": "8e769bc44c9a2403a3b587f99a0f9df06d4c2bb13e57b3c3c32b753c1075bf26",
-      "size": 1547
+      "sha256": "81aa5ed6973707f275387b9d10ba775175f16cc1e7b1c24a79629696797c2d37",
+      "size": 1574
     },
     {
       "path": "device_reconciliation.py",
-      "sha256": "4c90142d9903465426960c348ab227d4e7a4a3515e3cb1bb714df838c5cbba0e",
-      "size": 2076
+      "sha256": "7b881a899a117df179b25c786601847c0fd19ebe2950943f235431a4779f76ca",
+      "size": 2103
     },
     {
       "path": "diagnostics.py",
-      "sha256": "69b81730a62a7369e447ddcf6a89eec39db680d537bd959aaf3f75a5237ed84f",
-      "size": 6298
+      "sha256": "a5d488e3819e68ea53e91c4a832e337933811607f4612b297589e293c45fbcdf",
+      "size": 6325
     },
     {
       "path": "draft.py",
@@ -79,18 +79,18 @@
     },
     {
       "path": "dual_mode.py",
-      "sha256": "f13298f5860d82249958d27ebd0327cd2c2c83d81e291dbbc1d60598b5cff3a3",
-      "size": 9092
+      "sha256": "c770daf714dd7076512e78cdfcc702f39a79b594f965c2b01a4c250db9ee6c55",
+      "size": 9091
     },
     {
       "path": "exporter.py",
-      "sha256": "d20f22dd94c24e644e1df5bec013d40ae87ec30993be824c19798bc1c5ba22c8",
-      "size": 1065
+      "sha256": "20f1359fb93dd00666c591b7491a7607666d62da4a62e5ee7590529fcbcbbaf2",
+      "size": 1092
     },
     {
       "path": "filtering.py",
-      "sha256": "002bc099407eda845f96a47ea66c8f15ba869707af7ec1eacceffe9dbb8bbffc",
-      "size": 5817
+      "sha256": "14472ca04e8514675b2e5269cedda33e45450d6b6a83f0d959c4a9f550a2e75d",
+      "size": 5846
     },
     {
       "path": "fingerprint.py",
@@ -99,13 +99,13 @@
     },
     {
       "path": "grouping.py",
-      "sha256": "91bac0a305dfaab2803d28c44f397a5348832dae6b5b88a89c0165802da4a746",
-      "size": 5662
+      "sha256": "cbcbaee81212129105d00be5e599dd0f65e79240d1300bae7a2ebbe87f2f9488",
+      "size": 5689
     },
     {
       "path": "history.py",
-      "sha256": "1dc3921637035480e8dab3e3b735c0e97644a50dea1a594d187ce8f6b6b5537e",
-      "size": 2297
+      "sha256": "684ee2500e595303b7af0726e9ce09cbb62f808e98ad718ebf753a4f57549480",
+      "size": 2310
     },
     {
       "path": "history_store.py",
@@ -114,23 +114,23 @@
     },
     {
       "path": "homekit_reader.py",
-      "sha256": "46d4ecdef4f1b8e0f4eab5aa83fcb09415029cd1b84885b61753bcf7b278d294",
-      "size": 2826
+      "sha256": "8953c9c2d3dcd9ceb02f6735afa14de7dff7fb1df55e03fc77b48b985f514ef6",
+      "size": 2829
     },
     {
       "path": "homekit_writer.py",
-      "sha256": "d84f33bc269c7b90e3e3ed6b02d4e66b4f5f9fee2ec06a716533d52e4af9c001",
-      "size": 18809
+      "sha256": "4b50e818fd89f42ed83fe08f6ece8b9399cbaf33598a437c6328ddb9c5829f90",
+      "size": 18800
     },
     {
       "path": "inventory.py",
-      "sha256": "9252f888b0f4d229891224f6f82300f178f2bf60a416a5f218172697b788fd36",
-      "size": 7798
+      "sha256": "a23a1b2971813f008c9727f59cc60b0429bcc8b5c09c0114e9baf5997d8912de",
+      "size": 7827
     },
     {
       "path": "inventory_export.py",
-      "sha256": "8613232aa4bc3516f19a32552e2b8e75d060b42ba7d64e5d82d59be7c4503f0a",
-      "size": 4248
+      "sha256": "a77acf03a67de656437a9a563a489fa0d70cf605d84765bdd8a4d59e815c1e2a",
+      "size": 4274
     },
     {
       "path": "management_store.py",
@@ -144,13 +144,13 @@
     },
     {
       "path": "migration.py",
-      "sha256": "f9ed98ab76e67027e6c0badc23ec174a4b1a1a24ff95802e9a3e97f9482b1147",
-      "size": 3168
+      "sha256": "7d04b9acf3e066f70630bdbea36032cc10a2894da200cd178d5520c3e728b33c",
+      "size": 3166
     },
     {
       "path": "migration_store.py",
-      "sha256": "69167f434f7f0acdbf2c092e1c3412093e0d63b95d0ee16715420cd256259db0",
-      "size": 1796
+      "sha256": "64e96bb35bcc48de34576c1449c72f14734c64f329d25a23cd82a6ec2bdff5d5",
+      "size": 1773
     },
     {
       "path": "mode_store.py",
@@ -159,13 +159,13 @@
     },
     {
       "path": "native_adapter.py",
-      "sha256": "de6c124734a05f46b80e84f39a07c5e3935162106565c860402fac3ca39be109",
-      "size": 12343
+      "sha256": "814667d47f8fa2150a58ea22f7ce7dc011df6f680a1ae3a937d82c978d40845c",
+      "size": 12411
     },
     {
       "path": "operations.py",
-      "sha256": "5b10e81778aefe4ef6b787e20cee8b9926e03dd83b6582c018bb3b513dcd1b9f",
-      "size": 19000
+      "sha256": "3dd3908f407ed3005c07a191271e40d7d49aafacc9db0da126ad76f493c41a2f",
+      "size": 19021
     },
     {
       "path": "panel.py",
@@ -174,28 +174,28 @@
     },
     {
       "path": "performance.py",
-      "sha256": "dc554cd935397a24db4ec74982e9674661656400ff15a48dfbd55baff0b2099e",
-      "size": 905
+      "sha256": "dea3aa46e169299456eeff7f798ae9da0ec377a17f646bee2e78e2dc1900adf0",
+      "size": 932
     },
     {
       "path": "positive_list.py",
-      "sha256": "68cc0e9116ab3152e833a84931be2aaac84bf6e48f6917cdf9cfffa30770667c",
-      "size": 6841
+      "sha256": "576fc194828d4efa6e46b0533807c3d21933a181dffd17307f98ca71b0d7231c",
+      "size": 6869
     },
     {
       "path": "reconcile.py",
-      "sha256": "9b58b1929b9d465fd8c8b7263f66d6b429bf300b0bf4605bb3f293eb0a6bafa6",
-      "size": 1870
+      "sha256": "b5388b37c53e6f77abc479052fc4639b89ca6ecb995b15b7a6ec821434f6870f",
+      "size": 1897
     },
     {
       "path": "rules.py",
-      "sha256": "e674e11eafeedfe3a72d931b40a8905060649213e9746642afb288302e5be297",
-      "size": 3679
+      "sha256": "47a1e444a788a9cf83cb492a5c48cc05455deefeccddb76ae9969b945ba043da",
+      "size": 3796
     },
     {
       "path": "runtime_diagnostics.py",
-      "sha256": "7591c56339ab15a775cef82be38e5ee2adcefb94b287acf6932d7bd75de6087e",
-      "size": 10596
+      "sha256": "ca0b328b6460d7cf0b7525773c70b5984b788a2e4a3dc60573c77665502ab2a7",
+      "size": 10622
     },
     {
       "path": "safety.py",
@@ -204,13 +204,13 @@
     },
     {
       "path": "selection_reconciliation.py",
-      "sha256": "1fdb2f1677d38e17e240292b46d78cf8c3ce66da0fead296b8d60aa78482dee2",
-      "size": 9158
+      "sha256": "d76f7b18c9431d9c3b475d46f267710ee6a59190cbf3b581181ca2767412a79c",
+      "size": 9185
     },
     {
       "path": "source_model.py",
-      "sha256": "c8a4a5be099c21360fdb911e0ed976d865af2c1b6e90f345f9272deb0f4b4c5d",
-      "size": 3873
+      "sha256": "2cd3093e06228a5a5edd0e5a090a2181064e11eedffccfd93eb34a5a5e02bf18",
+      "size": 3900
     },
     {
       "path": "strings.json",
@@ -229,18 +229,18 @@
     },
     {
       "path": "websocket.py",
-      "sha256": "1993cd46ec02a5e7389a315e7ee3b4fdd575258da3c3dc3b3887d3e1e45a5a77",
-      "size": 28619
+      "sha256": "93f21e80a1fa038dfbc26d6efe93c1b1ac01713e61f58b1dbc7a48c1f282b9e3",
+      "size": 28722
     },
     {
       "path": "write_grant.py",
-      "sha256": "dd438dd61d149330b9e0940c61ce030893a4d947e24f668beb5860500a16d2b6",
-      "size": 6566
+      "sha256": "98459919ab1473710f9c068da02016cbe496f2bfc46d8b96ddd4fe09f1ead538",
+      "size": 6592
     },
     {
       "path": "write_test_mode.py",
-      "sha256": "823bc2419bd2251755c92d860c176fc77e987e32327b8a8155687bc8a90e6d5e",
-      "size": 4456
+      "sha256": "6d8a2fed14f7fe81f0246a6cab33e4eceed2e3497add66bb646fed5d62fb4c00",
+      "size": 4441
     },
     {
       "path": "www/homekit-manager.js",
@@ -249,13 +249,13 @@
     },
     {
       "path": "yaml_adapter.py",
-      "sha256": "2ebb28f86859937cf226075bcba4c347a33d9596f5cbd9f5c208290245b3a46f",
-      "size": 31217
+      "sha256": "bd181e0aab03052c9ea216214605ba48e9f2dbdaf9580b6b269a0269695d35e6",
+      "size": 31245
     },
     {
       "path": "yaml_store.py",
-      "sha256": "de7747a3abaa6726d2cd6eb3dd7c0484bf1f229de1aeac637da5526c819d8a59",
-      "size": 11710
+      "sha256": "d43ec68286774cdc9cde77455082c44d1d112392682489918540bb7d59e69c52",
+      "size": 11723
     }
   ]
 }

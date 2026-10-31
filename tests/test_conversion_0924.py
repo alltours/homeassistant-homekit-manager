@@ -2,10 +2,14 @@
 from __future__ import annotations
 
 from copy import deepcopy
+
 import pytest
 
-from custom_components.homekit_manager.conversion import ConversionBlocked, native_to_yaml, yaml_to_native
-
+from custom_components.homekit_manager.conversion import (
+    ConversionBlocked,
+    native_to_yaml,
+    yaml_to_native,
+)
 
 CORE = "2026.10.4"
 

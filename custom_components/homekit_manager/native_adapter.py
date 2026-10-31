@@ -5,19 +5,29 @@ automatic recovery and rollback remain unavailable.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from copy import deepcopy
 import asyncio
-from typing import Any, Mapping
+from collections.abc import Mapping
+from copy import deepcopy
+from dataclasses import dataclass, field
+from typing import Any
 from uuid import uuid4
 
 from homeassistant.helpers.storage import Store
 
 from .const import NATIVE_FILTER_WRITE_CORE_VERSIONS
-from .homekit_writer import HomeKitWriter, HomeKitWriteBlocked, OptionsDiff, build_options_diff
+from .homekit_writer import (
+    HomeKitWriteBlocked,
+    HomeKitWriter,
+    OptionsDiff,
+    build_options_diff,
+)
+from .positive_list import (
+    PositiveListEvidence,
+    collect_migration_evidence,
+    read_runtime_publication,
+    verify_migration_runtime,
+)
 from .source_model import HomeKitSource, native_source, revision
-from .positive_list import PositiveListEvidence, collect_migration_evidence, read_runtime_publication, verify_migration_runtime
-
 
 _OPERATION_LOCKS: dict[str, asyncio.Lock] = {}
 

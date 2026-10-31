@@ -8,15 +8,15 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from pathlib import Path
 import socket
+from pathlib import Path
 
+import pytest
 from aiohomekit.controller.controller import Controller
 from aiohomekit.controller.ip.discovery import IpDiscovery
 from aiohomekit.controller.ip.pairing import IpPairing
 from aiohomekit.zeroconf import HomeKitService
 from homeassistant import config_entries
-import pytest
 
 
 class LocalAdvertiser:

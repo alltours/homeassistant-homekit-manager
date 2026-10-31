@@ -6,12 +6,12 @@ No test mDNS packet or persistence file reaches the productive HA host.
 from __future__ import annotations
 
 import asyncio
-from copy import deepcopy
 import gc
 import json
 import os
-from pathlib import Path
 import traceback
+from copy import deepcopy
+from pathlib import Path
 from unittest.mock import patch
 
 from homeassistant.bootstrap import async_setup_hass
@@ -22,9 +22,8 @@ from homeassistant.core import State
 from homeassistant.helpers.entityfilter import FILTER_SCHEMA
 from homeassistant.runner import RuntimeConfig
 
-from custom_components.homekit_manager.operations import HomeKitOperationService
 from custom_components.homekit_manager.compatibility import classify_entity
-
+from custom_components.homekit_manager.operations import HomeKitOperationService
 
 ENTRY_ID = "isolated-hap-full-bootstrap"
 SENSORS = (

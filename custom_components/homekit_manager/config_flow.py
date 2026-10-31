@@ -1,7 +1,10 @@
 """Config flow for the read-only HomeKit Manager."""
 from __future__ import annotations
+
 from homeassistant import config_entries
+
 from .const import DOMAIN
+
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Create a local read-only manager entry."""

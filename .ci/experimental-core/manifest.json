@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "core_version": "2026.10.4",
+  "base_commit": "357cae5c598dfcd7a0ea7dc5b1facccd4ec6037b",
+  "target_commit": "c04fa739c790169977447b0373e5c26e7e334021",
+  "target_tree": "8419f460ab542256cbee6f8031a874e6f43608a4",
+  "patch_file": "hkm-core-2026.10.4-0.10.20.patch",
+  "patch_sha256": "ad8a0a1166d634c829978fb35be35b7894b9ea136011023e76e1fbb29dd23537",
+  "changed_files": [
+    "homeassistant/components/homekit/__init__.py",
+    "homeassistant/components/homekit/migration.py",
+    "homeassistant/config_entries.py",
+    "tests/components/homekit/test_migration.py"
+  ],
+  "capabilities": [
+    "async_prepare_source_migration",
+    "async_switch_source",
+    "async_recover_before_yaml_reconciliation",
+    "async_get_migration_status",
+    "async_request_rollback"
+  ]
+}

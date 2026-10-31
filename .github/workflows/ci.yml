@@ -80,7 +80,7 @@ jobs:
       - name: Lint source adapters and operation boundary
         run: |
           python -m pip install ruff==0.17.3
-          ruff check scripts/run_beta_integration.py tests/integration/_beta_pytest_adapter/sitecustomize.py custom_components/homekit_manager/{bulk.py,change_planner.py,compatibility.py,conversion.py,filtering.py,inventory.py,inventory_export.py,native_adapter.py,runtime_diagnostics.py,source_model.py,yaml_adapter.py,operations.py,homekit_reader.py,homekit_writer.py,positive_list.py,selection_reconciliation.py,write_grant.py,write_test_mode.py,coordinator.py,websocket.py,migration.py,safety.py} tests/{test_beta_compatibility_0105.py,test_bulk_0105.py,test_inventory_names_0105.py,test_conversion_0924.py,test_filter_core_contract_0100.py,test_inventory_quality.py,test_inventory_export_0108.py,test_runtime_diagnostics_0108.py,test_source_model_0924.py,test_writer_filter_boundary_0100.py,test_yaml_adapter.py,test_reader_redaction_0924.py,test_migration.py,test_release.py,test_selection_reconciliation_01010.py} tests/integration/{test_native_0924.py,test_hap_identity_0100.py,test_hap_loopback_0100.py,test_hap_yaml_loopback_0100.py,test_hap_process_restart_0100.py,_hap_restart_worker.py,test_hap_full_bootstrap_0100.py,_hap_full_bootstrap_worker.py,_native_beta_filter_worker.py,test_write_grant_0100.py,test_test_write_mode_0100.py,test_websocket_authorization_0100.py,test_yaml_core_0924.py,test_operation_service_0924.py,test_operation_websocket_0924.py,test_performance_probe_0100.py} --select E,F,B,S --ignore E501,S101
+          ruff check scripts/{run_beta_integration.py,run_experimental_core_tests.py,verify_experimental_core_patch.py} tests/integration/_beta_pytest_adapter/sitecustomize.py custom_components/homekit_manager/{bulk.py,change_planner.py,compatibility.py,conversion.py,filtering.py,inventory.py,inventory_export.py,native_adapter.py,runtime_diagnostics.py,source_model.py,yaml_adapter.py,operations.py,homekit_reader.py,homekit_writer.py,positive_list.py,selection_reconciliation.py,write_grant.py,write_test_mode.py,coordinator.py,websocket.py,migration.py,safety.py} tests/{test_beta_compatibility_0105.py,test_bulk_0105.py,test_inventory_names_0105.py,test_conversion_0924.py,test_filter_core_contract_0100.py,test_inventory_quality.py,test_inventory_export_0108.py,test_runtime_diagnostics_0108.py,test_source_model_0924.py,test_writer_filter_boundary_0100.py,test_yaml_adapter.py,test_reader_redaction_0924.py,test_migration.py,test_release.py,test_selection_reconciliation_01010.py,test_security_negative_controls_021.py} tests/integration/{test_native_0924.py,test_hap_identity_0100.py,test_hap_loopback_0100.py,test_hap_yaml_loopback_0100.py,test_hap_process_restart_0100.py,_hap_restart_worker.py,test_hap_full_bootstrap_0100.py,_hap_full_bootstrap_worker.py,_native_beta_filter_worker.py,test_write_grant_0100.py,test_test_write_mode_0100.py,test_websocket_authorization_0100.py,test_yaml_core_0924.py,test_operation_service_0924.py,test_operation_websocket_0924.py,test_performance_probe_0100.py} --select E,F,B,S --ignore E501,S101
       - name: Static production write-boundary checks
         run: |
           grep -F "raise HomeKitWriteDisabled(WRITE_LOCK_REASON)" custom_components/homekit_manager/coordinator.py
@@ -129,37 +129,98 @@ jobs:
           npx playwright test -c tests/frontend/playwright.config.mjs tests/frontend/browser_regression.spec.mjs tests/frontend/screenshot_reference.spec.mjs --project=webkit --workers=1
 
   experimental-core-native:
-    if: ${{ vars.HKM_EXPERIMENTAL_CORE_ARCHIVE_URL != '' && vars.HKM_EXPERIMENTAL_CORE_ARCHIVE_SHA256 != '' && vars.HKM_EXPERIMENTAL_CORE_COMMIT != '' }}
     runs-on: ubuntu-24.04
     env:
-      HKM_EXPERIMENTAL_CORE_ARCHIVE_URL: ${{ vars.HKM_EXPERIMENTAL_CORE_ARCHIVE_URL }}
-      HKM_EXPERIMENTAL_CORE_ARCHIVE_SHA256: ${{ vars.HKM_EXPERIMENTAL_CORE_ARCHIVE_SHA256 }}
-      HKM_EXPERIMENTAL_CORE_COMMIT: ${{ vars.HKM_EXPERIMENTAL_CORE_COMMIT }}
       HKM_EXPERIMENTAL_CORE_VERSION: '2026.10.4'
+      HKM_EXPERIMENTAL_CORE_ROOT: ${{ runner.temp }}/hkm-core
+      HKM_EXPERIMENTAL_CORE_EVIDENCE: ${{ runner.temp }}/hkm-experimental-evidence
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.14'
+          cache: pip
+          cache-dependency-path: tests/integration/requirements-ha-2026.10.4.txt
       - name: Install Manager test dependencies
         run: python -m pip install -r tests/integration/requirements-ha-2026.10.4.txt
-      - name: Download and verify pinned experimental Core
+      - name: Verify Manager checkout identity
         run: |
           set -euo pipefail
-          archive="$RUNNER_TEMP/hkm-core.tar.gz"
-          curl --fail --location --silent --show-error "$HKM_EXPERIMENTAL_CORE_ARCHIVE_URL" --output "$archive"
-          printf '%s  %s\n' "$HKM_EXPERIMENTAL_CORE_ARCHIVE_SHA256" "$archive" | sha256sum --check --strict
-          mkdir "$RUNNER_TEMP/hkm-core"
-          tar --extract --gzip --file "$archive" --directory "$RUNNER_TEMP/hkm-core" --strip-components=1
-          test -f "$RUNNER_TEMP/hkm-core/homeassistant/components/homekit/migration.py"
-          echo "HKM_EXPERIMENTAL_CORE_ROOT=$RUNNER_TEMP/hkm-core" >> "$GITHUB_ENV"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          mkdir -p "$HKM_EXPERIMENTAL_CORE_EVIDENCE"
+          cp .ci/experimental-core/manifest.json "$HKM_EXPERIMENTAL_CORE_EVIDENCE/manifest.json"
+      - name: Resolve pinned Core provenance
+        id: core-provenance
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          manifest = json.loads(Path('.ci/experimental-core/manifest.json').read_text())
+          for key in ('base_commit', 'target_commit', 'target_tree', 'patch_sha256'):
+              print(f'{key}={manifest[key]}')
+          PY
+      - name: Clone exact official Core base
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout https://github.com/home-assistant/core.git "$HKM_EXPERIMENTAL_CORE_ROOT"
+          git -C "$HKM_EXPERIMENTAL_CORE_ROOT" fetch --depth=1 origin "${{ steps.core-provenance.outputs.base_commit }}"
+          git -C "$HKM_EXPERIMENTAL_CORE_ROOT" checkout --detach "${{ steps.core-provenance.outputs.base_commit }}"
+          test "$(git -C "$HKM_EXPERIMENTAL_CORE_ROOT" rev-parse HEAD)" = "${{ steps.core-provenance.outputs.base_commit }}"
+      - name: Verify and apply reviewed Core patch
+        run: |
+          set -euo pipefail
+          python scripts/verify_experimental_core_patch.py \
+            --core-root "$HKM_EXPERIMENTAL_CORE_ROOT" \
+            --manifest .ci/experimental-core/manifest.json \
+            --evidence "$HKM_EXPERIMENTAL_CORE_EVIDENCE/patch-verification.json"
+      - name: Run independent security negative controls
+        run: |
+          set -euo pipefail
+          python -m pytest -q tests/test_security_negative_controls_021.py \
+            --junitxml="$HKM_EXPERIMENTAL_CORE_EVIDENCE/negative-controls.junit.xml"
+      - name: Reject wrong Core before pytest
+        run: |
+          set -euo pipefail
+          if python scripts/run_experimental_core_tests.py \
+            --core-root "$HKM_EXPERIMENTAL_CORE_ROOT" \
+            --core-commit 0000000000000000000000000000000000000000 \
+            --core-version "$HKM_EXPERIMENTAL_CORE_VERSION" \
+            tests -m experimental_core; then
+            echo 'wrong-Core negative control unexpectedly passed' >&2
+            exit 1
+          fi
+      - name: Reject tampered Core patch before apply
+        run: |
+          set -euo pipefail
+          tampered="$RUNNER_TEMP/hkm-core-tampered.patch"
+          cp .ci/experimental-core/hkm-core-2026.10.4-0.10.20.patch "$tampered"
+          printf '\n# tampered\n' >> "$tampered"
+          if python scripts/verify_experimental_core_patch.py \
+            --verify-only \
+            --manifest .ci/experimental-core/manifest.json \
+            --patch "$tampered" \
+            --evidence "$HKM_EXPERIMENTAL_CORE_EVIDENCE/tampered-patch.json"; then
+            echo 'tampered-patch negative control unexpectedly passed' >&2
+            exit 1
+          fi
       - name: Run experimental Core migration suite with fail-closed checkout guard
         run: |
+          set -euo pipefail
           python scripts/run_experimental_core_tests.py \
             --core-root "$HKM_EXPERIMENTAL_CORE_ROOT" \
-            --core-commit "$HKM_EXPERIMENTAL_CORE_COMMIT" \
+            --core-commit "${{ steps.core-provenance.outputs.base_commit }}" \
             --core-version "$HKM_EXPERIMENTAL_CORE_VERSION" \
+            --expected-tree "${{ steps.core-provenance.outputs.target_tree }}" \
+            --artifacts-dir "$HKM_EXPERIMENTAL_CORE_EVIDENCE" \
             tests -m experimental_core
+      - name: Archive experimental Core evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: experimental-core-ci-evidence
+          path: ${{ runner.temp }}/hkm-experimental-evidence
+          if-no-files-found: error
 
   core-beta-native:
     runs-on: ubuntu-24.04

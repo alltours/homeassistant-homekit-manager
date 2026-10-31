@@ -164,14 +164,15 @@ State garantiert. Ohne diesen Nachweis bleibt sie blockiert.
 |---|---|
 | Python-Unit-Tests auf HA Core 2026.10.4 | **166 bestanden**, 0 fehlgeschlagen, 0 übersprungen, 7 Warnungen. |
 | Python-Unit-Tests auf HA Core 2026.11.0b0 | **166 bestanden**, 0 fehlgeschlagen, 0 übersprungen, 4 Warnungen; inklusive Dual-Mode-/Conversion-Verträgen gegen den Beta-Core. |
-| Core-Integrationstest auf HA Core 2026.10.4 | **114 bestanden**, einschließlich Config-Flow, WebSocket, YAML, HAP-Loopback und Browser-Backend. |
+| Core-Integrationstest auf HA Core 2026.10.4 | **114 bestanden**, 0 fehlgeschlagen, 0 übersprungen; einschließlich Config-Flow, WebSocket, YAML, HAP-Loopback und Browser-Backend. |
 | Core-Integrationstest auf HA Core 2026.11.0b0 | **114 bestanden**, 0 fehlgeschlagen, 0 übersprungen, 4 Warnungen; mit dem dokumentierten Testadapter für den entfernten Logger-Hook. YAML-Apply bleibt auf dieser Beta absichtlich blockiert und wird als Blockade geprüft. |
 | YAML-Core-Import/Reload | Vorhandene isolierte Tests bestehen auf dem kompatiblen Venv und prüfen `SOURCE_IMPORT`, Entry-ID und Reload. |
 | HAP-Loopback | Vorhandener isolierter YAML-Loopback weist MAC-, Pairing-, AID- und IID-Erhalt innerhalb derselben YAML-Quelle nach; kein Quellenmigrationsnachweis. |
 | Frontend-Unit-Test und JS-Syntax | Bestanden (`npm run test:frontend`, `node --check`). |
 | Browser Chromium/WebKit | **104 bestanden** (`npm run test:browser`), einschließlich des neuen Dual-Mode-Tests. |
-| Release-Reproduzierbarkeit | **3 bestanden** (`tests/test_release.py`), 51 Dateien; SHA-256 wird nach dem finalen Commit neu erzeugt. |
+| Release-Reproduzierbarkeit | **3 bestanden** (`tests/test_release.py`), 51 Integrationsdateien plus Manifest; ZIP SHA-256 `3497409c38ea6b2dbe0da068f9fd9a7c88c5df09a380233aa3e3549f83c67ce7`. |
 | Ruff-Qualitätsprüfung | Bestanden für geänderte Backend-/Testdateien. |
+| GitHub Actions | CI Run **239**: Quality, Browser und Core-Beta erfolgreich; HACS Run **264** erfolgreich. |
 
 Für Core `2026.11.0b0` ist `pytest-homeassistant-custom-component 0.13.375`
 weiterhin die verfügbare Plugin-Version; sie importiert einen Logger-Hook, den

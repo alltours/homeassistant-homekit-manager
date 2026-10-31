@@ -9,8 +9,11 @@ from __future__ import annotations
 
 from hashlib import sha256
 import json
+import logging
 from typing import Any, Iterable, Mapping
 
+
+_LOGGER = logging.getLogger(__name__)
 
 RUNTIME_STATES = frozenset({
     "published_verified",
@@ -124,6 +127,7 @@ def diagnose_runtime(
             try:
                 aid = aid_lookup(entity_id)
             except Exception:  # pragma: no cover - defensive Core adapter boundary
+                _LOGGER.debug("AID lookup failed for %s", entity_id, exc_info=True)
                 continue
             if aid is None:
                 continue

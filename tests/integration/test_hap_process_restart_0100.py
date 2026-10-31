@@ -15,7 +15,7 @@ def test_pairing_reconnects_after_isolated_core_process_restart():
     with TemporaryDirectory(prefix="hkm-hap-restart-") as directory:
         for phase in ("pair", "reconnect"):
             environment = dict(os.environ, HKM_RESTART_DIR=directory, HKM_RESTART_PHASE=phase)
-            result = subprocess.run(
+            result = subprocess.run(  # noqa: S603 - fixed worker executable and isolated test path
                 [sys.executable, "-m", "pytest", "-q", "--show-capture=no", str(WORKER)],
                 cwd=ROOT, env=environment, capture_output=True, text=True, timeout=90, check=False,
             )

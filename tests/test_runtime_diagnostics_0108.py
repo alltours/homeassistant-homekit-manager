@@ -12,7 +12,7 @@ if package not in sys.modules:
     module.__path__ = [str(Path(__file__).parents[1] / "custom_components" / "homekit_manager")]
     sys.modules[package] = module
 
-from custom_components.homekit_manager.runtime_diagnostics import (
+from custom_components.homekit_manager.runtime_diagnostics import (  # noqa: E402 - package stub is installed first
     diagnose_runtime,
     runtime_publication_summary,
 )

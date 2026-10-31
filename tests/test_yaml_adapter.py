@@ -135,7 +135,7 @@ def test_macos_source_acl_is_read_only(yaml_files):
     adapter = YamlHomeKitAdapter(root)
     plan = adapter.plan_filter(imported_entry(), {"include_entities": ["light.new"]})
     before = source.read_bytes()
-    applied = subprocess.run(["/bin/chmod", "+a", "everyone allow write", str(source)],
+    applied = subprocess.run(["/bin/chmod", "+a", "everyone allow write", str(source)],  # noqa: S603 - fixed command and isolated test path
                              capture_output=True, check=False)
     if applied.returncode:
         pytest.skip("Testdateisystem unterstützt keine macOS-ACL")

@@ -16,7 +16,7 @@ def test_full_bootstrap_reloads_persisted_entry_and_hap_pairing():
         for phase in ("pair", "reconnect"):
             environment = dict(os.environ, HKM_FULL_BOOTSTRAP_DIR=directory,
                                HKM_FULL_BOOTSTRAP_PHASE=phase)
-            result = subprocess.run(
+            result = subprocess.run(  # noqa: S603 - fixed worker executable and isolated test path
                 [sys.executable, "-X", "faulthandler", str(WORKER)],
                 cwd=ROOT, env=environment, capture_output=True, text=True,
                 timeout=240, check=False,

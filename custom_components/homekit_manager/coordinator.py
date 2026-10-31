@@ -47,6 +47,7 @@ from .positive_list import read_runtime_publication
 from .runtime_diagnostics import diagnose_runtime, runtime_publication_summary
 from .inventory_export import build_inventory_export, export_inventory_snapshot
 from .dual_mode import build_dual_mode_status
+from .core_migration import capability as core_migration_capability
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -505,6 +506,7 @@ class HomeKitManagerCoordinator:
             "bridge_selection_required": len(self.bridges) > 1,
             "message": "Der Verwaltungsmodus ist von der nativen Konfigurationsquelle getrennt; eine SOURCE_USER/SOURCE_IMPORT-Migration bleibt gesperrt.",
             "source_detection": self.configuration_sources,
+            "native_migration_core": core_migration_capability(self.hass),
             "dual_mode": build_dual_mode_status(
                 bridge,
                 core_version=CORE_VERSION,

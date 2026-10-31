@@ -1,5 +1,15 @@
 # Changelog
 
+# 0.10.18 (development)
+
+- Add a Core-owned rollback executor for unfinished UI↔YAML migrations.
+- Persist rollback intent, reconciliation, HAP verification and commit states
+  before their associated recovery boundaries.
+- Add full-Core SIGKILL coverage in both directions with two real HAP pairings.
+- Add commit-vs-rollback protection and a 25-entity positive-list regression
+  with 25 excluded synthetic entities.
+- Keep native source migration disabled in the production Manager integration.
+
 # 0.10.17 (development)
 
 - Add an experimental Core-owned transaction protocol with explicit state

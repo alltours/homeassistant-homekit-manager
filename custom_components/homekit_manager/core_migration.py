@@ -26,6 +26,7 @@ def _core_api() -> Any | None:
             "async_switch_source",
             "async_recover_before_yaml_reconciliation",
             "async_get_migration_status",
+            "async_request_rollback",
         )
     ):
         return None
@@ -53,6 +54,7 @@ def capability(hass: Any) -> dict[str, Any]:
             "strict_recovery_load": True,
             "identity_fingerprint": True,
             "allowlist_fingerprint": True,
+            "rollback_executor": True,
             "migration_execution": False,
         },
         "reason": "Core-Schnittstelle vorhanden; Aktivierung bleibt bis zur Freigabe gesperrt.",
@@ -111,6 +113,25 @@ async def async_status(hass: Any) -> dict[str, Any]:
         }
     try:
         return await api.async_get_migration_status(hass)
+    except Exception as err:  # noqa: BLE001
+        return {
+            "state": "BLOCKED",
+            "action": "manual_recovery",
+            "reason": type(err).__name__,
+        }
+
+
+async def async_rollback(hass: Any, transaction_id: str, reason: str) -> dict[str, Any]:
+    """Request Core-owned rollback; production activation remains disabled."""
+    api = _core_api()
+    if api is None:
+        return {
+            "state": "BLOCKED",
+            "action": "manual_recovery",
+            "reason": "Core-Schnittstelle fehlt; Rollback bleibt gesperrt.",
+        }
+    try:
+        return await api.async_request_rollback(hass, transaction_id, reason)
     except Exception as err:  # noqa: BLE001
         return {
             "state": "BLOCKED",

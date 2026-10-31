@@ -28,12 +28,21 @@ from homeassistant.runner import RuntimeConfig
 
 from custom_components.homekit_manager.core_migration import (
     async_prepare,
+    async_rollback,
     async_switch,
 )
 
 ENTITY_A = "input_boolean.multi_bridge_a"
 ENTITY_B = "input_boolean.multi_bridge_b"
 ENTRY_B = "isolated-multi-bridge-b-015"
+
+
+def _large_allowlist() -> list[str]:
+    return [f"input_boolean.rollback_allowed_{index:02d}" for index in range(25)]
+
+
+def _large_excluded() -> list[str]:
+    return [f"input_boolean.rollback_excluded_{index:02d}" for index in range(25)]
 
 
 class LocalAdvertiser:
@@ -60,7 +69,8 @@ def free_loopback_port() -> int:
         return reservation.getsockname()[1]
 
 
-def _yaml_bridge(name: str, port: int, entity_id: str) -> str:
+def _yaml_bridge(name: str, port: int, entity_ids: list[str]) -> str:
+    entities = "".join(f"        - {entity_id}\n" for entity_id in entity_ids)
     return (
         f"  - name: {name}\n"
         f"    port: {port}\n"
@@ -69,20 +79,28 @@ def _yaml_bridge(name: str, port: int, entity_id: str) -> str:
         "      - 127.0.0.1\n"
         "    filter:\n"
         "      include_entities:\n"
-        f"        - {entity_id}\n"
+        f"{entities}"
     )
 
 
 def write_configuration(shared: Path, *, yaml_bridge: bool, name: str, port: int) -> None:
+    large_allowlist = os.environ.get("HKM_CORE_MULTIBRIDGE_LARGE_ALLOWLIST") == "1"
+    bridge_a_entities = _large_allowlist() if large_allowlist else [ENTITY_A]
+    declared_entities = [ENTITY_A, ENTITY_B]
+    if large_allowlist:
+        declared_entities.extend(_large_allowlist())
+        declared_entities.extend(_large_excluded())
     content = (
         "homeassistant:\n  name: Isolated Multi Bridge\n"
         "input_boolean:\n"
-        "  multi_bridge_a:\n    name: Multi Bridge A\n"
-        "  multi_bridge_b:\n    name: Multi Bridge B\n"
-        "logger:\n  default: critical\n"
+        + "".join(
+            f"  {entity_id.removeprefix('input_boolean.')}:\n    name: {entity_id}\n"
+            for entity_id in declared_entities
+        )
+        + "logger:\n  default: critical\n"
     )
     if yaml_bridge:
-        content += "homekit:\n" + _yaml_bridge(name, port, ENTITY_A)
+        content += "homekit:\n" + _yaml_bridge(name, port, bridge_a_entities)
     (shared / "configuration.yaml").write_text(content, encoding="utf-8")
 
 
@@ -249,6 +267,11 @@ def _load_baseline(shared: Path, name: str) -> dict:
 
 
 async def _add_user_entry(hass, *, name: str, entry_id: str, port: int, entity_id: str):
+    include_entities = (
+        _large_allowlist()
+        if name == "Bridge A" and os.environ.get("HKM_CORE_MULTIBRIDGE_LARGE_ALLOWLIST") == "1"
+        else [entity_id]
+    )
     entry = config_entries.ConfigEntry(
         version=1,
         minor_version=1,
@@ -260,7 +283,7 @@ async def _add_user_entry(hass, *, name: str, entry_id: str, port: int, entity_i
             "ip_address": "127.0.0.1",
             "advertise_ip": ["127.0.0.1"],
         },
-        options={"mode": "bridge", "filter": {"include_entities": [entity_id]}},
+        options={"mode": "bridge", "filter": {"include_entities": include_entities}},
         source=config_entries.SOURCE_USER,
         entry_id=entry_id,
         unique_id=None,
@@ -282,7 +305,13 @@ async def _verify_both(shared: Path, hass, expected_a_source: str) -> None:
     for name in ("Bridge A", "Bridge B"):
         baseline = _load_baseline(shared, name)
         entry = entries[name]
-        current = _logical_identity(entry, await _read_with_pairing(shared, name))
+        accessories = await _read_with_pairing(shared, name)
+        current = _logical_identity(entry, accessories)
+        if (
+            name == "Bridge A"
+            and os.environ.get("HKM_CORE_MULTIBRIDGE_LARGE_ALLOWLIST") == "1"
+        ):
+            assert len(accessories) == 26
         for key in ("entry_id", "name", "port", "mac", "aids", "iids", "allowlist"):
             assert current[key] == baseline["logical"][key], (name, key, current[key], baseline["logical"][key])
         await _reconnect(shared, name, baseline)
@@ -349,7 +378,7 @@ async def run() -> None:
             observation = hass.data.get("homekit_migration", {})
             assert observation.get("action") == "manual_recovery", observation
             assert observation.get("state") == "MANUAL_RECOVERY_REQUIRED", observation
-        if phase == "migrate":
+        if phase in {"migrate", "rollback"}:
             entries = await wait_for_entries(
                 hass,
                 {
@@ -398,6 +427,25 @@ async def run() -> None:
             if switched.get("state") != "SOURCE_SWITCHED":
                 raise RuntimeError(f"HomeKit migration switch failed: {switched!r}")
             await hass.async_block_till_done()
+            if phase == "rollback":
+                rollback = await async_rollback(
+                    hass, request["transaction_id"], "isolated rollback fault test"
+                )
+                if rollback.get("state") == "MANUAL_RECOVERY_REQUIRED":
+                    raise RuntimeError(f"HomeKit rollback was blocked: {rollback!r}")
+                await hass.async_block_till_done()
+                if entry_a.state.value != "loaded":
+                    await hass.config_entries.async_setup(entry_a.entry_id)
+                    await hass.async_block_till_done()
+                await _verify_both(
+                    shared,
+                    hass,
+                    config_entries.SOURCE_USER
+                    if direction == "ui_to_yaml"
+                    else config_entries.SOURCE_IMPORT,
+                )
+                await hass.async_stop(force=True)
+                return
             (shared / "fault-reached").write_text("AFTER_SOURCE_MUTATION", encoding="utf-8")
             os.kill(os.getpid(), signal.SIGKILL)
 

@@ -22,6 +22,7 @@ def _run(
     fault: str | None = None,
     error_name: str | None = None,
     expected_source: str | None = None,
+    large_allowlist: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     environment = dict(
         os.environ,
@@ -39,6 +40,8 @@ def _run(
         environment["HKM_CORE_MIGRATION_TEST_ERRNO"] = error_name
     if expected_source:
         environment["HKM_CORE_MULTIBRIDGE_EXPECT_SOURCE"] = expected_source
+    if large_allowlist:
+        environment["HKM_CORE_MULTIBRIDGE_LARGE_ALLOWLIST"] = "1"
     return subprocess.run(
         [sys.executable, "-X", "faulthandler", str(WORKER)],
         cwd=ROOT,

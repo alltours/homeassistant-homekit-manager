@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from custom_components.homekit_manager.core_migration import (
     async_prepare,
+    async_rollback,
     async_status,
     async_switch,
     capability,
@@ -30,3 +31,10 @@ def test_missing_core_boundary_status_is_fail_closed() -> None:
     status = asyncio.run(async_status(SimpleNamespace()))
     assert status["state"] == "BLOCKED"
     assert status["action"] == "manual_recovery"
+
+
+def test_missing_core_boundary_rollback_is_fail_closed() -> None:
+    """Rollback cannot fall back to Manager-owned ConfigEntry mutations."""
+    result = asyncio.run(async_rollback(SimpleNamespace(), "transaction", "test"))
+    assert result["state"] == "BLOCKED"
+    assert result["action"] == "manual_recovery"

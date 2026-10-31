@@ -1,9 +1,9 @@
-# HomeKit Core Transaction Protocol 0.10.17
+# HomeKit Core Transaction Protocol 0.10.18
 
 ## Scope
 
 This document describes the experimental Core-owned protocol used by the
-0.10.17 prototype. It is not a public Home Assistant API and does not enable
+0.10.18 prototype. It is not a public Home Assistant API and does not enable
 native source migration in the released Manager integration.
 
 ## Ownership
@@ -43,6 +43,10 @@ The protocol uses the following forward-only states:
 reload implementation. Rollback uses:
 
 `ROLLBACK_PENDING → ROLLING_BACK → ROLLED_BACK`
+
+The implemented rollback path extends this with
+`ROLLBACK_RECONCILING → ROLLBACK_VERIFYING → ROLLBACK_COMMIT_PENDING`.
+`ROLLED_BACK` is written only after the restored HAP runtime has been checked.
 
 Any uncertainty transitions to `MANUAL_RECOVERY_REQUIRED`. Terminal states are
 not reopened. Invalid transitions are rejected before persistence.

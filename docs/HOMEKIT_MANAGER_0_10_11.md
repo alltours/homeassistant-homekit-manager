@@ -179,6 +179,9 @@ der Beta-Core entfernt hat. `scripts/run_beta_integration.py` lädt deshalb
 unter `tests/integration/_beta_pytest_adapter/sitecustomize.py` einen eng
 begrenzten No-op-Kompatibilitätshook. Der Adapter ändert keinen Core-Code,
 deaktiviert keine Assertions und wird nicht in das Release-ZIP aufgenommen.
+CI installiert dieses Plugin bewusst mit `--no-deps`, weil seine Metadaten
+weiterhin hart `homeassistant==2026.10.4` verlangen; die tatsächlich benötigten
+Testabhängigkeiten sind im Beta-Requirements-Satz separat gepinnt.
 Damit ist die vollständige Beta-Integration reproduzierbar ausführbar; die
 YAML-Schreibpfade werden auf dieser nicht freigegebenen Core-Version weiterhin
 serverseitig blockiert und auf Byte-Unverändertheit geprüft.

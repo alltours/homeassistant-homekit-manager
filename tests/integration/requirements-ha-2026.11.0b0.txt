@@ -12,5 +12,12 @@ homekit-audio-proxy==1.2.1
 base36==0.1.1
 ha-ffmpeg==3.2.2
 pytest==9.0.3
-pytest-homeassistant-custom-component==0.13.375
+pytest-aiohttp==1.1.1
+pytest-asyncio==1.4.0
+pytest-socket==0.8.1
+requests-mock==1.12.1
+respx==0.23.1
+freezegun==1.5.5
+execnet==2.1.1
+syrupy==6.1.1
 ruamel.yaml==0.18.17

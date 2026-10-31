@@ -20,4 +20,5 @@ respx==0.23.1
 freezegun==1.5.5
 execnet==2.1.1
 syrupy==6.1.1
+paho-mqtt==2.1.0
 ruamel.yaml==0.18.17

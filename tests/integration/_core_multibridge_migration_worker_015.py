@@ -226,10 +226,13 @@ async def _reconnect(shared: Path, label: str, baseline: dict) -> None:
         controller,
         json.loads((shared / f"{file_label}.pairing.json").read_text(encoding="utf-8")),
     )
-    accessories = await asyncio.wait_for(pairing.list_accessories_and_characteristics(), 10)
-    assert _accessory_signature(accessories) == baseline["accessories_signature"]
-    assert sorted(item["aid"] for item in accessories) == baseline["logical"]["aids"]
-    await pairing.shutdown()
+    try:
+        accessories = await asyncio.wait_for(pairing.list_accessories_and_characteristics(), 10)
+        assert _accessory_signature(accessories) == baseline["accessories_signature"]
+        assert sorted(item["aid"] for item in accessories) == baseline["logical"]["aids"]
+        assert _fingerprint(dict(pairing.pairing_data)) == baseline["pairing_fingerprint"]
+    finally:
+        await pairing.shutdown()
 
 
 async def _read_with_pairing(shared: Path, label: str) -> list[dict]:

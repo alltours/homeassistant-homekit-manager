@@ -272,8 +272,10 @@ async def test_yaml_grant_applies_only_to_isolated_import(hass, tmp_path, monkey
     monkeypatch.setattr("homeassistant.components.homekit.HomeKit.async_start", no_network_start)
     monkeypatch.setattr("homeassistant.components.homekit.async_port_is_available", lambda _port: True)
     (tmp_path / "configuration.yaml").write_text("homekit: !include grant_bridges.yaml\n")
+    (tmp_path / "configuration.yaml").chmod(0o600)
     source = tmp_path / "grant_bridges.yaml"
     source.write_text("- name: Grant YAML\n  port: 21093\n  filter:\n    include_entities:\n    - light.before\n")
+    source.chmod(0o600)
     assert await async_setup_component(hass, "homekit", await async_hass_config_yaml(hass))
     await hass.async_block_till_done()
     entry = hass.config_entries.async_entries("homekit")[0]

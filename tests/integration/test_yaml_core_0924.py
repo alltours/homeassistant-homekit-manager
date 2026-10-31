@@ -15,6 +15,7 @@ async def test_isolated_yaml_file_apply_is_imported_by_core(hass, tmp_path, monk
     monkeypatch.setattr("homeassistant.components.homekit.HomeKit.async_start", no_network_start)
     monkeypatch.setattr("homeassistant.components.homekit.async_port_is_available", lambda _port: True)
     (tmp_path / "configuration.yaml").write_text("homekit: !include bridges.yaml\n")
+    (tmp_path / "configuration.yaml").chmod(0o600)
     source = tmp_path / "bridges.yaml"
     source.write_text(
         "- name: Isolated YAML Bridge\n"
@@ -23,6 +24,7 @@ async def test_isolated_yaml_file_apply_is_imported_by_core(hass, tmp_path, monk
         "    include_entities:\n"
         "    - light.before\n"
     )
+    source.chmod(0o600)
     config = await async_hass_config_yaml(hass)
     assert await async_setup_component(hass, "homekit", config)
     await hass.async_block_till_done()
@@ -83,6 +85,7 @@ async def test_direct_configuration_yaml_apply_is_imported_by_core(hass, tmp_pat
         "  default: warning\n"
     ).encode()
     source.write_bytes(before)
+    source.chmod(0o600)
     config = await async_hass_config_yaml(hass)
     assert await async_setup_component(hass, "homekit", config)
     await hass.async_block_till_done()

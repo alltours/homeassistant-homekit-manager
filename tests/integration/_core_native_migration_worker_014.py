@@ -218,6 +218,10 @@ async def run() -> None:
 
         await hass.async_start()
         await hass.async_block_till_done()
+        if phase == "verify_stale":
+            observation = hass.data["homekit_migration"]
+            assert observation["action"] == "manual_recovery", observation
+            assert observation["state"] == "MANUAL_RECOVERY_REQUIRED", observation
         original_source = config_entries.SOURCE_USER if direction == "ui_to_yaml" else config_entries.SOURCE_IMPORT
         target_source = config_entries.SOURCE_IMPORT if direction == "ui_to_yaml" else config_entries.SOURCE_USER
         entry = await loaded_entry(hass, original_source if phase == "migrate" else target_source)

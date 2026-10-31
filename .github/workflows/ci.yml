@@ -132,10 +132,13 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       HKM_EXPERIMENTAL_CORE_VERSION: '2026.10.4'
-      HKM_EXPERIMENTAL_CORE_ROOT: ${{ runner.temp }}/hkm-core
-      HKM_EXPERIMENTAL_CORE_EVIDENCE: ${{ runner.temp }}/hkm-experimental-evidence
     steps:
       - uses: actions/checkout@v4
+      - name: Set isolated experimental paths
+        run: |
+          set -euo pipefail
+          echo "HKM_EXPERIMENTAL_CORE_ROOT=$RUNNER_TEMP/hkm-core" >> "$GITHUB_ENV"
+          echo "HKM_EXPERIMENTAL_CORE_EVIDENCE=$RUNNER_TEMP/hkm-experimental-evidence" >> "$GITHUB_ENV"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.14'

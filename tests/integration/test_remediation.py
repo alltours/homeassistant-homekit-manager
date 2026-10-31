@@ -4,11 +4,10 @@ from copy import deepcopy
 from unittest.mock import Mock
 
 import pytest
-from homeassistant import config_entries
 from homeassistant.components import frontend, websocket_api
 from pytest_homeassistant_custom_component.common import MockConfigEntry, MockUser
 from custom_components.homekit_manager.compatibility import classify_entity
-from custom_components.homekit_manager.homekit_writer import HomeKitWriteDisabled, HomeKitWriter
+from custom_components.homekit_manager.homekit_writer import HomeKitWriteDisabled
 from custom_components.homekit_manager.yaml_store import validate_document, YamlValidationError
 
 
@@ -67,7 +66,7 @@ async def test_failed_refresh_preserves_complete_snapshot(hass, enable_custom_in
     monkeypatch.setattr("custom_components.homekit_manager.coordinator.build_device_views", fail)
     await manager.async_refresh()
     after = (manager.inventory, manager.bridges, manager.devices, manager.areas, manager.fingerprint, manager.last_updated)
-    assert all(left is right for left, right in zip(before, after))
+    assert all(left is right for left, right in zip(before, after, strict=False))
     assert manager.overview()["snapshot_stale"] is True
 
 

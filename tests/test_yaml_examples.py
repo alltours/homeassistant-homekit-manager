@@ -2,6 +2,7 @@
 import pytest
 from homeassistant.components.homekit import CONFIG_SCHEMA
 from homeassistant.util.yaml.loader import load_yaml
+from probatio.error import MultipleInvalid
 
 
 @pytest.mark.parametrize("directive,fragment", [
@@ -24,5 +25,5 @@ def test_duplicate_bridge_ports_fail_core_schema(tmp_path):
     root = tmp_path / "configuration.yaml"
     root.write_text("homekit:\n  - name: One Bridge\n    port: 21065\n"
                     "  - name: Two Bridge\n    port: 21065\n")
-    with pytest.raises(Exception):
+    with pytest.raises(MultipleInvalid):
         CONFIG_SCHEMA(load_yaml(root))

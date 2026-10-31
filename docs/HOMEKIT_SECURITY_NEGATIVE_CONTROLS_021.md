@@ -28,6 +28,10 @@ python -m pytest -q tests/test_security_negative_controls_021.py
 
 Result: `10 passed` in `0.19s`.
 
+The final CI run executed the same module successfully and the
+`experimental-core-native` job also completed the wrong-Core and tampered-patch
+guard steps successfully. This is CI VERIFIED for the implemented controls.
+
 ## Important limitation
 
 Controls A–F are independent oracle tests over synthetic observations; they do

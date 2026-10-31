@@ -22,7 +22,8 @@ fatal: fetch-pack: invalid index-pack output
 ```
 
 Consequently, a full local fresh-clone plus fresh dependency installation is
-NOT VERIFIED. No product or persistent Home Assistant data was involved.
+NOT VERIFIED on the macOS host. No product or persistent Home Assistant data
+was involved.
 
 ## Reproduction inputs
 
@@ -37,10 +38,11 @@ NOT VERIFIED. No product or persistent Home Assistant data was involved.
 | Target tree | `8419f460ab542256cbee6f8031a874e6f43608a4` |
 | Experimental result | `68 passed, 0 skipped` |
 
-## Remaining clean-room gate
+## GitHub clean-room result
 
-After the branch is pushed, the GitHub Actions `experimental-core-native` job
-must be run and its uploaded artifact must show the exact base commit, patch
-digest, target tree, non-empty collection, JUnit `skipped=0`, and successful
-negative controls. Until that occurs, CI and clean-room claims remain NOT
-VERIFIED.
+The GitHub Actions `experimental-core-native` job in run `41253834835` created
+the fresh runner checkout, fetched the exact base commit, applied the verified
+patch, ran the guard and experimental suite, and uploaded the evidence artifact.
+The job completed successfully. This is CI VERIFIED for the tested GitHub
+Actions Ubuntu environment; it is not a claim of platform-independent
+reproducibility.

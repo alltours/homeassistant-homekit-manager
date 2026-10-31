@@ -81,10 +81,22 @@ and target-tree verification also passed locally. These are TEST VERIFIED.
 
 ## CI status
 
-The workflow change is implemented, but no GitHub Actions run has been started
-from the 0.10.21 branch at the time this document was written. Run ID, URL,
-artifact download, and remote job status are therefore NOT VERIFIED. A local
-green run is not presented as CI VERIFIED.
+The final workflow run for Manager commit `83a296ceaada58bc3f8553fc0b5c9dad47f9b358`
+completed successfully:
+
+* Run ID: `41253834835`
+* URL: <https://github.com/alltours/homeassistant-homekit-manager/actions/runs/41253834835>
+* `quality`: success
+* `browser`: success
+* `core-beta-native`: success
+* `experimental-core-native`: success
+* Artifact: `experimental-core-ci-evidence` (uploaded, 3,963 bytes)
+
+This is CI VERIFIED. The first run (`41252932837`) failed before any job because
+`runner.temp` was used in a job-level environment context; `actionlint` caught
+the defect, the paths were moved into a shell step, and the subsequent run
+passed. The same first run also exposed a real HAP bootstrap race in the
+regular suite; that was fixed before the final run.
 
 ## Security boundary
 

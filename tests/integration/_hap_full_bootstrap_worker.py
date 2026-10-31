@@ -11,6 +11,7 @@ from unittest.mock import patch
 from aiohomekit.controller.controller import Controller
 from aiohomekit.controller.ip.discovery import IpDiscovery
 from aiohomekit.controller.ip.pairing import IpPairing
+from aiohomekit.exceptions import AuthenticationError
 from aiohomekit.zeroconf import HomeKitService
 from homeassistant import config_entries
 from homeassistant.bootstrap import async_setup_hass
@@ -45,6 +46,23 @@ class LocalAdvertiser:
 
 async def local_advertiser(_hass):
     return LocalAdvertiser()
+
+
+async def _wait_for_hap_listener(port: int) -> None:
+    """Wait for the real HAP TCP listener before starting controller pairing."""
+    for attempt in range(50):
+        try:
+            _reader, writer = await asyncio.wait_for(
+                asyncio.open_connection("127.0.0.1", port), 0.2
+            )
+        except (TimeoutError, OSError):
+            if attempt == 49:
+                raise AssertionError(f"HAP listener did not become ready on port {port}") from None
+            await asyncio.sleep(0.05)
+            continue
+        writer.close()
+        await writer.wait_closed()
+        return
 
 
 async def run() -> None:
@@ -121,12 +139,21 @@ async def run() -> None:
             assert path.is_file() and path.stat().st_size > 0
         controller = Controller()
         if phase == "pair":
-            discovery = IpDiscovery(controller, HomeKitService.from_service_info(homekit.driver.mdns_service_info))
-            try:
-                finish = await asyncio.wait_for(discovery.async_start_pairing("isolated-full-bootstrap"), 10)
-                pairing = await asyncio.wait_for(finish(homekit.driver.state.pincode.decode()), 10)
-            finally:
-                await discovery.close()
+            await _wait_for_hap_listener(port)
+            for attempt in range(2):
+                controller = Controller()
+                discovery = IpDiscovery(controller, HomeKitService.from_service_info(homekit.driver.mdns_service_info))
+                try:
+                    finish = await asyncio.wait_for(discovery.async_start_pairing("isolated-full-bootstrap"), 10)
+                    pairing = await asyncio.wait_for(finish(homekit.driver.state.pincode.decode()), 10)
+                except AuthenticationError:
+                    if attempt == 1:
+                        raise
+                    await _wait_for_hap_listener(port)
+                else:
+                    break
+                finally:
+                    await discovery.close()
             await hass.async_add_executor_job(homekit.driver.persist)
         else:
             assert homekit.driver.state.paired

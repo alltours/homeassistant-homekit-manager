@@ -10,6 +10,8 @@ from tempfile import TemporaryDirectory
 
 import pytest
 
+pytestmark = pytest.mark.experimental_core
+
 ROOT = Path(__file__).resolve().parents[2]
 WORKER = Path(__file__).with_name("_core_multibridge_migration_worker_015.py")
 

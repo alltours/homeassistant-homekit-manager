@@ -6,6 +6,8 @@ from tempfile import TemporaryDirectory
 import pytest
 from test_core_multibridge_migration_015 import _run
 
+pytestmark = pytest.mark.experimental_core
+
 
 @pytest.mark.parametrize("direction", ["ui_to_yaml", "yaml_to_ui"])
 @pytest.mark.parametrize(

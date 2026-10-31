@@ -12,13 +12,15 @@ from custom_components.homekit_manager.core_migration import (
 )
 
 
-def test_missing_core_boundary_fails_closed() -> None:
+def test_missing_core_boundary_fails_closed(monkeypatch) -> None:
+    monkeypatch.setattr("custom_components.homekit_manager.core_migration._core_api", lambda: None)
     result = capability(SimpleNamespace())
     assert result["available"] is False
     assert result["migration_enabled"] is False
 
 
-def test_missing_core_boundary_never_prepares_or_switches() -> None:
+def test_missing_core_boundary_never_prepares_or_switches(monkeypatch) -> None:
+    monkeypatch.setattr("custom_components.homekit_manager.core_migration._core_api", lambda: None)
     hass = SimpleNamespace()
     prepared = asyncio.run(async_prepare(hass, {"entry_id": "bridge"}))
     switched = asyncio.run(async_switch(hass, "transaction"))
@@ -26,15 +28,17 @@ def test_missing_core_boundary_never_prepares_or_switches() -> None:
     assert switched["state"] == "BLOCKED"
 
 
-def test_missing_core_boundary_status_is_fail_closed() -> None:
+def test_missing_core_boundary_status_is_fail_closed(monkeypatch) -> None:
     """A missing protocol cannot be mistaken for an idle migration."""
+    monkeypatch.setattr("custom_components.homekit_manager.core_migration._core_api", lambda: None)
     status = asyncio.run(async_status(SimpleNamespace()))
     assert status["state"] == "BLOCKED"
     assert status["action"] == "manual_recovery"
 
 
-def test_missing_core_boundary_rollback_is_fail_closed() -> None:
+def test_missing_core_boundary_rollback_is_fail_closed(monkeypatch) -> None:
     """Rollback cannot fall back to Manager-owned ConfigEntry mutations."""
+    monkeypatch.setattr("custom_components.homekit_manager.core_migration._core_api", lambda: None)
     result = asyncio.run(async_rollback(SimpleNamespace(), "transaction", "test"))
     assert result["state"] == "BLOCKED"
     assert result["action"] == "manual_recovery"

@@ -10,9 +10,9 @@ import asyncio
 import gc
 import hashlib
 import json
+import logging
 import os
 import signal
-import socket
 import traceback
 from pathlib import Path
 from unittest.mock import patch
@@ -20,11 +20,13 @@ from unittest.mock import patch
 from aiohomekit.controller.controller import Controller
 from aiohomekit.controller.ip.discovery import IpDiscovery
 from aiohomekit.controller.ip.pairing import IpPairing
+from aiohomekit.exceptions import AuthenticationError
 from aiohomekit.zeroconf import HomeKitService
 from homeassistant import config_entries
 from homeassistant.bootstrap import async_setup_hass
 from homeassistant.components.homekit import HomeKit
 from homeassistant.runner import RuntimeConfig
+from port_allocator import reserve_hap_port, reserve_http_port
 
 from custom_components.homekit_manager.core_migration import (
     async_prepare,
@@ -35,6 +37,7 @@ from custom_components.homekit_manager.core_migration import (
 ENTITY_A = "input_boolean.multi_bridge_a"
 ENTITY_B = "input_boolean.multi_bridge_b"
 ENTRY_B = "isolated-multi-bridge-b-015"
+_LOGGER = logging.getLogger(__name__)
 
 
 def _large_allowlist() -> list[str]:
@@ -63,12 +66,6 @@ async def local_advertiser(_hass):
     return LocalAdvertiser()
 
 
-def free_loopback_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
-        reservation.bind(("127.0.0.1", 0))
-        return reservation.getsockname()[1]
-
-
 def _yaml_bridge(name: str, port: int, entity_ids: list[str]) -> str:
     entities = "".join(f"        - {entity_id}\n" for entity_id in entity_ids)
     return (
@@ -90,8 +87,10 @@ def write_configuration(shared: Path, *, yaml_bridge: bool, name: str, port: int
     if large_allowlist:
         declared_entities.extend(_large_allowlist())
         declared_entities.extend(_large_excluded())
+    http_port = reserve_http_port(str(shared))
     content = (
         "homeassistant:\n  name: Isolated Multi Bridge\n"
+        f"http:\n  server_port: {http_port}\n"
         "input_boolean:\n"
         + "".join(
             f"  {entity_id.removeprefix('input_boolean.')}:\n    name: {entity_id}\n"
@@ -198,15 +197,41 @@ def _logical_identity(entry, accessories: list[dict]) -> dict:
     }
 
 
+async def _wait_for_hap_listener(port: int) -> None:
+    """Wait for the real HAP TCP listener, not merely a loaded ConfigEntry."""
+    for attempt in range(50):
+        try:
+            _reader, writer = await asyncio.wait_for(
+                asyncio.open_connection("127.0.0.1", port), 0.2
+            )
+        except (TimeoutError, OSError):
+            if attempt == 49:
+                raise AssertionError(f"HAP listener did not become ready on port {port}")
+            await asyncio.sleep(0.05)
+            continue
+        writer.close()
+        await writer.wait_closed()
+        return
+
+
 async def _pair(entry, label: str) -> tuple[dict, dict]:
     homekit = entry.runtime_data.homekit
-    controller = Controller()
-    discovery = IpDiscovery(controller, HomeKitService.from_service_info(homekit.driver.mdns_service_info))
-    try:
-        finish = await asyncio.wait_for(discovery.async_start_pairing(label), 10)
-        pairing = await asyncio.wait_for(finish(homekit.driver.state.pincode.decode()), 10)
-    finally:
-        await discovery.close()
+    await _wait_for_hap_listener(entry.data["port"])
+    for attempt in range(2):
+        controller = Controller()
+        discovery = IpDiscovery(controller, HomeKitService.from_service_info(homekit.driver.mdns_service_info))
+        try:
+            finish = await asyncio.wait_for(discovery.async_start_pairing(label), 10)
+            pairing = await asyncio.wait_for(finish(homekit.driver.state.pincode.decode()), 10)
+        except AuthenticationError:
+            if attempt == 1 or homekit.driver.state.paired:
+                raise
+            _LOGGER.warning("Transient HAP pairing bootstrap error; retrying once for %s", label)
+            await _wait_for_hap_listener(entry.data["port"])
+        else:
+            break
+        finally:
+            await discovery.close()
     await homekit.hass.async_add_executor_job(homekit.driver.persist)
     accessories = await asyncio.wait_for(pairing.list_accessories_and_characteristics(), 10)
     assert accessories
@@ -337,7 +362,8 @@ async def run() -> None:
     expected_source_override = os.environ.get("HKM_CORE_MULTIBRIDGE_EXPECT_SOURCE")
 
     if phase == "pair":
-        port_a, port_b = free_loopback_port(), free_loopback_port()
+        port_a = reserve_hap_port(f"{shared}:bridge-a")
+        port_b = reserve_hap_port(f"{shared}:bridge-b")
         write_configuration(shared, yaml_bridge=yaml_bridge, name=name, port=port_a)
     else:
         port_a = int(json.loads((shared / "ports.json").read_text(encoding="utf-8"))["a"])

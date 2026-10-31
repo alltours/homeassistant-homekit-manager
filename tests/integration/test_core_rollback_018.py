@@ -8,6 +8,8 @@ from tempfile import TemporaryDirectory
 import pytest
 from test_core_multibridge_migration_015 import _run
 
+pytestmark = pytest.mark.experimental_core
+
 ROLLBACK_FAULTS = [
     "BEFORE_ROLLBACK_PENDING",
     "AFTER_ROLLBACK_PENDING",

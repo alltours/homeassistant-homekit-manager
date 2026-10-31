@@ -1,6 +1,6 @@
 import { chromium, webkit } from 'playwright';
 import assert from 'node:assert/strict';
-const [url, browserName] = process.argv.slice(2);
+const [url, browserName, expectedVersion] = process.argv.slice(2);
 const browser = await ({chromium,webkit}[browserName]).launch({headless:true});
 try {
   const page = await browser.newPage({viewport:{width:320,height:740}});
@@ -12,7 +12,7 @@ try {
     await panel.getByRole('tab',{name,exact:true}).click();
     assert.equal(await panel.locator('h2').first().isVisible(),true);
   }
-        assert.equal(await panel.locator('.settings-content').innerText().then(s=>s.includes('0.10.14')),true);
+  assert.equal(await panel.locator('.settings-content').innerText().then(s=>s.includes(expectedVersion)),true);
   await panel.getByRole('tab',{name:'Geräte',exact:true}).click();
   await panel.locator('[data-group=entities]').click();
   await panel.getByRole('searchbox').pressSequentially('Audit');

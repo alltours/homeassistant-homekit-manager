@@ -12,7 +12,6 @@ import gc
 import json
 import os
 import signal
-import socket
 from pathlib import Path
 from unittest.mock import patch
 
@@ -24,6 +23,7 @@ from homeassistant import config_entries
 from homeassistant.bootstrap import async_setup_hass
 from homeassistant.components.homekit import HomeKit
 from homeassistant.runner import RuntimeConfig
+from port_allocator import reserve_hap_port, reserve_http_port
 
 from custom_components.homekit_manager.core_migration import (
     async_prepare,
@@ -52,15 +52,10 @@ async def local_advertiser(_hass):
     return LocalAdvertiser()
 
 
-def free_loopback_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
-        reservation.bind(("127.0.0.1", 0))
-        return reservation.getsockname()[1]
-
-
 def write_configuration(shared: Path, *, yaml_bridge: bool, name: str, port: int) -> None:
     content = (
         "homeassistant:\n  name: Isolated Core Migration\n"
+        f"http:\n  server_port: {reserve_http_port(str(shared))}\n"
         "input_boolean:\n  migration_test:\n    name: Migration Test\n"
         "logger:\n  default: critical\n"
     )
@@ -168,7 +163,7 @@ async def run() -> None:
     name = "Core Migration UI" if direction == "ui_to_yaml" else "Core Migration YAML"
     yaml_bridge = direction == "yaml_to_ui"
     if phase == "pair":
-        port = free_loopback_port()
+        port = reserve_hap_port(str(shared))
         write_configuration(shared, yaml_bridge=yaml_bridge, name=name, port=port)
     elif phase == "migrate":
         baseline = json.loads((shared / "baseline.json").read_text(encoding="utf-8"))

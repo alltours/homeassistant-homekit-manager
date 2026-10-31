@@ -7,6 +7,10 @@ import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import pytest
+
+pytestmark = pytest.mark.experimental_core
+
 ROOT = Path(__file__).resolve().parents[2]
 WORKER = Path(__file__).with_name("_startup_recovery_lifecycle_worker_013.py")
 

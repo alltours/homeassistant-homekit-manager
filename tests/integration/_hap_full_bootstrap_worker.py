@@ -6,7 +6,6 @@ import gc
 import json
 import os
 from pathlib import Path
-import socket
 from unittest.mock import patch
 
 from aiohomekit.controller.controller import Controller
@@ -22,7 +21,7 @@ from homeassistant.components.homekit.util import (
     get_persist_fullpath_for_entry_id,
 )
 from homeassistant.runner import RuntimeConfig
-
+from port_allocator import reserve_hap_port, reserve_http_port
 
 ENTRY_ID = "isolated-hap-full-bootstrap"
 ENTITY_ID = "input_boolean.restart_test"
@@ -48,18 +47,13 @@ async def local_advertiser(_hass):
     return LocalAdvertiser()
 
 
-def free_loopback_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
-        reservation.bind(("127.0.0.1", 0))
-        return reservation.getsockname()[1]
-
-
 async def run() -> None:
     shared = Path(os.environ["HKM_FULL_BOOTSTRAP_DIR"])
     phase = os.environ["HKM_FULL_BOOTSTRAP_PHASE"]
     if phase == "pair":
         (shared / "configuration.yaml").write_text(
             "homeassistant:\n  name: Isolated HAP Bootstrap\n"
+            f"http:\n  server_port: {reserve_http_port(str(shared))}\n"
             "input_boolean:\n  restart_test:\n    name: Restart Test\n"
             "logger:\n  default: critical\n"
         )
@@ -76,7 +70,7 @@ async def run() -> None:
         hass.states.async_set(ENTITY_ID, "off")
         await hass.async_block_till_done()
         if phase == "pair":
-            port = free_loopback_port()
+            port = reserve_hap_port(str(shared))
             entry = config_entries.ConfigEntry(
                 version=1, minor_version=1, domain="homekit", title="Full Bootstrap HAP",
                 data={"name": "Full Bootstrap HAP", "port": port,

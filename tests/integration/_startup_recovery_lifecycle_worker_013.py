@@ -5,7 +5,6 @@ import asyncio
 import gc
 import json
 import os
-import socket
 from pathlib import Path
 from unittest.mock import patch
 
@@ -13,6 +12,7 @@ from homeassistant.bootstrap import async_setup_hass
 from homeassistant.components import homekit as homekit_component
 from homeassistant.components.homekit import HomeKit
 from homeassistant.runner import RuntimeConfig
+from port_allocator import reserve_hap_port, reserve_http_port
 
 from custom_components.homekit_manager import async_setup as manager_async_setup
 from custom_components.homekit_manager.const import DOMAIN
@@ -46,12 +46,6 @@ async def local_addresses(_hass):
     return ["127.0.0.1"]
 
 
-def free_loopback_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
-        reservation.bind(("127.0.0.1", 0))
-        return reservation.getsockname()[1]
-
-
 def _append_marker(path: Path, marker: str) -> None:
     with path.open("a", encoding="utf-8") as stream:
         stream.write(marker + "\n")
@@ -69,10 +63,11 @@ async def run() -> None:
         target_is_directory=True,
     )
 
-    port = free_loopback_port()
+    port = reserve_hap_port(str(shared))
     (shared / "configuration.yaml").write_text(
         "homeassistant:\n"
         "  name: Isolated Startup Recovery\n"
+        f"http:\n  server_port: {reserve_http_port(str(shared))}\n"
         "input_boolean:\n"
         "  startup_recovery_test:\n"
         "    name: Startup Recovery Test\n"

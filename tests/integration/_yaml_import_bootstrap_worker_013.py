@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import socket
 from pathlib import Path
 
 import pytest
@@ -20,6 +19,7 @@ from homeassistant import config_entries
 from homeassistant.components.homekit import HomeKit
 from homeassistant.config import async_hass_config_yaml
 from homeassistant.setup import async_setup_component
+from port_allocator import reserve_hap_port, reserve_http_port
 
 ENTITY_ID = "input_boolean.yaml_bootstrap_test"
 
@@ -48,21 +48,16 @@ async def _local_addresses(_hass):
     return ["127.0.0.1"]
 
 
-def _free_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
-        reservation.bind(("127.0.0.1", 0))
-        return reservation.getsockname()[1]
-
-
 @pytest.mark.asyncio
 async def test_worker(hass, monkeypatch, socket_enabled):
     """Run one bounded, isolated YAML-import bootstrap."""
     shared = Path(os.environ["HKM_YAML_BOOTSTRAP_DIR"])
     shared.mkdir(mode=0o700, parents=True, exist_ok=True)
-    port = _free_port()
+    port = reserve_hap_port(str(shared))
     (shared / "configuration.yaml").write_text(
         "homeassistant:\n"
         "  name: Isolated YAML Import\n"
+        f"http:\n  server_port: {reserve_http_port(str(shared))}\n"
         f"homekit:\n"
         f"  - name: YAML Bootstrap Bridge\n"
         f"    port: {port}\n"

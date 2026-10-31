@@ -11,6 +11,8 @@ from tempfile import TemporaryDirectory
 
 import pytest
 
+pytestmark = pytest.mark.experimental_core
+
 ROOT = Path(__file__).resolve().parents[2]
 WORKER = Path(__file__).with_name("_native_source_migration_worker_012.py")
 

@@ -9,20 +9,22 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import signal
-import socket
 from pathlib import Path
 
 import pytest
 from aiohomekit.controller.controller import Controller
 from aiohomekit.controller.ip.discovery import IpDiscovery
 from aiohomekit.controller.ip.pairing import IpPairing
+from aiohomekit.exceptions import AuthenticationError
 from aiohomekit.zeroconf import HomeKitService
 from homeassistant import config_entries
 from homeassistant.config import async_hass_config_yaml
 from homeassistant.const import __version__
 from homeassistant.setup import async_setup_component
+from port_allocator import reserve_hap_port, reserve_http_port
 
 from custom_components.homekit_manager.migration_engine import (
     MigrationEngine,
@@ -38,6 +40,7 @@ from custom_components.homekit_manager.migration_snapshot import (
 ENTRY_ID = "isolated-native-source-migration"
 ENTITY_ID = "input_boolean.native_migration_test"
 BRIDGE_NAME = "Native Source Migration"
+_LOGGER = logging.getLogger(__name__)
 
 
 class LocalAdvertiser:
@@ -59,12 +62,6 @@ class LocalAdvertiser:
 @pytest.fixture
 def hass_storage():
     return {}
-
-
-def _free_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
-        reservation.bind(("127.0.0.1", 0))
-        return reservation.getsockname()[1]
 
 
 def _yaml_source(port: int) -> str:
@@ -96,6 +93,11 @@ def _base_config() -> str:
     )
 
 
+def _config(shared: Path, content: str) -> str:
+    """Add an isolated HTTP listener to every worker-phase configuration."""
+    return f"http:\n  server_port: {reserve_http_port(str(shared))}\n" + content
+
+
 async def _save_config_entries(hass) -> None:
     """Persist the test-only ConfigEntry source mutation."""
     await hass.config_entries._store.async_save(
@@ -116,6 +118,23 @@ async def _unload_for_source_change(hass, entry) -> None:
             return
         await asyncio.sleep(0.05)
     raise AssertionError("HAP port did not become available after isolated unload")
+
+
+async def _wait_for_hap_listener(port: int) -> None:
+    """Wait for the real HAP listener before starting controller traffic."""
+    for attempt in range(50):
+        try:
+            _reader, writer = await asyncio.wait_for(
+                asyncio.open_connection("127.0.0.1", port), 0.2
+            )
+        except (OSError, TimeoutError):
+            if attempt == 49:
+                raise AssertionError(f"HAP listener did not become ready on port {port}")
+            await asyncio.sleep(0.05)
+            continue
+        writer.close()
+        await writer.wait_closed()
+        return
 
 
 async def _run_engine_source_switch(hass, shared: Path, entry, identity: dict, before: dict, target: str):
@@ -152,7 +171,7 @@ async def _run_engine_source_switch(hass, shared: Path, entry, identity: dict, b
         if target_source == SOURCE_IMPORT:
             _inject_fault(shared, "BEFORE_YAML_WRITE")
             (shared / "configuration.yaml").write_text(
-                _yaml_source(identity["port"]), encoding="utf-8"
+                _config(shared, _yaml_source(identity["port"])), encoding="utf-8"
             )
             (shared / "native_migration.yaml").write_text(
                 _yaml_fragment(identity["port"]), encoding="utf-8"
@@ -161,7 +180,7 @@ async def _run_engine_source_switch(hass, shared: Path, entry, identity: dict, b
             entry.source = SOURCE_IMPORT
         else:
             _inject_fault(shared, "BEFORE_YAML_WRITE")
-            (shared / "configuration.yaml").write_text(_base_config(), encoding="utf-8")
+            (shared / "configuration.yaml").write_text(_config(shared, _base_config()), encoding="utf-8")
             (shared / "native_migration.yaml").unlink()
             _inject_fault(shared, "AFTER_YAML_WRITE")
             entry.source = SOURCE_USER
@@ -232,12 +251,12 @@ async def _prepare_hass(hass, shared: Path, yaml_enabled: bool, preserve_files: 
     (shared / ".storage").mkdir(mode=0o700, exist_ok=True)
     if not preserve_files:
         (shared / "configuration.yaml").write_text(
-            _yaml_source(0) if yaml_enabled else _base_config(), encoding="utf-8"
+            _config(shared, _yaml_source(0) if yaml_enabled else _base_config()), encoding="utf-8"
         )
     if yaml_enabled and not preserve_files:
         identity = json.loads((shared / "public_identity.json").read_text())
         (shared / "configuration.yaml").write_text(
-            _yaml_source(identity["port"]), encoding="utf-8"
+            _config(shared, _yaml_source(identity["port"])), encoding="utf-8"
         )
         (shared / "native_migration.yaml").write_text(
             _yaml_fragment(identity["port"]), encoding="utf-8"
@@ -298,7 +317,7 @@ async def _recover_after_crash(hass, shared: Path, entry, identity: dict) -> Non
     store.save(record.advance(
         state="ROLLING_BACK",
         completed_operation="recovery_start",
-        recovery_status="ROLLBACK_REQUIRED",
+        recovery_status="rollback_required",
     ))
     if os.environ.get("HKM_NATIVE_SOURCE_MIGRATION_FAULT") == "DURING_ROLLBACK":
         (shared / "fault-reached").write_text("DURING_ROLLBACK", encoding="utf-8")
@@ -358,31 +377,32 @@ async def _pair_or_reconnect(hass, shared: Path, entry, pair: bool):
 
     homekit = entry.runtime_data.homekit
     assert homekit.driver is not None and homekit.status == 1
+    await _wait_for_hap_listener(entry.data["port"])
     if pair:
         assert not homekit.driver.state.paired
-    aid = homekit.aid_storage.get_allocated_aid_for_entity_id(ENTITY_ID)
-    assert aid is not None
-    await homekit.aid_storage.async_save()
-    await homekit.iid_storage.async_save()
-    assert Path(get_persist_fullpath_for_entry_id(hass, entry.entry_id)).is_file()
-    assert Path(hass.config.path(".storage", get_aid_storage_filename_for_entry_id(entry.entry_id))).is_file()
-    assert Path(hass.config.path(".storage", get_iid_storage_filename_for_entry_id(entry.entry_id))).is_file()
-
-    controller = Controller()
     if pair:
-        discovery = IpDiscovery(
-            controller,
-            HomeKitService.from_service_info(homekit.driver.mdns_service_info),
-        )
-        try:
-            finish = await asyncio.wait_for(
-                discovery.async_start_pairing("native-source-migration"), 10
+        for attempt in range(2):
+            controller = Controller()
+            discovery = IpDiscovery(
+                controller,
+                HomeKitService.from_service_info(homekit.driver.mdns_service_info),
             )
-            pairing = await asyncio.wait_for(
-                finish(homekit.driver.state.pincode.decode()), 10
-            )
-        finally:
-            await discovery.close()
+            try:
+                finish = await asyncio.wait_for(
+                    discovery.async_start_pairing("native-source-migration"), 10
+                )
+                pairing = await asyncio.wait_for(
+                    finish(homekit.driver.state.pincode.decode()), 10
+                )
+            except AuthenticationError:
+                if attempt == 1 or homekit.driver.state.paired:
+                    raise
+                _LOGGER.warning("Transient HAP pairing bootstrap error; retrying once")
+                await _wait_for_hap_listener(entry.data["port"])
+            else:
+                break
+            finally:
+                await discovery.close()
         await hass.async_add_executor_job(homekit.driver.persist)
         pairing_data = dict(pairing.pairing_data)
         (shared / "controller_pairing.json").write_text(
@@ -391,14 +411,33 @@ async def _pair_or_reconnect(hass, shared: Path, entry, pair: bool):
         (shared / "controller_pairing.json").chmod(0o600)
     else:
         assert homekit.driver.state.paired
-        pairing = IpPairing(
-            controller,
-            json.loads((shared / "controller_pairing.json").read_text()),
-        )
-
-    accessories = await asyncio.wait_for(
-        pairing.list_accessories_and_characteristics(), 10
-    )
+        pairing = None
+        for attempt in range(2):
+            pairing = IpPairing(
+                Controller(),
+                json.loads((shared / "controller_pairing.json").read_text()),
+            )
+            try:
+                accessories = await asyncio.wait_for(
+                    pairing.list_accessories_and_characteristics(), 10
+                )
+            except AuthenticationError:
+                await pairing.shutdown()
+                if attempt == 1:
+                    raise
+                _LOGGER.warning("Transient HAP reconnect error; retrying once")
+                await _wait_for_hap_listener(entry.data["port"])
+            else:
+                break
+    aid = homekit.aid_storage.get_allocated_aid_for_entity_id(ENTITY_ID)
+    assert aid is not None
+    await homekit.aid_storage.async_save()
+    await homekit.iid_storage.async_save()
+    assert Path(get_persist_fullpath_for_entry_id(hass, entry.entry_id)).is_file()
+    assert Path(hass.config.path(".storage", get_aid_storage_filename_for_entry_id(entry.entry_id))).is_file()
+    assert Path(hass.config.path(".storage", get_iid_storage_filename_for_entry_id(entry.entry_id))).is_file()
+    if pair:
+        accessories = await asyncio.wait_for(pairing.list_accessories_and_characteristics(), 10)
     try:
         accessory = next(item for item in accessories if item["aid"] == aid)
     except StopIteration as err:
@@ -454,17 +493,19 @@ async def test_worker(hass, monkeypatch, socket_enabled):
 
     if phase in {"pair_ui", "pair_yaml"}:
         shared.mkdir(mode=0o700, exist_ok=True)
-        port = _free_port()
+        port = reserve_hap_port(str(shared))
         yaml_pairing = phase == "pair_yaml"
         (shared / "configuration.yaml").write_text(
-            _yaml_source(port) if yaml_pairing else _base_config(), encoding="utf-8"
+            f"http:\n  server_port: {reserve_http_port(str(shared))}\n"
+            + (_yaml_source(port) if yaml_pairing else _base_config()),
+            encoding="utf-8",
         )
         if yaml_pairing:
             (shared / "native_migration.yaml").write_text(
                 _yaml_fragment(port), encoding="utf-8"
             )
             (shared / "baseline_configuration.yaml").write_text(
-                _yaml_source(port), encoding="utf-8"
+                _config(shared, _yaml_source(port)), encoding="utf-8"
             )
             (shared / "baseline_native_migration.yaml").write_text(
                 _yaml_fragment(port), encoding="utf-8"

@@ -1,11 +1,16 @@
-# HomeKit Manager 0.10.11
+# HomeKit Manager 0.10.12 (development)
 
-Version 0.10.11 adds a dual-mode administration surface for `UI / Bridge` and
+Version 0.10.12 hardens the dual-mode administration surface for `UI / Bridge`
+and YAML include sources and adds isolated evidence for the unsupported native
+source-switching experiment. The safe production boundary remains unchanged.
+
+Version 0.10.11 added a dual-mode administration surface for `UI / Bridge` and
 `YAML`. The native Home Assistant configuration source remains authoritative;
 YAML is available for deterministic preview, validation, draft import and
 export. A source migration between `SOURCE_USER` and `SOURCE_IMPORT` remains
 blocked because Core does not provide a stable identity- and pairing-preserving
-API. See [the 0.10.11 technical report](docs/HOMEKIT_MANAGER_0_10_11.md) and
+API. See [the 0.10.12 native migration report](docs/HOMEKIT_MANAGER_0_10_12_NATIVE_MIGRATION.md),
+[the 0.10.11 technical report](docs/HOMEKIT_MANAGER_0_10_11.md) and
 [release notes](docs/RELEASE_0_10_11.md).
 
 Version 0.10.10 makes reconciliation explainable at entity level and supports

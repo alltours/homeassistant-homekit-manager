@@ -66,6 +66,12 @@ assert.equal(positivePanel.individualExclusionReason(hiddenLamp), null, 'hidden 
 positivePanel.setDraft(hiddenLamp.entity_id, 'included', false);
 assert.equal(positivePanel.desiredDocument().bridges.positive.entities[hiddenLamp.entity_id], 'include', 'explicit hidden selection is included');
 assert.match(positivePanel.entityRow(hiddenLamp), /Versteckt · explizite Auswahl nötig/);
+
+const hiddenUnselected = { ...hiddenLamp, homekit: { configured_by_filter: false, registry_eligible: false } };
+positivePanel.entities = [hiddenUnselected];
+positivePanel.draft.clear();
+positivePanel.setDraft(hiddenUnselected.entity_id, 'included', false);
+assert.equal(positivePanel.desiredDocument().bridges.positive.entities[hiddenUnselected.entity_id], 'include', 'hidden entities excluded by the native filter remain individually selectable');
 panel.overview = { configuration_alignment: { state: 'mismatch', message: 'Mismatch', differences: { count: 2, desired_not_native: [], native_not_desired: [] }, deviations: [{ id: 'a', classification: 'manager_exclude_native', entity_id: 'light.flur_decke', cause: 'Native Auswahl' }, { id: 'b', classification: 'stale_manager_decision', entity_id: 'sensor.gone', cause: 'Nicht vorhanden' }] } };
 panel.view = 'changes'; panel.activationStatus = { state: 'unknown', has_operation: true };
 panel.render(); assert.match(panel.shadowRoot.innerHTML, /Ergebnis unbekannt/); assert.match(panel.shadowRoot.innerHTML, /Abweichungsdetails \(2\)/); assert.match(panel.shadowRoot.innerHTML, /sensor\.gone/); assert.match(panel.shadowRoot.innerHTML, /data-apply disabled/);

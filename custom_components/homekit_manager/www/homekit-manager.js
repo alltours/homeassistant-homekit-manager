@@ -195,9 +195,9 @@ class HomeKitManagerPanel extends HTMLElement {
   setFilter(key, value) { this.filters[key] = value; this.page = 0; this.filtersOpen = true; this.render(); }
   setDraft(id, value, render = true) {
     const entity = this.entities.find(item => item.entity_id === id);
-    if (!entity || this.currentStatus(entity) === "unknown" || (value === "included" && value !== this.currentStatus(entity) && this.bulkExclusionReason(entity))) return;
+    const current = entity && (this.positiveListMigration ? this.migrationBaselineStatus(entity) : this.currentStatus(entity));
+    if (!entity || current === "unknown" || (value === "included" && value !== current && this.individualExclusionReason(entity))) return;
     if (!this.draft.size) this.draftFingerprint = this.fingerprint;
-    const current = this.positiveListMigration ? this.migrationBaselineStatus(entity) : this.currentStatus(entity);
     if (!value || value === current) this.draft.delete(id); else this.draft.set(id, value);
     this.serverPreview = null;
     this.operationPlan = null; this.operationStatus = null;

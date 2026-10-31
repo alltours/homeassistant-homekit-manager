@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import signal
 import socket
 from pathlib import Path
 
@@ -101,6 +102,9 @@ async def _unload_for_source_change(hass, entry) -> None:
     from homeassistant.components.homekit.util import async_port_is_available
 
     assert await hass.config_entries.async_unload(entry.entry_id)
+    if os.environ.get("HKM_NATIVE_SOURCE_MIGRATION_FAULT") == "DURING_UNLOAD":
+        (Path(hass.config.config_dir) / "fault-reached").write_text("DURING_UNLOAD", encoding="utf-8")
+        os.kill(os.getpid(), signal.SIGKILL)
     for _ in range(100):
         if async_port_is_available(entry.data["port"]):
             return
@@ -132,6 +136,7 @@ async def _run_engine_source_switch(hass, shared: Path, entry, identity: dict, b
         snapshots=SnapshotStore(shared / "migration.snapshot.json"),
         lock=BridgeMigrationLock(shared / "migration.bridge.lock", entry.entry_id),
         experimental_test_permit=True,
+        fault_injector=lambda point: _inject_fault(shared, point),
     )
 
     async def quiesce():
@@ -139,16 +144,20 @@ async def _run_engine_source_switch(hass, shared: Path, entry, identity: dict, b
 
     async def source_switch():
         if target_source == SOURCE_IMPORT:
+            _inject_fault(shared, "BEFORE_YAML_WRITE")
             (shared / "configuration.yaml").write_text(
                 _yaml_source(identity["port"]), encoding="utf-8"
             )
             (shared / "native_migration.yaml").write_text(
                 _yaml_fragment(identity["port"]), encoding="utf-8"
             )
+            _inject_fault(shared, "AFTER_YAML_WRITE")
             entry.source = SOURCE_IMPORT
         else:
+            _inject_fault(shared, "BEFORE_YAML_WRITE")
             (shared / "configuration.yaml").write_text(_base_config(), encoding="utf-8")
             (shared / "native_migration.yaml").unlink()
+            _inject_fault(shared, "AFTER_YAML_WRITE")
             entry.source = SOURCE_USER
             hass.config_entries.async_update_entry(
                 entry,
@@ -196,16 +205,30 @@ async def _run_engine_source_switch(hass, shared: Path, entry, identity: dict, b
     assert result.state == "COMMITTED"
 
 
-async def _prepare_hass(hass, shared: Path, yaml_enabled: bool):
+def _inject_fault(shared: Path, point: str) -> None:
+    """Kill only when the requested isolated worker fault point is reached."""
+    if os.environ.get("HKM_NATIVE_SOURCE_MIGRATION_FAULT") != point:
+        return
+    state_filter = os.environ.get("HKM_NATIVE_SOURCE_MIGRATION_FAULT_STATE")
+    if state_filter:
+        record = JournalStore(shared / "migration.journal.json").load()
+        if record is None or record.state != state_filter:
+            return
+    (shared / "fault-reached").write_text(point, encoding="utf-8")
+    os.kill(os.getpid(), signal.SIGKILL)
+
+
+async def _prepare_hass(hass, shared: Path, yaml_enabled: bool, preserve_files: bool = False):
     """Load only the isolated test storage and the selected source."""
     hass.config.config_dir = str(shared)
     hass.states.async_set(ENTITY_ID, "off")
     await hass.async_block_till_done()
     (shared / ".storage").mkdir(mode=0o700, exist_ok=True)
-    (shared / "configuration.yaml").write_text(
-        _yaml_source(0) if yaml_enabled else _base_config(), encoding="utf-8"
-    )
-    if yaml_enabled:
+    if not preserve_files:
+        (shared / "configuration.yaml").write_text(
+            _yaml_source(0) if yaml_enabled else _base_config(), encoding="utf-8"
+        )
+    if yaml_enabled and not preserve_files:
         identity = json.loads((shared / "public_identity.json").read_text())
         (shared / "configuration.yaml").write_text(
             _yaml_source(identity["port"]), encoding="utf-8"
@@ -228,6 +251,64 @@ async def _prepare_hass(hass, shared: Path, yaml_enabled: bool):
     await hass.async_block_till_done()
     assert entry.state.value == "loaded"
     return entry
+
+
+async def _recover_after_crash(hass, shared: Path, entry, identity: dict) -> None:
+    """Recover an interrupted isolated migration after a real Core crash."""
+    store = JournalStore(shared / "migration.journal.json")
+    record = store.load()
+    assert record is not None
+    original = await _pair_or_reconnect(hass, shared, entry, False)
+    original_source = config_entries.SOURCE_USER
+
+    if record.state in {"PREFLIGHT", "LOCKED", "SNAPSHOT_CREATED", "PREPARED"}:
+        assert entry.source == original_source
+        assert original["mac"] == identity["mac"]
+        store.save(record.advance(
+            state="FAILED",
+            completed_operation="recovery_complete",
+            recovery_status="RECOVERY_COMPLETED",
+        ))
+        return
+
+    # A crash after quiescing or source/YAML mutation is resolved by an
+    # explicitly journaled rollback. Recovery never recreates a bridge.
+    store.save(record.advance(
+        state="ROLLING_BACK",
+        completed_operation="recovery_start",
+        recovery_status="ROLLBACK_REQUIRED",
+    ))
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    from homeassistant.components.homekit.util import async_port_is_available
+
+    for _ in range(100):
+        if async_port_is_available(entry.data["port"]):
+            break
+        await asyncio.sleep(0.05)
+    (shared / "configuration.yaml").write_text(_base_config(), encoding="utf-8")
+    fragment = shared / "native_migration.yaml"
+    if fragment.exists():
+        fragment.unlink()
+    entry.source = original_source
+    hass.config_entries.async_update_entry(
+        entry,
+        data={"name": BRIDGE_NAME, "port": identity["port"]},
+        options={"mode": "bridge", "filter": {"include_entities": [ENTITY_ID]}},
+    )
+    await _save_config_entries(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    restored = await _pair_or_reconnect(hass, shared, entry, False)
+    assert restored["entry_id"] == identity["entry_id"]
+    assert restored["source"] == original_source
+    assert restored["mac"] == identity["mac"]
+    assert restored["aids"] == identity["aids"]
+    assert restored["entity_iids"] == identity["entity_iids"]
+    store.save((store.load() or record).advance(
+        state="ROLLED_BACK",
+        completed_operation="rollback_complete",
+        recovery_status="ROLLBACK_COMPLETED",
+    ))
 
 
 async def _pair_or_reconnect(hass, shared: Path, entry, pair: bool):
@@ -368,10 +449,12 @@ async def test_worker(hass, monkeypatch, socket_enabled):
 
     identity = json.loads((shared / "public_identity.json").read_text())
     yaml_enabled = phase in {"restart_yaml", "migrate_yaml_ui"}
-    entry = await _prepare_hass(hass, shared, yaml_enabled)
+    entry = await _prepare_hass(hass, shared, yaml_enabled, preserve_files=phase == "recover")
     before = await _pair_or_reconnect(hass, shared, entry, False)
 
-    if phase == "migrate_ui_yaml":
+    if phase == "recover":
+        await _recover_after_crash(hass, shared, entry, identity)
+    elif phase == "migrate_ui_yaml":
         assert entry.source == SOURCE_USER
         await _run_engine_source_switch(hass, shared, entry, identity, before, SOURCE_IMPORT)
     elif phase == "restart_yaml":

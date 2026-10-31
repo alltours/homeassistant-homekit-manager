@@ -5,6 +5,11 @@ from dataclasses import dataclass
 
 from .migration_journal import JournalCorruptError, JournalRecord, JournalStore, TERMINAL_STATES
 
+RECOVERY_COMPLETED = "RECOVERY_COMPLETED"
+ROLLBACK_COMPLETED = "ROLLBACK_COMPLETED"
+RECOVERY_BLOCKED = "RECOVERY_BLOCKED"
+MANUAL_RECOVERY_REQUIRED = "MANUAL_RECOVERY_REQUIRED"
+
 
 @dataclass(frozen=True)
 class RecoveryDecision:
@@ -15,6 +20,7 @@ class RecoveryDecision:
     action: str
     reason: str
     automatic: bool
+    outcome: str = RECOVERY_BLOCKED
 
 
 def classify(record: JournalRecord | None) -> RecoveryDecision:
@@ -26,7 +32,13 @@ def classify(record: JournalRecord | None) -> RecoveryDecision:
     ) and (
         record.state != "ROLLED_BACK" or "rollback_complete" in record.completed_operations
     ):
-        return RecoveryDecision(record.transaction_id, record.state, "none", "Transaktion ist abgeschlossen", False)
+        outcome = record.recovery_status if record.recovery_status in {
+            RECOVERY_COMPLETED,
+            ROLLBACK_COMPLETED,
+        } else RECOVERY_COMPLETED
+        return RecoveryDecision(
+            record.transaction_id, record.state, "none", "Transaktion ist abgeschlossen", False, outcome
+        )
     if record.state in {"PREFLIGHT", "LOCKED", "SNAPSHOT_CREATED", "PREPARED"}:
         return RecoveryDecision(
             record.transaction_id,
@@ -42,6 +54,7 @@ def classify(record: JournalRecord | None) -> RecoveryDecision:
             "manual_recovery",
             "Der Runtime-Zustand nach dem Abbruch des Quiesce-Schritts ist unbekannt",
             False,
+            MANUAL_RECOVERY_REQUIRED,
         )
     return RecoveryDecision(
         record.transaction_id,
@@ -49,6 +62,7 @@ def classify(record: JournalRecord | None) -> RecoveryDecision:
         "manual_recovery",
         "Nach dem Quiesce-Schritt kann der native Zustand nicht ohne externe Verifikation automatisch beurteilt werden",
         False,
+        MANUAL_RECOVERY_REQUIRED,
     )
 
 
@@ -57,4 +71,4 @@ def inspect_store(store: JournalStore) -> RecoveryDecision:
     try:
         return classify(store.load())
     except JournalCorruptError as err:
-        return RecoveryDecision(None, "UNKNOWN", "manual_recovery", str(err), False)
+        return RecoveryDecision(None, "UNKNOWN", "manual_recovery", str(err), False, MANUAL_RECOVERY_REQUIRED)

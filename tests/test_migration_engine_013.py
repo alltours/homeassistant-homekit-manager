@@ -130,6 +130,29 @@ def test_engine_persists_every_state_and_commits(tmp_path):
     assert engine.recover_status().action == "none"
 
 
+def test_engine_fault_points_are_opt_in_and_ordered(tmp_path):
+    points: list[str] = []
+    engine = MigrationEngine(
+        journal=JournalStore(tmp_path / "journal.json"),
+        snapshots=SnapshotStore(tmp_path / "snapshot.json"),
+        lock=BridgeMigrationLock(tmp_path / "bridge.lock", "bridge-a"),
+        experimental_test_permit=True,
+        fault_injector=points.append,
+    )
+    engine.execute(
+        _plan(),
+        steps={name: (lambda: None) for name in (
+            "lock", "snapshot", "prepare", "quiesce", "source_switch", "reload", "verify", "commit"
+        )},
+        snapshot=_snapshot(tmp_path),
+    )
+    assert "BEFORE_PREFLIGHT" in points
+    assert "AFTER_PREFLIGHT" in points
+    assert "AFTER_SNAPSHOT" in points
+    assert "BEFORE_SOURCE_MUTATION" in points
+    assert "AFTER_COMMIT" in points
+
+
 def test_async_engine_uses_the_same_durable_boundaries(tmp_path):
     engine = _engine(tmp_path)
     executed: list[str] = []
@@ -243,6 +266,7 @@ def test_recovery_never_auto_commits_ambiguous_states(tmp_path):
     decision = classify(store.load())
     assert decision.action == "manual_recovery"
     assert decision.automatic is False
+    assert decision.outcome == "MANUAL_RECOVERY_REQUIRED"
 
 
 def test_lock_rejects_second_process_handle(tmp_path):

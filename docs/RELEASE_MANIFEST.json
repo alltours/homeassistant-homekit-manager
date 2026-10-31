@@ -149,8 +149,8 @@
     },
     {
       "path": "migration_engine.py",
-      "sha256": "7614a2f51ef6cb29d9b96f575d7de4214a8f76c04050c2e3a77385b117548a90",
-      "size": 15355
+      "sha256": "c0954708e854aa73528fdea0a83227597e61526340501edbe8ff51ccc50491aa",
+      "size": 17380
     },
     {
       "path": "migration_journal.py",
@@ -164,8 +164,8 @@
     },
     {
       "path": "migration_recovery.py",
-      "sha256": "7aca84da013297950d01ddff121c2e4a4bed33d29cf498cb2d78cae71c81d804",
-      "size": 2258
+      "sha256": "186c91acb6265c76e4fd2a91bf14e4b575f85555e280c0b3f4db34f4f575173c",
+      "size": 2770
     },
     {
       "path": "migration_snapshot.py",

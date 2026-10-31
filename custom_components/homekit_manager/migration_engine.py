@@ -66,6 +66,7 @@ TRANSITIONS = {
 
 Step = Callable[[], Mapping[str, str] | None]
 AsyncStep = Callable[[], Awaitable[Mapping[str, str] | None]]
+FaultInjector = Callable[[str], None]
 
 
 @dataclass(frozen=True)
@@ -94,11 +95,18 @@ class MigrationEngine:
         snapshots: SnapshotStore,
         lock: BridgeMigrationLock,
         experimental_test_permit: bool = False,
+        fault_injector: FaultInjector | None = None,
     ):
         self.journal = journal
         self.snapshots = snapshots
         self.lock = lock
         self.experimental_test_permit = experimental_test_permit
+        self.fault_injector = fault_injector
+
+    def _fault(self, point: str) -> None:
+        """Invoke an isolated-test fault point, if one was explicitly supplied."""
+        if self.fault_injector:
+            self.fault_injector(point)
 
     def preflight(self, plan: MigrationPlan) -> JournalRecord:
         """Create the first durable record without touching native state."""
@@ -183,9 +191,12 @@ class MigrationEngine:
         """
         if not self.experimental_test_permit:
             raise MigrationDisabled("Native Quellenmigration ist außerhalb isolierter Tests deaktiviert")
+        self._fault("BEFORE_PREFLIGHT")
         record = self.preflight(plan)
+        self._fault("AFTER_PREFLIGHT")
         snapshot = replace(snapshot, transaction_id=record.transaction_id)
         self.snapshots.save(snapshot)
+        self._fault("AFTER_SNAPSHOT")
         try:
             self.lock.acquire()
             record = await self._step_async(record, "LOCKED", "lock", steps.get("lock"))
@@ -245,9 +256,12 @@ class MigrationEngine:
         """
         if not self.experimental_test_permit:
             raise MigrationDisabled("Native Quellenmigration ist außerhalb isolierter Tests deaktiviert")
+        self._fault("BEFORE_PREFLIGHT")
         record = self.preflight(plan)
+        self._fault("AFTER_PREFLIGHT")
         snapshot = replace(snapshot, transaction_id=record.transaction_id)
         self.snapshots.save(snapshot)
+        self._fault("AFTER_SNAPSHOT")
         try:
             self.lock.acquire()
             record = self._step(record, "LOCKED", "lock", steps.get("lock"))
@@ -307,6 +321,16 @@ class MigrationEngine:
         if state not in TRANSITIONS.get(record.state, set()):
             raise InvalidTransition(f"{record.state} -> {state} ist nicht zulässig")
         record = self._persist(record, state, checksums=checksums)
+        before_fault = {
+            "quiesce": "BEFORE_UNLOAD",
+            "source_switch": "BEFORE_SOURCE_MUTATION",
+            "reload": "BEFORE_RELOAD",
+            "verify": "BEFORE_HAP_VERIFY",
+            "commit": "BEFORE_COMMIT",
+            "rollback": "DURING_ROLLBACK",
+        }.get(operation)
+        if before_fault:
+            self._fault(before_fault)
         if callback:
             result = callback()
             result_checksums = dict(checksums or {})
@@ -314,6 +338,15 @@ class MigrationEngine:
                 result_checksums.update(result)
         else:
             result_checksums = dict(checksums or {})
+        after_fault = {
+            "quiesce": "AFTER_UNLOAD",
+            "source_switch": "AFTER_SOURCE_MUTATION",
+            "reload": "AFTER_RELOAD",
+            "verify": "AFTER_HAP_VERIFY",
+            "commit": "AFTER_COMMIT",
+        }.get(operation)
+        if after_fault:
+            self._fault(after_fault)
         return self._persist(record, state, operation=operation, checksums=result_checksums)
 
     async def _step_async(
@@ -328,10 +361,29 @@ class MigrationEngine:
         if state not in TRANSITIONS.get(record.state, set()):
             raise InvalidTransition(f"{record.state} -> {state} ist nicht zulässig")
         record = self._persist(record, state, checksums=checksums)
+        before_fault = {
+            "quiesce": "BEFORE_UNLOAD",
+            "source_switch": "BEFORE_SOURCE_MUTATION",
+            "reload": "BEFORE_RELOAD",
+            "verify": "BEFORE_HAP_VERIFY",
+            "commit": "BEFORE_COMMIT",
+            "rollback": "DURING_ROLLBACK",
+        }.get(operation)
+        if before_fault:
+            self._fault(before_fault)
         result = await callback() if callback else None
         result_checksums = dict(checksums or {})
         if result:
             result_checksums.update(result)
+        after_fault = {
+            "quiesce": "AFTER_UNLOAD",
+            "source_switch": "AFTER_SOURCE_MUTATION",
+            "reload": "AFTER_RELOAD",
+            "verify": "AFTER_HAP_VERIFY",
+            "commit": "AFTER_COMMIT",
+        }.get(operation)
+        if after_fault:
+            self._fault(after_fault)
         return self._persist(record, state, operation=operation, checksums=result_checksums)
 
     def _persist(
@@ -351,4 +403,6 @@ class MigrationEngine:
             error=error,
             recovery_status=recovery_status,
         )
-        return self.journal.save(updated)
+        persisted = self.journal.save(updated)
+        self._fault("AFTER_JOURNAL_SYNC")
+        return persisted

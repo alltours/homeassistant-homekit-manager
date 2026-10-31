@@ -135,17 +135,30 @@ Die isolierten Tests decken ab:
 - Recoveryklassifizierung nach Prozessverlust,
 - reale HAP-Controller-Verifikation im bestehenden UI↔YAML-POC.
 
-Der abschließende lokale Nachweis umfasst 299 Stable-Core-Tests, 182
-Beta-Core-Unit-Tests, 117 Beta-Core-Integrationstests, 108 Chromium-/WebKit-
-Browserfälle und 13 dedizierte Engine-/Fault-Tests. Der Prozess-Fault-Harness
+Der abschließende lokale Nachweis umfasst 306 Stable-Core-Tests, 183
+Beta-Core-Unit-Tests, 123 Beta-Core-Integrationstests, 108 Chromium-/WebKit-
+Browserfälle und 14 dedizierte Engine-/Fault-Tests. Der Prozess-Fault-Harness
 beendet einen echten Workerprozess mit `SIGKILL`/`SIGTERM`; er ist jedoch kein
 vollständiger SIGKILL während eines laufenden Home-Assistant-Core-
 Commitfensters.
+
+Der weiterentwickelte Harness beendet nun auch einen vollständig laufenden,
+isolierten Home-Assistant-Core-Prozess während des echten HAP-Source-Switch-
+POCs. Die geprüften Punkte `AFTER_SNAPSHOT`, `AFTER_UNLOAD`,
+`BEFORE_SOURCE_MUTATION`, `AFTER_SOURCE_MUTATION` und `AFTER_RELOAD` werden
+nach dem Neustart automatisch klassifiziert. Für die getesteten Zustände wird
+entweder `RECOVERY_COMPLETED` ohne native Änderung oder ein journalisierter
+`ROLLBACK_COMPLETED` mit erneuter aiohomekit-Kommunikation erreicht.
+
+Zusätzlich existiert ein echter Zwei-Bridge-HAP-Test. Während Bridge A
+quiesced, umgeschaltet und neu geladen wird, bleibt Bridge B mit ihrem
+ursprünglichen Pairing, MAC und Accessory-Satz erreichbar.
 
 ## Konsequenz
 
 Die Engine ist ein belastbarer Sicherheitsbaustein, aber noch kein Beweis für
 eine produktiv verantwortbare native Migration. Für eine Freigabe fehlen
-weiterhin ein offizieller oder stabiler Core-Vertrag, Fehler-Injektion in
-echten Core-Prozessen während jedes Commit-Fensters, vollständige HAP-
-Rollbacktests und Apple-Home-Tests.
+weiterhin ein offizieller oder stabiler Core-Vertrag, Fault-Injection in jedem
+erdenklichen Core-Commitfenster, vollständige Rollbackabdeckung in beiden
+Richtungen, YAML-Reconciliation unter allen Include-Varianten und Apple-Home-
+Tests. Die produktive Migration bleibt deshalb gesperrt.

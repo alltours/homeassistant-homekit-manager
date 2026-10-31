@@ -12,6 +12,10 @@
 - Stabilize the isolated beta-Core bootstrap by asserting entity readiness only
   after the Home Assistant start lifecycle boundary; no assertion retry masks a
   functional failure.
+- Add real isolated full-Core SIGKILL recovery tests after snapshot, unload,
+  source mutation and reload, including journaled rollback and HAP reconnect.
+- Add a real two-bridge HAP test proving that migration of one bridge does not
+  change the second bridge's pairing or accessory identity.
 - Keep native source execution unavailable outside isolated test permits.
 
 ## 0.10.12

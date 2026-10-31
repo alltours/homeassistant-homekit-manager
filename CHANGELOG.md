@@ -1,5 +1,15 @@
 # Changelog
 
+# 0.10.17 (development)
+
+- Add an experimental Core-owned transaction protocol with explicit state
+  transitions, commit status and recovery generations.
+- Persist non-secret revision, allowlist and HAP identity fingerprints before
+  native source mutation.
+- Add read-only Core migration status reporting and a technical upstream API
+  proposal.
+- Keep native source migration disabled in the production Manager integration.
+
 # 0.10.16 (development)
 
 - Add fail-closed migration journal and snapshot integrity validation,

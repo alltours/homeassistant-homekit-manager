@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-CORE_MIGRATION_API = "homekit_core_source_migration_v1"
+CORE_MIGRATION_API = "homekit_core_source_migration_v2"
 
 
 def _core_api() -> Any | None:
@@ -25,6 +25,7 @@ def _core_api() -> Any | None:
             "async_prepare_source_migration",
             "async_switch_source",
             "async_recover_before_yaml_reconciliation",
+            "async_get_migration_status",
         )
     ):
         return None
@@ -46,6 +47,14 @@ def capability(hass: Any) -> dict[str, Any]:
         "api": CORE_MIGRATION_API,
         "available": True,
         "migration_enabled": False,
+        "protocol_version": 2,
+        "capabilities": {
+            "write_ahead_journal": True,
+            "strict_recovery_load": True,
+            "identity_fingerprint": True,
+            "allowlist_fingerprint": True,
+            "migration_execution": False,
+        },
         "reason": "Core-Schnittstelle vorhanden; Aktivierung bleibt bis zur Freigabe gesperrt.",
     }
 
@@ -89,3 +98,22 @@ async def async_switch(hass: Any, transaction_id: str) -> dict[str, Any]:
         "entry_id": entry.entry_id,
         "source": entry.source,
     }
+
+
+async def async_status(hass: Any) -> dict[str, Any]:
+    """Read the Core-owned protocol state without mutating anything."""
+    api = _core_api()
+    if api is None:
+        return {
+            "state": "BLOCKED",
+            "action": "manual_recovery",
+            "reason": "Core-Schnittstelle fehlt; Status bleibt unbekannt.",
+        }
+    try:
+        return await api.async_get_migration_status(hass)
+    except Exception as err:  # noqa: BLE001
+        return {
+            "state": "BLOCKED",
+            "action": "manual_recovery",
+            "reason": type(err).__name__,
+        }

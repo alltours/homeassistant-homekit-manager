@@ -1,5 +1,5 @@
 {
-  "integration_version": "0.10.16",
+  "integration_version": "0.10.17",
   "file_count": 58,
   "files": [
     {
@@ -44,7 +44,7 @@
     },
     {
       "path": "const.py",
-      "sha256": "3d88d6f50e2166b51da9673aa20851bf1716e18289ee48881624a2a4dacd9537",
+      "sha256": "7d3b6a4013384037334b594c690b83e138f097dcb055dceaaf82d25ef8a22a77",
       "size": 2747
     },
     {
@@ -59,8 +59,8 @@
     },
     {
       "path": "core_migration.py",
-      "sha256": "0ce2609a6f1a38508eb2534f5eba50cddc285d7c31c8ba327338a9a05e573655",
-      "size": 3172
+      "sha256": "e33fe6be78f4091fe1222fabe8bd436ae6b9a3c34a1fb33eab3579900fa5a340",
+      "size": 4091
     },
     {
       "path": "device_config.py",
@@ -144,7 +144,7 @@
     },
     {
       "path": "manifest.json",
-      "sha256": "33d4468bfad9b3834828beb524cd4c974da75f1985c298c29cccc5c033f7ad7b",
+      "sha256": "3999ba3547f581816e04cae974ebc1076b081dd6570c3e6e7f7b6376170003a0",
       "size": 517
     },
     {

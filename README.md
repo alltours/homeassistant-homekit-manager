@@ -1,4 +1,9 @@
-# HomeKit Manager 0.10.16 (development)
+# HomeKit Manager 0.10.17 (development)
+
+Version 0.10.17 adds an experimental Core-owned transaction protocol around
+the existing migration boundary. It defines explicit source-switch, recovery
+and commit states, non-secret identity fingerprints and a read-only status
+adapter. Native migration remains disabled in the production Manager path.
 
 Version 0.10.16 adds fail-closed persistence-integrity checks around the
 experimental Core-owned migration boundary, including strict journal loading,

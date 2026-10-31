@@ -1,5 +1,13 @@
 # Changelog
 
+# 0.10.15 (development)
+
+- Add full Home Assistant Core multi-bridge crash-recovery coverage for the
+  isolated migration prototype, including real HAP pairings, both migration
+  directions, repeated SIGKILL recovery and a second crash during recovery.
+- Keep the native migration path experimental and unavailable in the
+  production Manager integration.
+
 # 0.10.14 (development)
 
 - Add an isolated Home Assistant Core migration-boundary proof of concept with

@@ -1,4 +1,4 @@
-# HomeKit Manager 0.10.14 (development)
+# HomeKit Manager 0.10.15 (development)
 
 Version 0.10.14 adds an isolated Core-owned migration boundary around the
 existing dual-mode administration surface for `UI / Bridge`

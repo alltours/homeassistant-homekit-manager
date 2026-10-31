@@ -1,8 +1,9 @@
 """Redacted configuration history and restoration previews."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any, Mapping
+from collections.abc import Mapping
+from datetime import UTC, datetime
+from typing import Any
 
 from .yaml_store import validate_document
 
@@ -15,7 +16,7 @@ def make_history_entry(document: Mapping[str, Any], *, reason: str = "draft_save
     """Create a redacted history entry containing desired state only."""
     safe = _safe_document(document)
     return {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "reason": reason,
         "document": safe,
         "fingerprint": fingerprint,

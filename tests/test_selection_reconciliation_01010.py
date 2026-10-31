@@ -5,7 +5,9 @@ import unittest
 
 from custom_components.homekit_manager.bulk import preview_bulk
 from custom_components.homekit_manager.change_planner import plan_changes
-from custom_components.homekit_manager.selection_reconciliation import reconcile_selection
+from custom_components.homekit_manager.selection_reconciliation import (
+    reconcile_selection,
+)
 
 
 def entity(

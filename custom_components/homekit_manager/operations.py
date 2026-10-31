@@ -8,19 +8,24 @@ never retried automatically.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Mapping
+from datetime import UTC, datetime
+from typing import Any
 
 from homeassistant.helpers.storage import Store
 
-from .homekit_writer import HomeKitWriteBlocked, HomeKitWriteDisabled, build_options_diff
+from .const import NATIVE_FILTER_WRITE_CORE_VERSIONS
+from .homekit_writer import (
+    HomeKitWriteBlocked,
+    HomeKitWriteDisabled,
+    build_options_diff,
+)
 from .native_adapter import NativeFilterPlan, NativeHomeKitAdapter
 from .safety import WRITE_LOCK_REASON
-from .yaml_adapter import YamlFilterPlan, YamlHomeKitAdapter
 from .write_grant import GrantBlocked, ProductionWriteGrant, read_production_grant
-from .write_test_mode import TestWriteMode, TestModeBlocked, TestModeAuthority
-from .const import NATIVE_FILTER_WRITE_CORE_VERSIONS
+from .write_test_mode import TestModeAuthority, TestModeBlocked, TestWriteMode
+from .yaml_adapter import YamlFilterPlan, YamlHomeKitAdapter
 
 
 @dataclass(frozen=True)
@@ -128,7 +133,7 @@ class HomeKitOperationService:
             "source_file": plan.payload.source_path.name if isinstance(plan.payload, YamlFilterPlan) else None,
             "state": state,
             "detail": detail,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
         }
         await self._store.async_save({"operations": dict(list(records.items())[-100:])})
 
@@ -277,7 +282,7 @@ class HomeKitOperationService:
                 actual = "unknown_outcome"
             state = "verified" if actual in {"verified_options", "verified_core"} else "not_applied" if actual == "not_applied" else "unknown_outcome"
             records = await self._records()
-            records[operation_id] = record | {"state": state, "updated_at": datetime.now(timezone.utc).isoformat()}
+            records[operation_id] = record | {"state": state, "updated_at": datetime.now(UTC).isoformat()}
             await self._store.async_save({"operations": dict(list(records.items())[-100:])})
             return self._public(records[operation_id])
         if isinstance(plan.payload, NativeFilterPlan):

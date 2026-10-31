@@ -1,7 +1,8 @@
 """Safe, non-persistent HomeKit device configuration previews."""
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 _EDITABLE_KEYS = {"name", "type"}
 

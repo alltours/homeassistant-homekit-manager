@@ -5,8 +5,8 @@ include as proof that the running bridge has adopted a configuration.
 """
 from __future__ import annotations
 
-import re
 import hashlib
+import re
 from pathlib import Path
 from typing import Any
 
@@ -21,9 +21,14 @@ def detect_configuration_sources(
 ) -> dict[str, Any]:
     """Classify observed sources without attempting a migration."""
     text = configuration_text or ""
-    has_direct_homekit = bool(re.search(r"(?m)^\s*homekit\s*:(?!\s*!include\b)\s*", text))
+    include_directive = r"!include(?:_dir_merge_named|_dir_merge_list)?\b"
+    has_direct_homekit = bool(
+        re.search(rf"(?m)^\s*homekit\s*:(?!\s*{include_directive})\s*", text)
+    )
     includes_manager = bool(re.search(r"(?m)^\s*homekit\s*:\s*!include\s+homekit_manager\.yaml\s*(?:#.*)?$", text))
-    has_other_include = bool(re.search(r"(?m)^\s*homekit\s*:\s*!include\s+[^\s#]+", text)) and not includes_manager
+    has_other_include = bool(
+        re.search(rf"(?m)^\s*homekit\s*:\s*{include_directive}\s+[^\s#]+", text)
+    ) and not includes_manager
     observed = []
     if bridge_count:
         observed.append("homekit_bridge")
@@ -54,7 +59,9 @@ def detect_configuration_sources(
     }
 
 
-_HOMEKIT_INCLUDE = re.compile(r"(?m)^\s*homekit\s*:\s*!include(?:_dir_merge_named|_dir_merge_list)?\s+([^\s#]+)")
+_HOMEKIT_INCLUDE = re.compile(
+    r"(?m)^\s*homekit\s*:\s*!(?P<kind>include|include_dir_merge_named|include_dir_merge_list)\s+(?P<path>[^\s#]+)"
+)
 
 
 def inspect_configuration_sources(
@@ -78,20 +85,46 @@ def inspect_configuration_sources(
     root = Path(config_dir).resolve()
     include_files: list[dict[str, Any]] = []
     errors: list[str] = []
-    for raw_path in _HOMEKIT_INCLUDE.findall(configuration_text or ""):
-        candidate = (root / raw_path).resolve()
+    for match in _HOMEKIT_INCLUDE.finditer(configuration_text or ""):
+        raw_path = match.group("path")
+        include_kind = match.group("kind")
+        unresolved_candidate = root / raw_path
+        if unresolved_candidate.is_symlink():
+            errors.append(f"Unsicherer Include-Symlink: {raw_path}")
+            include_files.append(
+                {
+                    "path": raw_path,
+                    "kind": "directory" if include_kind != "include" else "file",
+                    "directive": f"!{include_kind}",
+                    "exists": True,
+                    "readable": False,
+                    "symlink": True,
+                }
+            )
+            continue
+        candidate = unresolved_candidate.resolve()
         try:
             candidate.relative_to(root)
         except ValueError:
             errors.append(f"Include außerhalb des Konfigurationsverzeichnisses: {raw_path}")
             continue
-        item: dict[str, Any] = {"path": str(candidate.relative_to(root)), "exists": candidate.is_file(), "readable": False}
-        if candidate.is_file():
+        relative_path = str(candidate.relative_to(root))
+        is_directory_include = include_kind != "include"
+        item: dict[str, Any] = {
+            "path": relative_path,
+            "kind": "directory" if is_directory_include else "file",
+            "directive": f"!{include_kind}",
+            "exists": candidate.is_dir() if is_directory_include else candidate.is_file(),
+            "readable": False,
+        }
+        if is_directory_include:
+            _inspect_include_directory(candidate, item, errors)
+        elif candidate.is_file():
             try:
                 content = candidate.read_bytes()
                 item.update({"readable": True, "sha256": hashlib.sha256(content).hexdigest(), "size": len(content)})
                 try:
-                    yaml.safe_load(content.decode("utf-8"))
+                    list(yaml.scan(content.decode("utf-8")))
                 except (UnicodeDecodeError, yaml.YAMLError) as err:
                     item["parse_error"] = str(err)
                     errors.append(f"Ungültige YAML-Datei: {item['path']}")
@@ -122,3 +155,78 @@ def inspect_configuration_sources(
             message="Eine HomeKit-Include-Datei konnte nicht sicher gelesen werden; Migration ist blockiert.",
         )
     return result
+
+
+def _inspect_include_directory(
+    candidate: Path,
+    item: dict[str, Any],
+    errors: list[str],
+) -> None:
+    """Inspect a directory include without making it writable.
+
+    Home Assistant's directory merge directives are valid YAML sources, but
+    they do not identify one editable file.  We therefore expose deterministic
+    read-only metadata for every regular YAML member and never infer a safe
+    write target from the directory itself.
+    """
+    if not candidate.is_dir():
+        errors.append(f"Include-Verzeichnis fehlt: {item['path']}")
+        return
+    try:
+        members = sorted(
+            (
+                path
+                for path in candidate.rglob("*")
+                if not any(part.startswith(".") for part in path.relative_to(candidate).parts)
+                and (
+                    path.is_symlink()
+                    or (
+                        path.is_file()
+                        and path.suffix == ".yaml"
+                        and path.name != "secrets.yaml"
+                    )
+                )
+            ),
+            key=lambda path: path.relative_to(candidate).as_posix(),
+        )
+    except OSError as err:
+        item["error"] = str(err)
+        errors.append(f"Include-Verzeichnis nicht lesbar: {item['path']}")
+        return
+
+    item["members"] = []
+    directory_errors = False
+    for member in members:
+        member_item: dict[str, Any] = {
+            "path": str(member.relative_to(candidate.parent)),
+            "regular_file": member.is_file() and not member.is_symlink(),
+            "readable": False,
+        }
+        if member.is_symlink() or not member.is_file():
+            errors.append(f"Unsicheres Include-Verzeichnismitglied: {member_item['path']}")
+            directory_errors = True
+        else:
+            try:
+                content = member.read_bytes()
+                member_item.update(
+                    {
+                        "readable": True,
+                        "sha256": hashlib.sha256(content).hexdigest(),
+                        "size": len(content),
+                    }
+                )
+                try:
+                    list(yaml.scan(content.decode("utf-8")))
+                except (UnicodeDecodeError, yaml.YAMLError) as err:
+                    member_item["parse_error"] = str(err)
+                    errors.append(f"Ungültige YAML-Datei: {member_item['path']}")
+                    directory_errors = True
+            except OSError as err:
+                member_item["error"] = str(err)
+                errors.append(f"Include nicht lesbar: {member_item['path']}")
+                directory_errors = True
+        item["members"].append(member_item)
+
+    item["readable"] = not directory_errors and all(
+        member["readable"] for member in item["members"]
+    )

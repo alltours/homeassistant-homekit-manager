@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Any, Iterable, Mapping
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 
 def summarize_inventory(entities: Iterable[Mapping[str, Any]]) -> dict[str, Any]:

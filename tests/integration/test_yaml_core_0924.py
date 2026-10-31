@@ -5,7 +5,10 @@ from homeassistant.config import async_hass_config_yaml
 from homeassistant.const import __version__
 from homeassistant.setup import async_setup_component
 
-from custom_components.homekit_manager.yaml_adapter import YamlAdapterBlocked, YamlHomeKitAdapter
+from custom_components.homekit_manager.yaml_adapter import (
+    YamlAdapterBlocked,
+    YamlHomeKitAdapter,
+)
 
 
 async def test_isolated_yaml_file_apply_is_imported_by_core(hass, tmp_path, monkeypatch):
@@ -72,16 +75,16 @@ async def test_direct_configuration_yaml_apply_is_imported_by_core(hass, tmp_pat
     monkeypatch.setattr("homeassistant.components.homekit.async_port_is_available", lambda _port: True)
     source = tmp_path / "configuration.yaml"
     before = (
-        "# outside comment retained\n"
-        "homekit:\n"
-        "  - name: Direct YAML Bridge\n"
-        "    port: 21089\n"
-        "    filter:\n"
-        "      include_entities:\n"
-        "        - light.before\n"
-        "logger:\n"
-        "  default: warning\n"
-    ).encode()
+        b"# outside comment retained\n"
+        b"homekit:\n"
+        b"  - name: Direct YAML Bridge\n"
+        b"    port: 21089\n"
+        b"    filter:\n"
+        b"      include_entities:\n"
+        b"        - light.before\n"
+        b"logger:\n"
+        b"  default: warning\n"
+    )
     source.write_bytes(before)
     config = await async_hass_config_yaml(hass)
     assert await async_setup_component(hass, "homekit", config)

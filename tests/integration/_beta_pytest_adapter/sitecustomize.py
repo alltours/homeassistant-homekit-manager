@@ -8,6 +8,5 @@ is never included in the HomeKit Manager release archive.
 
 from homeassistant.components import logger
 
-
 if not hasattr(logger, "_clear_logger_overwrites"):
     logger._clear_logger_overwrites = lambda: None

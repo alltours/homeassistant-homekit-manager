@@ -1,10 +1,11 @@
 """Server-side, read-only desired-state change planning."""
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
-from .yaml_store import validate_document
 from .bulk import exclusion_reason
+from .yaml_store import validate_document
 
 _FILTER_KEYS = {
     "include_entities", "exclude_entities", "include_domains", "exclude_domains",

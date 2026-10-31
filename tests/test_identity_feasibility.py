@@ -1,12 +1,12 @@
 """Core 2026.10.4 source/identity contracts, with no HAP driver start."""
 import inspect
 
-from homeassistant.config_entries import ConfigEntries
 from homeassistant.components.homekit.util import (
     get_aid_storage_filename_for_entry_id,
     get_iid_storage_filename_for_entry_id,
     get_persist_filename_for_entry_id,
 )
+from homeassistant.config_entries import ConfigEntries
 
 
 def test_public_config_entry_update_has_no_source_mutation():

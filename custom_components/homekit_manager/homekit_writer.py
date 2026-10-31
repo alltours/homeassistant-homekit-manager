@@ -7,15 +7,16 @@ from __future__ import annotations
 
 import asyncio
 import copy
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Callable, Mapping
+from typing import Any
 
 from .change_planner import plan_changes
 from .const import NATIVE_FILTER_WRITE_CORE_VERSIONS
 from .filtering import evaluate_filter
+from .positive_list import PositiveListEvidence
 from .safety import WRITE_LOCK_REASON
 from .source_model import revision
-from .positive_list import PositiveListEvidence
 
 
 class HomeKitWriteError(Exception):
@@ -159,9 +160,7 @@ def _unlisted_entity_default(config: Mapping[str, Any]) -> bool:
         return False
     if config.get("include_domains") or config.get("include_entity_globs"):
         return False
-    if config.get("exclude_domains") or config.get("exclude_entity_globs"):
-        return True
-    return False
+    return bool(config.get("exclude_domains") or config.get("exclude_entity_globs"))
 
 
 def _verify_scope(before: Mapping[str, Any], after: Mapping[str, Any], inventory: list[Mapping[str, Any]], desired: Mapping[str, str], *, allow_default_change: bool = False) -> None:
@@ -279,8 +278,8 @@ class HomeKitWriter:
                 raise HomeKitWriteBlocked("Produktiver Native-Apply benötigt eine vollständige Entry-Revision")
         if not diff.changed_keys:
             raise HomeKitWriteBlocked("Options-Diff enthält keine Änderung")
-        from homeassistant.const import __version__
         from homeassistant.config_entries import SOURCE_USER
+        from homeassistant.const import __version__
         if __version__ not in NATIVE_FILTER_WRITE_CORE_VERSIONS:
             raise HomeKitWriteBlocked(
                 f"Core-Version {__version__} wird für den isolierten Adapter nicht unterstützt"
@@ -337,7 +336,7 @@ class HomeKitWriter:
                     await asyncio.wait_for(
                         self.hass.async_block_till_done(), ACTIVATION_TIMEOUT
                     )
-                except asyncio.TimeoutError as err:
+                except TimeoutError as err:
                     raise HomeKitActivationUnknown(
                         "Aktivierung wurde nicht innerhalb des Zeitlimits bestätigt"
                     ) from err

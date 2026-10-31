@@ -4,12 +4,15 @@ from copy import deepcopy
 from unittest.mock import Mock
 
 import pytest
-from homeassistant import config_entries
 from homeassistant.components import frontend, websocket_api
 from pytest_homeassistant_custom_component.common import MockConfigEntry, MockUser
+
 from custom_components.homekit_manager.compatibility import classify_entity
-from custom_components.homekit_manager.homekit_writer import HomeKitWriteDisabled, HomeKitWriter
-from custom_components.homekit_manager.yaml_store import validate_document, YamlValidationError
+from custom_components.homekit_manager.homekit_writer import HomeKitWriteDisabled
+from custom_components.homekit_manager.yaml_store import (
+    YamlValidationError,
+    validate_document,
+)
 
 
 async def setup_manager(hass):
@@ -26,9 +29,9 @@ def test_malformed_status_is_a_controlled_validation_error(status):
 
 @pytest.mark.parametrize("domain,device_class,features", [("camera", None, 0), ("lock", None, 0), ("media_player", "tv", 0), ("remote", None, 4)])
 def test_accessory_mode_matches_native_core_eligibility(domain, device_class, features):
-    from homeassistant.core import State
     from homeassistant.components.homekit.util import state_needs_accessory_mode
     from homeassistant.components.remote import RemoteEntityFeature
+    from homeassistant.core import State
     if domain == "remote":
         features = int(RemoteEntityFeature.ACTIVITY)
     attrs = {"device_class": device_class, "supported_features": features}
@@ -67,7 +70,7 @@ async def test_failed_refresh_preserves_complete_snapshot(hass, enable_custom_in
     monkeypatch.setattr("custom_components.homekit_manager.coordinator.build_device_views", fail)
     await manager.async_refresh()
     after = (manager.inventory, manager.bridges, manager.devices, manager.areas, manager.fingerprint, manager.last_updated)
-    assert all(left is right for left, right in zip(before, after))
+    assert all(left is right for left, right in zip(before, after, strict=False))
     assert manager.overview()["snapshot_stale"] is True
 
 

@@ -3,8 +3,8 @@
 import pytest
 
 from custom_components.homekit_manager.bulk import exclusion_reason, preview_bulk
-from custom_components.homekit_manager.filtering import evaluate_filter
 from custom_components.homekit_manager.change_planner import plan_changes
+from custom_components.homekit_manager.filtering import evaluate_filter
 
 
 def entity(entity_id, **fields):

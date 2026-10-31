@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+
 import pytest
 
 from custom_components.homekit_manager.source_model import native_source, yaml_source

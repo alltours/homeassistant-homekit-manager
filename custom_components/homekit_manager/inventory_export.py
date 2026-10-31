@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 import csv
-from io import StringIO
 import json
 from collections import Counter
-from typing import Any, Mapping, Sequence
-
+from collections.abc import Mapping, Sequence
+from io import StringIO
+from typing import Any
 
 EXPORT_FIELDS = (
     "entity_id", "friendly_name", "domain", "device_id", "device_name",

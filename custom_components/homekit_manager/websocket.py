@@ -4,27 +4,55 @@ All commands require an administrator connection. Production filter mutation
 also requires either a local grant or the explicit ephemeral native test mode.
 """
 from __future__ import annotations
+
 import probatio
 from homeassistant.components import websocket_api
-from .const import (
-    BRIDGES_COMMAND, SELECT_BRIDGE_COMMAND, INVENTORY_COMMAND, INVENTORY_EXPORT_COMMAND, PREVIEW_COMMAND, SAVE_DRAFT_COMMAND, APPLY_OPTIONS_DIFF_COMMAND,
-    VALIDATE_DRAFT_COMMAND, YAML_STATUS_COMMAND, PREPARE_OPTIONS_DIFF_COMMAND,
-    RECONCILE_COMMAND, EXPORT_COMMAND,
-    MODE_STATUS_COMMAND, SET_MODE_COMMAND,
-    DEVICES_COMMAND, AREAS_COMMAND, DIAGNOSTICS_COMMAND, DEVICE_PREVIEW_COMMAND, RULES_PREVIEW_COMMAND, HISTORY_COMMAND, HISTORY_RESTORE_COMMAND, PERFORMANCE_COMMAND,
-    ACTIVATION_STATUS_COMMAND,
-    OPERATION_PLAN_COMMAND, OPERATION_APPLY_COMMAND, OPERATION_STATUS_COMMAND, OPERATION_RECONCILE_COMMAND,
-    TEST_WRITE_MODE_ENABLE_COMMAND, TEST_WRITE_MODE_DISABLE_COMMAND,
-    MIGRATION_PLAN_COMMAND, MIGRATION_START_COMMAND, MIGRATION_STATUS_COMMAND,
-    MANAGEMENT_STATUS_COMMAND, MANAGEMENT_ENABLE_COMMAND, MANAGEMENT_DISABLE_COMMAND,
-    BULK_PREVIEW_COMMAND,
-)
+
 from .bulk import preview_bulk
-from .homekit_writer import HomeKitWriteError
-from .yaml_store import YamlStoreError, YamlValidationError, YamlVersionConflict
+from .const import (
+    ACTIVATION_STATUS_COMMAND,
+    APPLY_OPTIONS_DIFF_COMMAND,
+    AREAS_COMMAND,
+    BRIDGES_COMMAND,
+    BULK_PREVIEW_COMMAND,
+    DEVICE_PREVIEW_COMMAND,
+    DEVICES_COMMAND,
+    DIAGNOSTICS_COMMAND,
+    EXPORT_COMMAND,
+    HISTORY_COMMAND,
+    HISTORY_RESTORE_COMMAND,
+    INVENTORY_COMMAND,
+    INVENTORY_EXPORT_COMMAND,
+    MANAGEMENT_DISABLE_COMMAND,
+    MANAGEMENT_ENABLE_COMMAND,
+    MANAGEMENT_STATUS_COMMAND,
+    MIGRATION_PLAN_COMMAND,
+    MIGRATION_START_COMMAND,
+    MIGRATION_STATUS_COMMAND,
+    MODE_STATUS_COMMAND,
+    OPERATION_APPLY_COMMAND,
+    OPERATION_PLAN_COMMAND,
+    OPERATION_RECONCILE_COMMAND,
+    OPERATION_STATUS_COMMAND,
+    PERFORMANCE_COMMAND,
+    PREPARE_OPTIONS_DIFF_COMMAND,
+    PREVIEW_COMMAND,
+    RECONCILE_COMMAND,
+    RULES_PREVIEW_COMMAND,
+    SAVE_DRAFT_COMMAND,
+    SELECT_BRIDGE_COMMAND,
+    SET_MODE_COMMAND,
+    TEST_WRITE_MODE_DISABLE_COMMAND,
+    TEST_WRITE_MODE_ENABLE_COMMAND,
+    VALIDATE_DRAFT_COMMAND,
+    YAML_STATUS_COMMAND,
+)
 from .device_config import build_preview
-from .rules import evaluate_rules
+from .homekit_writer import HomeKitWriteError
 from .performance import summarize_inventory
+from .rules import evaluate_rules
+from .yaml_store import YamlStoreError, YamlValidationError, YamlVersionConflict
+
 
 @websocket_api.require_admin
 @websocket_api.websocket_command({probatio.Required("type"): INVENTORY_COMMAND, probatio.Optional("query"): str, probatio.Optional("refresh", default=False): bool, probatio.Optional("include_context", default=False): bool, probatio.Optional("offset", default=0): int, probatio.Optional("limit", default=500): int})

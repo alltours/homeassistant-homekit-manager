@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 MAX_BULK_SCOPE = 10000
 
@@ -48,7 +49,7 @@ def preview_bulk(
     """Resolve the whole device/area on the server, independent of UI filters."""
     if kind == "device" and key.startswith("device:"):
         members = [item for item in inventory if item.get("device_id") == key[7:]]
-    elif kind == "area" and (key.startswith("area:") or key.startswith("name:")):
+    elif kind == "area" and key.startswith(("area:", "name:")):
         def area_key(item: Mapping[str, Any]) -> str:
             has_device = bool(item.get("device_id"))
             area_id = item.get("device_area_id") if has_device and "device_area_id" in item else item.get("area_id")

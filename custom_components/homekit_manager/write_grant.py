@@ -6,18 +6,17 @@ Every production apply re-reads the file immediately before the writer runs.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
 import json
 import os
-from pathlib import Path
 import re
 import stat
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from .const import SUPPORTED_CORE_VERSION
 from .safety import has_extended_acl
-
 
 GRANT_FILENAME = ".homekit_manager_write_grant.json"
 _KEYS = frozenset({"version", "grant_id", "entry_id", "source", "core_version", "allowed_fields", "issued_at", "expires_at"})
@@ -62,12 +61,12 @@ def _timestamp(value: Any) -> datetime:
     if not isinstance(value, str):
         raise GrantBlocked("Ungültiger Zeitstempel in der HomeKit-Schreibfreigabe")
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))  # noqa: FURB162 - supports older Python runtimes
     except ValueError as err:
         raise GrantBlocked("Ungültiger Zeitstempel in der HomeKit-Schreibfreigabe") from err
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise GrantBlocked("HomeKit-Schreibfreigabe benötigt UTC-Zeitstempel")
-    return parsed.astimezone(timezone.utc)
+    return parsed.astimezone(UTC)
 
 
 def _read(path: Path) -> ProductionWriteGrant | None:
@@ -116,7 +115,7 @@ def _read(path: Path) -> ProductionWriteGrant | None:
     if not isinstance(data["source"], str) or data["source"] not in {"user", "import"} or data["allowed_fields"] != ["filter"]:
         raise GrantBlocked("HomeKit-Schreibfreigabe ist zu breit oder hat eine ungültige Quelle")
     issued, expires = _timestamp(data["issued_at"]), _timestamp(data["expires_at"])
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if issued > now or expires <= now or expires > issued + timedelta(hours=24):
         raise GrantBlocked("HomeKit-Schreibfreigabe ist noch nicht gültig, abgelaufen oder länger als 24 Stunden")
     return ProductionWriteGrant(data["grant_id"], data["entry_id"], data["source"], expires,

@@ -1,23 +1,24 @@
 """Home Assistant Core integration tests for the HomeKit Manager."""
 
 import pytest
+from homeassistant import config_entries, loader
+from homeassistant.components import frontend, websocket_api
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.helpers import area_registry, device_registry, entity_registry
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from homeassistant import config_entries
-from homeassistant.config_entries import ConfigEntryState
-from homeassistant import loader
-from homeassistant.components import websocket_api
-from homeassistant.components import frontend
-from homeassistant.helpers import area_registry, device_registry, entity_registry
-
+import custom_components.homekit_manager.coordinator as coordinator_module
+import custom_components.homekit_manager.diagnostics as diagnostics_module
 from custom_components.homekit_manager.homekit_writer import (
     HomeKitWriteDisabled,
     HomeKitWriter,
     OptionsDiff,
 )
-from custom_components.homekit_manager.yaml_store import YamlSnapshot, YamlVersionConflict, empty_document
-import custom_components.homekit_manager.coordinator as coordinator_module
-import custom_components.homekit_manager.diagnostics as diagnostics_module
+from custom_components.homekit_manager.yaml_store import (
+    YamlSnapshot,
+    YamlVersionConflict,
+    empty_document,
+)
 
 
 async def test_homekit_manager_discovery_and_registration(

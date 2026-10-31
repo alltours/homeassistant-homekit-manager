@@ -5,8 +5,8 @@ import asyncio
 import gc
 import json
 import os
-from pathlib import Path
 import socket
+from pathlib import Path
 from unittest.mock import patch
 
 from aiohomekit.controller.controller import Controller
@@ -22,7 +22,6 @@ from homeassistant.components.homekit.util import (
     get_persist_fullpath_for_entry_id,
 )
 from homeassistant.runner import RuntimeConfig
-
 
 ENTRY_ID = "isolated-hap-full-bootstrap"
 ENTITY_ID = "input_boolean.restart_test"

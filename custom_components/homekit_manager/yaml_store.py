@@ -11,11 +11,12 @@ import os
 import re
 import tempfile
 import threading
+from collections.abc import Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 import yaml
 
@@ -228,7 +229,7 @@ class YamlStore:
 
     def _mtime(self) -> str | None:
         try:
-            return datetime.fromtimestamp(self.path.stat().st_mtime, tz=timezone.utc).isoformat()
+            return datetime.fromtimestamp(self.path.stat().st_mtime, tz=UTC).isoformat()
         except FileNotFoundError:
             return None
 

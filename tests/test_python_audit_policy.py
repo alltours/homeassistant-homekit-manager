@@ -5,7 +5,6 @@ from pathlib import Path
 
 from scripts.audit_python_dependencies import evaluate, manager_pillow_imports
 
-
 ROOT = Path(__file__).resolve().parents[1]
 POLICY = json.loads((ROOT / "scripts" / "python_audit_policy.json").read_text())
 

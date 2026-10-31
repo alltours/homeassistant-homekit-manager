@@ -1,7 +1,7 @@
 """Persist migration-assistant metadata, never HomeKit configuration."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from homeassistant.helpers.storage import Store
@@ -23,9 +23,9 @@ class MigrationStore:
             timestamp = datetime.fromisoformat(str(updated))
         except (TypeError, ValueError):
             return {"state": "unknown", "message": "Historischer Status ist nicht zeitlich verifizierbar.", "stale": True}
-        if timestamp.tzinfo is None or timestamp > datetime.now(timezone.utc) + timedelta(minutes=1):
+        if timestamp.tzinfo is None or timestamp > datetime.now(UTC) + timedelta(minutes=1):
             return {"state": "unknown", "message": "Historischer Status besitzt keinen verifizierbaren Zeitbezug.", "stale": True}
-        if datetime.now(timezone.utc) - timestamp > timedelta(minutes=15):
+        if datetime.now(UTC) - timestamp > timedelta(minutes=15):
             return {"state": "unknown", "message": "Historischer Migrationsstatus ist abgelaufen; keine automatische Wiederholung.", "stale": True, "updated_at": updated}
         return status
 

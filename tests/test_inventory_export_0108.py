@@ -12,10 +12,10 @@ if package not in sys.modules:
     module = type(sys)(package)
     module.__path__ = [str(Path(__file__).parents[1] / "custom_components" / "homekit_manager")]
     sys.modules[package] = module
-from custom_components.homekit_manager.inventory_export import (  # noqa: E402
+from custom_components.homekit_manager.inventory_export import (  # noqa: E402 - package stub is installed first
     build_inventory_export,
     export_inventory_snapshot,
-)  # noqa: E402
+)
 
 
 class InventoryExport0108Tests(unittest.TestCase):

@@ -5,14 +5,13 @@ revocation returns the writer to its default locked state.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
 import time
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
 from .const import NATIVE_FILTER_WRITE_CORE_VERSIONS
-
 
 TEST_MODE_SECONDS = 60 * 60
 
@@ -32,8 +31,8 @@ class TestModeAuthority:
 
     async def verify(self, hass: Any, entry_id: str, source: str) -> None:
         """Recheck at the writer boundary, including after a bridge lock wait."""
-        from homeassistant.const import __version__
         from homeassistant.config_entries import SOURCE_USER
+        from homeassistant.const import __version__
 
         if (self.manager._authority is not self or time.monotonic() >= self.deadline
                 or __version__ not in NATIVE_FILTER_WRITE_CORE_VERSIONS or entry_id != self.entry_id
@@ -68,8 +67,8 @@ class TestWriteMode:
                 "persistent": False, "duration_minutes": TEST_MODE_SECONDS // 60}
 
     def enable(self, hass: Any, entry_id: str, confirmed_entry_id: str) -> TestModeAuthority:
-        from homeassistant.const import __version__
         from homeassistant.config_entries import SOURCE_USER
+        from homeassistant.const import __version__
 
         if not entry_id or confirmed_entry_id != entry_id:
             raise TestModeBlocked("Die konkrete Bridge-ID muss bestätigt werden")
@@ -84,7 +83,7 @@ class TestWriteMode:
             raise TestModeBlocked("Die HomeKit-Bridge muss geladen sein")
         if self._authority is not None and time.monotonic() < self._authority.deadline:
             raise TestModeBlocked("Ein Testmodus ist bereits aktiv; zuerst widerrufen")
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         authority = TestModeAuthority(self, uuid4().hex, entry_id, "user",
                                       now + timedelta(seconds=TEST_MODE_SECONDS),
                                       time.monotonic() + TEST_MODE_SECONDS)

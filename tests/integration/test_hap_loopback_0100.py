@@ -4,16 +4,16 @@ import asyncio
 import socket
 from pathlib import Path
 
+import pytest
 from aiohomekit.controller.controller import Controller
 from aiohomekit.controller.ip.discovery import IpDiscovery
 from aiohomekit.controller.ip.pairing import IpPairing
 from aiohomekit.zeroconf import HomeKitService
 from homeassistant import config_entries
-import pytest
 
+from custom_components.homekit_manager.filtering import evaluate_filter
 from custom_components.homekit_manager.homekit_writer import HomeKitWriter, OptionsDiff
 from custom_components.homekit_manager.operations import HomeKitOperationService
-from custom_components.homekit_manager.filtering import evaluate_filter
 
 
 class LocalAdvertiser:

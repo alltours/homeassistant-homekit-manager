@@ -6,9 +6,9 @@ import logging
 from statistics import median
 from time import perf_counter
 
+import pytest
 from homeassistant import loader
 from homeassistant.helpers import area_registry, device_registry, entity_registry
-import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.homekit_manager.coordinator import HomeKitManagerCoordinator

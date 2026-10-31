@@ -216,7 +216,7 @@ test('isolated operation workflow binds plan, confirms exact request and verifie
   expect(calls).toHaveLength(1);
 });
 
-test('source migration is absent from the 0.10.11 interface', async ({ page }) => {
+test('source migration is absent from the 0.10.12 interface', async ({ page }) => {
   await page.goto('/tests/frontend/browser_fixture.html');
   const panel = page.locator('homekit-manager-panel');
   await panel.getByRole('tab', { name: 'Einstellungen', exact: true }).click();

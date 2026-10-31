@@ -1,6 +1,20 @@
 # Changelog
 
-# 0.10.11 (unreleased)
+# 0.10.12 (development)
+
+- Harden HomeKit source inspection for `!include_dir_merge_list` and
+  `!include_dir_merge_named`; directory members are read-only, deterministic
+  and fail closed on symlinks or invalid YAML.
+- Add Chromium/WebKit multi-bridge coverage for explicit bridge selection,
+  YAML-source display and unknown bridge IDs.
+- Add an isolated, test-only HAP controller proof for both internal source
+  directions across reloads and fresh Core processes. The production source
+  migration remains blocked and no migration code is shipped in the
+  integration.
+- Document the Core 2026.10.4/2026.11.0b0 source paths, experimental evidence,
+  risks and the required conditions for any future native migration.
+
+## 0.10.11
 
 - Add a dual-mode administration contract for UI/Bridge and YAML draft views.
 - Keep the native Home Assistant configuration source explicit and authoritative.

@@ -7,11 +7,11 @@ ambiguous mapping into a false negative.
 """
 from __future__ import annotations
 
-from hashlib import sha256
 import json
 import logging
-from typing import Any, Iterable, Mapping
-
+from collections.abc import Iterable, Mapping
+from hashlib import sha256
+from typing import Any
 
 _LOGGER = logging.getLogger(__name__)
 

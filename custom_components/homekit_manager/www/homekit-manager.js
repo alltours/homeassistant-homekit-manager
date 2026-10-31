@@ -153,8 +153,12 @@ class HomeKitManagerPanel extends HTMLElement {
   }
   desiredDocument() {
     const entry = this.bridge?.entry_id, active = this.activePositiveList(), positive = active || this.positiveListMigration;
-    const baseline = active ? this.bridge.filter.include_entities : this.positiveListMigration ? this.entities.filter(item => this.currentStatus(item) === "included" && item.homekit?.registry_eligible !== false).map(item => item.entity_id) : [];
-    const entities = Object.fromEntries(baseline.map(id => [id, "include"]));
+    const baseline = active ? this.bridge.filter.include_entities : this.positiveListMigration ? this.entities.filter(item => this.currentStatus(item) === "included" && item.homekit?.registry_eligible !== false && this.managerDecision(item) !== "exclude").map(item => item.entity_id) : [];
+    const savedEntities = this.yamlStatus.document?.bridges?.[entry]?.entities || {};
+    const preservedExcludes = this.positiveListMigration
+      ? Object.entries(savedEntities).filter(([id, value]) => value === "exclude" && this.entities.some(item => item.entity_id === id))
+      : [];
+    const entities = Object.fromEntries([...baseline.map(id => [id, "include"]), ...preservedExcludes]);
     for (const [id, value] of this.draft) {
       if (positive && value === "excluded") delete entities[id];
       else entities[id] = value === "included" ? "include" : "exclude";
@@ -233,7 +237,7 @@ class HomeKitManagerPanel extends HTMLElement {
   async applyToSelection(value) { await this.planSelection([...this.selected], value); }
   async preparePositiveListMigration() {
     if (!this.bridge?.entry_id || !this.fingerprint || this.activePositiveList()) return;
-    const selected = this.entities.filter(item => this.currentStatus(item) === "included").length;
+    const selected = this.entities.filter(item => this.currentStatus(item) === "included" && item.homekit?.registry_eligible !== false && this.managerDecision(item) !== "exclude").length;
     if (!selected) { this.error = "Aktuell ist keine sicher bestimmbare eingeschlossene Entität vorhanden."; this.render(); return; }
     const message = `Für ${this.bridge.title || this.bridge.entry_id} werden ${selected} aktuell durch den Filter ausgewählte Entitäten als Positivlistenentwurf vorgemerkt. Domain- und Glob-Regeln entfallen erst nach einem gesondert bestätigten Apply. Neue Entitäten werden danach nicht automatisch zugelassen. Der Server prüft zusätzlich den vollständigen Registry-, State- und HAP-Umfang und blockiert bei Abweichungen. Bestehende Apple-Home-Szenen können durch entfernte Accessories beeinträchtigt werden.`;
     if (!await this.requestConfirmation("Positivliste als Entwurf vorbereiten", message, "Positivlistenentwurf vorbereiten")) return;

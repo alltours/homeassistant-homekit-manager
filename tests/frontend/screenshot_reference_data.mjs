@@ -40,7 +40,7 @@ export function screenshotReferenceData() {
     unavailable_entities: entities.filter(entity => !entity.available).length,
     compatible_entities: entities.filter(entity => entity.compatibility.status === 'supported').length,
     selected_bridge_id: 'fixture-bridge', accessories: 0,
-    integration_version: '0.10.8', core_version: '2026.10.4', snapshot_stale: false,
+    integration_version: '0.10.9', core_version: '2026.10.4', snapshot_stale: false,
     fingerprint: 'synthetic-photo-reference', write_policy: {enabled: false},
   }};
 }

@@ -12,7 +12,7 @@ try {
     await panel.getByRole('tab',{name,exact:true}).click();
     assert.equal(await panel.locator('h2').first().isVisible(),true);
   }
-  assert.equal(await panel.locator('.settings-content').innerText().then(s=>s.includes('0.10.8')),true);
+  assert.equal(await panel.locator('.settings-content').innerText().then(s=>s.includes('0.10.9')),true);
   await panel.getByRole('tab',{name:'Geräte',exact:true}).click();
   await panel.locator('[data-group=entities]').click();
   await panel.getByRole('searchbox').pressSequentially('Audit');

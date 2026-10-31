@@ -1,4 +1,11 @@
-# HomeKit Manager 0.10.8
+# HomeKit Manager 0.10.9
+
+Version 0.10.9 hardens the existing positive-list workflow. Runtime diagnosis
+can resolve accessories through Core's read-only AID allocation table when an
+accessory object does not expose `entity_id`. Legacy Manager exclusions are
+not copied into a migration baseline automatically; an explicit override stays
+visible as a concrete draft change and requires the existing confirmation and
+revision gates.
 
 Version 0.10.8 adds a read-only inventory and runtime-diagnosis layer for the
 existing 0.10.7 positive-list workflow. The integration exports one

@@ -35,10 +35,11 @@ class RuntimeDiagnostics0108Tests(unittest.TestCase):
         } if with_services else None
         return SimpleNamespace(entity_id=entity_id, display_name=entity_id, category=1, services=services, aid=aid)
 
-    def entry(self, accessories, driver=True):
+    def entry(self, accessories, driver=True, aid_storage=None):
         homekit = SimpleNamespace(
             bridge=SimpleNamespace(accessories=accessories),
             driver=object() if driver else None,
+            aid_storage=aid_storage,
         )
         return SimpleNamespace(entry_id="bridge-1", runtime_data=SimpleNamespace(homekit=homekit))
 
@@ -92,6 +93,39 @@ class RuntimeDiagnostics0108Tests(unittest.TestCase):
         self.assertIsNone(result["service_count"])
         self.assertIsNone(result["characteristic_count"])
         self.assertEqual(result["entity_status"]["light.living"], "published_verified")
+
+    def test_aid_storage_fallback_maps_accessory_without_entity_id(self):
+        class AidStorage:
+            def get_allocated_aid_for_entity_id(self, entity_id):
+                return {"light.living": 41, "sensor.temperature": 42}.get(entity_id)
+
+        accessory = self.accessory(None, aid=41)
+        result = diagnose_runtime(
+            SimpleNamespace(),
+            self.entry({41: accessory}, aid_storage=AidStorage()),
+            self.inventory(),
+        )
+
+        self.assertEqual(result["completeness"], "verified")
+        self.assertEqual(result["mapped_accessory_count"], 1)
+        self.assertEqual(result["entity_status"]["light.living"], "published_verified")
+        self.assertEqual(result["entity_status"]["sensor.temperature"], "not_published_verified")
+        self.assertEqual(result["accessories"][0]["mapping_source"], "aid_storage")
+
+    def test_conflicting_entity_id_and_aid_mapping_is_ambiguous(self):
+        class AidStorage:
+            def get_allocated_aid_for_entity_id(self, entity_id):
+                return 41 if entity_id == "sensor.temperature" else None
+
+        result = diagnose_runtime(
+            SimpleNamespace(),
+            self.entry({41: self.accessory("light.living", aid=41)}, aid_storage=AidStorage()),
+            self.inventory(),
+        )
+
+        self.assertEqual(result["completeness"], "partial")
+        self.assertEqual(result["ambiguous_accessory_count"], 1)
+        self.assertEqual(result["entity_status"]["light.living"], "unknown")
 
 
 if __name__ == "__main__":

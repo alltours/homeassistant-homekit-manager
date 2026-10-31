@@ -1,11 +1,11 @@
 {
   "integration_version": "0.10.13",
-  "file_count": 56,
+  "file_count": 57,
   "files": [
     {
       "path": "__init__.py",
-      "sha256": "2574381eb1c7db1489f0b8be714a7b683a003516e019ee98a07d48e33ed470df",
-      "size": 2540
+      "sha256": "0558173a988fa48a08acd1630a6c24bbc88409bfd563b3b15fb7ee6cd754b75f",
+      "size": 2990
     },
     {
       "path": "activation_store.py",
@@ -54,8 +54,8 @@
     },
     {
       "path": "coordinator.py",
-      "sha256": "ee2559cf39f3ebfebaa9b2a1cc0a062f7ed2078259e34aefaf7c574afc0ab72e",
-      "size": 51817
+      "sha256": "ac9ca6d9b9f3134aafed004fe7e2bf60cc2af61815aec34b0d79b53515d30969",
+      "size": 52030
     },
     {
       "path": "device_config.py",
@@ -236,6 +236,11 @@
       "path": "source_model.py",
       "sha256": "c8a4a5be099c21360fdb911e0ed976d865af2c1b6e90f345f9272deb0f4b4c5d",
       "size": 3873
+    },
+    {
+      "path": "startup_recovery.py",
+      "sha256": "cf2e5d41322bfc9d27f1729da57d4b357905bbb0418a6de82360c738623141fb",
+      "size": 4177
     },
     {
       "path": "strings.json",

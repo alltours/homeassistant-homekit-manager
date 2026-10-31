@@ -22,12 +22,21 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         return True
     from .coordinator import HomeKitManagerCoordinator
     from .panel import async_register_panel
+    from .startup_recovery import default_journal_path, observe_startup_recovery
     from .websocket import async_register_websocket_commands
 
     coordinator = HomeKitManagerCoordinator(hass)
     try:
         await coordinator.async_initialize()
-        hass.data[DOMAIN] = {"coordinator": coordinator}
+        startup_recovery = await hass.async_add_executor_job(
+            observe_startup_recovery, default_journal_path(hass)
+        )
+        hass.data[DOMAIN] = {
+            "coordinator": coordinator,
+            "startup_recovery": startup_recovery.as_dict(),
+        }
+        if startup_recovery.action == "manual_recovery":
+            _LOGGER.error("Native HomeKit-Recovery blockiert: %s", startup_recovery.reason)
         await coordinator.async_refresh()
         if coordinator.last_error:
             raise RuntimeError(coordinator.last_error)

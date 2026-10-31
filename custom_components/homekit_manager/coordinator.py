@@ -26,7 +26,7 @@ from .yaml_store import (
     YamlWriteError,
     empty_document,
 )
-from .const import MANAGEMENT_MODES, MODE_HOMEKIT_BRIDGE, MODE_HOMEKIT_MANAGER, MODE_YAML
+from .const import DOMAIN, MANAGEMENT_MODES, MODE_HOMEKIT_BRIDGE, MODE_HOMEKIT_MANAGER, MODE_YAML
 from .mode_store import ModeStore
 from .grouping import build_area_views, build_device_views
 from .diagnostics import build_diagnostics, diagnostics_summary, group_diagnostics
@@ -529,7 +529,11 @@ class HomeKitManagerCoordinator:
 
     def migration_status_snapshot(self) -> dict[str, Any]:
         """Return persisted status; stale status is never treated as active."""
-        return dict(self.migration_status)
+        status = dict(self.migration_status)
+        startup_recovery = self.hass.data.get(DOMAIN, {}).get("startup_recovery")
+        if startup_recovery is not None:
+            status["startup_recovery"] = startup_recovery
+        return status
 
     def management_status(self) -> dict[str, Any]:
         """Describe native source and explicit Manager ownership separately."""

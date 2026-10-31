@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.9 (2026-10-31)
+
+- Resolve read-only runtime accessory mappings through Home Assistant Core's AID allocation table when an HAP accessory does not expose `entity_id`; conflicting mappings remain ambiguous and never become verified.
+- Keep stored Manager exclusions out of automatically prepared positive-list migration baselines. An explicit override remains a visible draft change and is still subject to the existing server-side diff, revision and confirmation gates.
+- Keep the release metadata synchronized and add regression coverage for AID fallback, conflicting mappings, and exclusion-safe positive-list preparation. No productive Apply, reload, pairing or native filter change is included.
+
 ## 0.10.8 (2026-10-30)
 
 - Add a deterministic, complete Home Assistant entity inventory snapshot with JSON and CSV export. Registry-only, state-only, device-less and area-less entities remain visible; state attributes and personal values are never exported.

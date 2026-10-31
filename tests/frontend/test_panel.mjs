@@ -37,6 +37,27 @@ positivePanel.draft.set('light.keep', 'excluded');
 assert.deepEqual(Object.keys(positivePanel.desiredDocument().bridges.positive.entities), []);
 positivePanel.bridge.filter = { include_domains: ['light'] };
 assert.equal(positivePanel.activePositiveList(), false);
+positivePanel.entities = [
+  { entity_id: 'light.keep', homekit: { configured_by_filter: true, registry_eligible: true } },
+  { entity_id: 'input_boolean.legacy_exclude', homekit: { configured_by_filter: true, registry_eligible: true } },
+];
+positivePanel.draft.clear();
+positivePanel.yamlStatus = { document: { bridges: { positive: { policy: 'explicit_overrides', entities: { 'input_boolean.legacy_exclude': 'exclude' } } } } };
+positivePanel.positiveListMigration = true;
+const preservedDocument = positivePanel.desiredDocument().bridges.positive.entities;
+assert.equal(preservedDocument['light.keep'], 'include', 'migration keeps the selected entity');
+assert.equal(preservedDocument['input_boolean.legacy_exclude'], 'exclude', 'migration must preserve stored Manager exclusions');
+const flurLamps = Array.from({ length: 8 }, (_, index) => `light.flur_flur_decke_${index + 1}`);
+positivePanel.entities = [
+  ...flurLamps.map(entity_id => ({ entity_id, homekit: { configured_by_filter: true, registry_eligible: true } })),
+  { entity_id: 'light.flur_decke', homekit: { configured_by_filter: true, registry_eligible: true } },
+  { entity_id: 'input_boolean.automations_wachter', homekit: { configured_by_filter: true, registry_eligible: true } },
+];
+positivePanel.yamlStatus = { document: { bridges: { positive: { policy: 'explicit_overrides', entities: { 'light.flur_decke': 'exclude', 'input_boolean.automations_wachter': 'exclude' } } } } };
+const flurDocument = positivePanel.desiredDocument().bridges.positive.entities;
+assert.deepEqual(flurLamps.filter(id => flurDocument[id] === 'include'), flurLamps, 'the eight individual Flur lamps stay selected');
+assert.equal(flurDocument['light.flur_decke'], 'exclude', 'the Flur group stays excluded');
+assert.equal(flurDocument['input_boolean.automations_wachter'], 'exclude', 'the virtual helper stays excluded');
 panel.view = 'changes'; panel.activationStatus = { state: 'unknown', has_operation: true };
 panel.render(); assert.match(panel.shadowRoot.innerHTML, /Ergebnis unbekannt/); assert.match(panel.shadowRoot.innerHTML, /data-apply disabled/);
 panel.activationStatus = { state: 'unknown', has_operation: false };

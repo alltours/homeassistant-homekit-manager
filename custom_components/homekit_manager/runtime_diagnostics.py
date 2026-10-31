@@ -9,8 +9,11 @@ from __future__ import annotations
 
 from hashlib import sha256
 import json
+import logging
 from typing import Any, Iterable, Mapping
 
+
+_LOGGER = logging.getLogger(__name__)
 
 RUNTIME_STATES = frozenset({
     "published_verified",
@@ -110,6 +113,31 @@ def diagnose_runtime(
         result["entity_status"] = {entity_id: "unknown" for entity_id in sorted(inventory_ids)}
         return result
 
+    # Core's HAP accessory objects normally expose ``entity_id``.  Some Core
+    # versions/ accessory implementations only expose the AID, however, while
+    # the persistent AID store remains the authoritative entity mapping.  Use
+    # that store as a read-only fallback.  Calling the allocation lookup does
+    # not allocate, save, initialize, or otherwise mutate HAP state.
+    aid_to_entity: dict[str, str] = {}
+    aid_collisions: set[str] = set()
+    aid_storage = getattr(homekit, "aid_storage", None)
+    aid_lookup = getattr(aid_storage, "get_allocated_aid_for_entity_id", None)
+    if callable(aid_lookup):
+        for entity_id in sorted(inventory_ids):
+            try:
+                aid = aid_lookup(entity_id)
+            except Exception:  # pragma: no cover - defensive Core adapter boundary
+                _LOGGER.debug("AID lookup failed for %s", entity_id, exc_info=True)
+                continue
+            if aid is None:
+                continue
+            aid_key = str(aid)
+            previous = aid_to_entity.get(aid_key)
+            if previous is not None and previous != entity_id:
+                aid_collisions.add(aid_key)
+            else:
+                aid_to_entity[aid_key] = entity_id
+
     mapped: set[str] = set()
     ambiguous: list[dict[str, Any]] = []
     accessory_rows: list[dict[str, Any]] = []
@@ -117,7 +145,16 @@ def diagnose_runtime(
     characteristic_count = 0
     services_complete = True
     for key, accessory in sorted(accessories, key=lambda item: str(item[0])):
-        entity_id = _value(accessory, "entity_id")
+        raw_entity_id = _value(accessory, "entity_id")
+        aid = _value(accessory, "aid", key)
+        aid_key = str(aid) if aid is not None else None
+        mapped_entity_id = aid_to_entity.get(aid_key) if aid_key not in aid_collisions else None
+        entity_id = raw_entity_id if isinstance(raw_entity_id, str) else mapped_entity_id
+        mapping_source = "accessory.entity_id" if isinstance(raw_entity_id, str) else (
+            "aid_storage" if mapped_entity_id else "unresolved"
+        )
+        if isinstance(raw_entity_id, str) and mapped_entity_id and raw_entity_id != mapped_entity_id:
+            mapping_source = "mapping_ambiguous"
         services = _items(_value(accessory, "services"))
         if services is None:
             services_complete = False
@@ -132,13 +169,15 @@ def diagnose_runtime(
         row = {
             "accessory_id_fingerprint": _fingerprint({"entry_id": getattr(entry, "entry_id", None), "aid": key}),
             "entity_id": entity_id if isinstance(entity_id, str) else None,
+            "mapping_source": mapping_source,
             "name": _value(accessory, "display_name") or _value(accessory, "name"),
             "category": _value(accessory, "category"),
             "services": service_rows,
             "service_count": len(service_rows),
             "characteristic_count": sum(item["characteristic_count"] for item in service_rows),
         }
-        if not isinstance(entity_id, str) or entity_id not in inventory_ids or entity_id in mapped:
+        if (mapping_source == "mapping_ambiguous" or not isinstance(entity_id, str)
+                or entity_id not in inventory_ids or entity_id in mapped):
             ambiguous.append(row)
         else:
             mapped.add(entity_id)

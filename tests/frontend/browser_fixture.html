@@ -40,6 +40,7 @@
         homekit: { configured_by_filter: true, current_status: "included" },
       })) : entities;
       let savedDocument = { schema_version: 1, bridges: {} };
+      let selectedBridgeId = "fixture-bridge";
       let managementActive = new URLSearchParams(window.location.search).has("activation-error");
       const isolatedWrite = new URLSearchParams(window.location.search).has("isolated-write");
       let operationState = "validated";
@@ -61,9 +62,10 @@
                 unavailable_entities: 1,
                 compatible_entities: 1,
                 configured_entities: 1,
-                integration_version: "0.10.11", core_version: params.has("core-beta") ? "2026.11.0b0" : "2026.10.4", last_updated: "2026-10-27T08:00:00Z", refresh_duration_ms: 3.2, refresh_count: 1, unavailable_entities: 1, accessories: 1, write_policy: { enabled: false }, operation_policy: { enabled: isolatedWrite || testModeActive, reason: isolatedWrite ? "Nur isolierte Testinstanz" : testModeActive ? "Befristeter nativer Testmodus aktiv" : "HomeKit-Schreibpfad gesperrt" },
+                integration_version: "0.10.13", core_version: params.has("core-beta") ? "2026.11.0b0" : "2026.10.4", last_updated: "2026-10-27T08:00:00Z", refresh_duration_ms: 3.2, refresh_count: 1, unavailable_entities: 1, accessories: 1, write_policy: { enabled: false }, operation_policy: { enabled: isolatedWrite || testModeActive, reason: isolatedWrite ? "Nur isolierte Testinstanz" : testModeActive ? "Befristeter nativer Testmodus aktiv" : "HomeKit-Schreibpfad gesperrt" },
                 test_write_mode: { enabled: testModeActive, entry_id: testModeActive ? "fixture-bridge" : null, expires_at: testModeActive ? "2026-10-28T23:00:00Z" : null, persistent: false, duration_minutes: 60 },
                 fingerprint: "fixture-fingerprint",
+                selected_bridge_id: selectedBridgeId,
               },
               entities: params.has("paged") ? pagedEntities.slice(message.offset || 0, (message.offset || 0) + (message.limit || 500)) : entities,
             };
@@ -86,28 +88,37 @@
             return { entry_id: message.entry_id, fingerprint: message.fingerprint, total: members.length, eligible_entity_ids: eligible.map(item => item.entity_id), skipped, skipped_total: members.length - eligible.length };
           }
           if (message.type === "homekit_manager/bridges") {
-            return { bridges: [{ entry_id: "fixture-bridge", title: "Fixture Bridge", source: "user", state: "loaded", mode: "bridge", filter: { include_domains: ["light"] }, data: { name: "Fixture Bridge", port: 21088 }, options: { mode: "bridge", filter: { include_domains: ["light"] } } }] };
+            const bridges = [{ entry_id: "fixture-bridge", title: "Fixture Bridge", source: "user", state: "loaded", mode: "bridge", filter: { include_domains: ["light"] }, data: { name: "Fixture Bridge", port: 21088 }, options: { mode: "bridge", filter: { include_domains: ["light"] } } }];
+            if (params.has("multi-bridge")) bridges.push(
+              { entry_id: "yaml-fixture-bridge", title: "YAML Fixture Bridge", source: "import", state: "loaded", mode: "bridge", filter: { include_entities: ["light.kitchen"] }, data: { name: "YAML Fixture Bridge", port: 21089 }, options: { mode: "bridge", filter: { include_entities: ["light.kitchen"] } } },
+              { entry_id: "secondary-fixture-bridge", title: "Secondary Fixture Bridge", source: "user", state: "loaded", mode: "bridge", filter: { include_entities: ["sensor.temperature"] }, data: { name: "Secondary Fixture Bridge", port: 21090 }, options: { mode: "bridge", filter: { include_entities: ["sensor.temperature"] } } },
+            );
+            return { bridges };
           }
           if (message.type === "homekit_manager/history") {
             return { entries: [], count: 0 };
           }
           if (message.type === "homekit_manager/select_bridge") {
-            return { selected_bridge_id: message.entry_id, overview: { selected_bridge_id: message.entry_id } };
+            if (!["fixture-bridge", "yaml-fixture-bridge", "secondary-fixture-bridge"].includes(message.entry_id)) throw new Error("Unbekannte Bridge");
+            selectedBridgeId = message.entry_id;
+            return { selected_bridge_id: selectedBridgeId, overview: { selected_bridge_id: selectedBridgeId } };
           }
           if (message.type === "homekit_manager/yaml_status") {
             return { exists: Object.keys(savedDocument.bridges || {}).length > 0, valid: true, document: savedDocument, file_version: "fixture-version", fingerprint: "fixture-fingerprint", is_applied: false };
           }
           if (message.type === "homekit_manager/mode_status") {
-            return { active_mode: "homekit_bridge", desired_mode: "homekit_bridge", transition: "stable", matrix: {}, dual_mode: {
-              administration_mode: "ui_bridge", administration_mode_label: "UI / Bridge", available_modes: ["ui_bridge", "yaml"],
-              native_configuration_source: { key: "user", label: "Home Assistant UI / Config Entry", short_label: "UI / Bridge" },
+            const source = selectedBridgeId === "yaml-fixture-bridge" ? "import" : "user";
+            const yamlSelected = source === "import";
+            return { active_mode: yamlSelected ? "yaml" : "homekit_bridge", desired_mode: yamlSelected ? "yaml" : "homekit_bridge", transition: "stable", matrix: {}, dual_mode: {
+              administration_mode: yamlSelected ? "yaml" : "ui_bridge", administration_mode_label: yamlSelected ? "YAML" : "UI / Bridge", available_modes: ["ui_bridge", "yaml"],
+              native_configuration_source: { key: source, label: yamlSelected ? "Home Assistant YAML (SOURCE_IMPORT)" : "Home Assistant UI / Config Entry", short_label: yamlSelected ? "YAML" : "UI / Bridge" },
               mode_options: [
-                { key: "ui_bridge", label: "UI / Bridge", selected: true, description: "Native Home-Assistant-Bridge verwalten." },
-                { key: "yaml", label: "YAML", selected: false, description: "YAML-Projektion als Entwurf prüfen und exportieren." },
+                { key: "ui_bridge", label: "UI / Bridge", selected: !yamlSelected, description: "Native Home-Assistant-Bridge verwalten." },
+                { key: "yaml", label: "YAML", selected: yamlSelected, description: "YAML-Projektion als Entwurf prüfen und exportieren." },
               ],
               plans: {
-                ui_bridge: { status: "same_native_source", title: "Verwaltungsmodus kann sicher verwendet werden", message: "Die gewählte Oberfläche entspricht der nativen Quelle.", safe_action: "manage_existing_source", source_migration_supported: false, pairing_preservation_proven: false },
-                yaml: { status: "draft_only", title: "YAML nur als sicherer Entwurf verfügbar", message: "Eine YAML-Projektion kann geprüft und exportiert werden.", safe_action: "preview_export_validate", source_migration_supported: false, pairing_preservation_proven: false },
+                ui_bridge: { status: yamlSelected ? "read_only_projection" : "same_native_source", title: yamlSelected ? "UI-Modus nur als Lesesicht verfügbar" : "Verwaltungsmodus kann sicher verwendet werden", message: yamlSelected ? "Die aktive YAML-Quelle bleibt maßgeblich." : "Die gewählte Oberfläche entspricht der nativen Quelle.", safe_action: yamlSelected ? "read_existing_source" : "manage_existing_source", source_migration_supported: false, pairing_preservation_proven: false },
+                yaml: { status: yamlSelected ? "same_native_source" : "draft_only", title: yamlSelected ? "Verwaltungsmodus kann sicher verwendet werden" : "YAML nur als sicherer Entwurf verfügbar", message: yamlSelected ? "Die gewählte Oberfläche entspricht der nativen Quelle." : "Eine YAML-Projektion kann geprüft und exportiert werden.", safe_action: yamlSelected ? "manage_existing_source" : "preview_export_validate", source_migration_supported: false, pairing_preservation_proven: false },
               },
               source_migration: { supported: false, status: "blocked" },
             } };

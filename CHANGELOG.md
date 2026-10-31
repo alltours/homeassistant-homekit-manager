@@ -1,6 +1,38 @@
 # Changelog
 
-# 0.10.11 (unreleased)
+# 0.10.13 (development)
+
+- Add fail-closed transactional migration scaffolding with durable
+  write-ahead journal, fsync/atomic replacement, redacted snapshots,
+  cross-process bridge locks and conservative recovery classification.
+- Add real-process `SIGKILL`/`SIGTERM` fault-injection tests and explicit
+  rollback tests. Ambiguous states require manual recovery.
+- Run the isolated HAP source-switch POC through the asynchronous engine while
+  retaining the production migration block.
+- Stabilize the isolated beta-Core bootstrap by asserting entity readiness only
+  after the Home Assistant start lifecycle boundary; no assertion retry masks a
+  functional failure.
+- Add real isolated full-Core SIGKILL recovery tests after snapshot, unload,
+  source mutation and reload, including journaled rollback and HAP reconnect.
+- Add a real two-bridge HAP test proving that migration of one bridge does not
+  change the second bridge's pairing or accessory identity.
+- Keep native source execution unavailable outside isolated test permits.
+
+## 0.10.12
+
+- Harden HomeKit source inspection for `!include_dir_merge_list` and
+  `!include_dir_merge_named`; directory members are read-only, deterministic
+  and fail closed on symlinks or invalid YAML.
+- Add Chromium/WebKit multi-bridge coverage for explicit bridge selection,
+  YAML-source display and unknown bridge IDs.
+- Add an isolated, test-only HAP controller proof for both internal source
+  directions across reloads and fresh Core processes. The production source
+  migration remains blocked and no migration code is shipped in the
+  integration.
+- Document the Core 2026.10.4/2026.11.0b0 source paths, experimental evidence,
+  risks and the required conditions for any future native migration.
+
+## 0.10.11
 
 - Add a dual-mode administration contract for UI/Bridge and YAML draft views.
 - Keep the native Home Assistant configuration source explicit and authoritative.

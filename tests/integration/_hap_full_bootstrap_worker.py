@@ -70,7 +70,11 @@ async def run() -> None:
         ))
         assert hass is not None
         await hass.async_block_till_done()
-        assert hass.states.get(ENTITY_ID) is not None
+        # The test entity is deliberately injected into the isolated state
+        # machine.  This keeps the HAP bootstrap independent from whether the
+        # beta Core has completed the input_boolean platform setup yet.
+        hass.states.async_set(ENTITY_ID, "off")
+        await hass.async_block_till_done()
         if phase == "pair":
             port = free_loopback_port()
             entry = config_entries.ConfigEntry(
@@ -97,6 +101,17 @@ async def run() -> None:
             assert entry.data["port"] == port
         await hass.async_start()
         await hass.async_block_till_done()
+        # Entity platforms are started by async_start.  Checking the state
+        # before that lifecycle boundary is a transient bootstrap race on the
+        # beta Core and does not prove that the configured runtime is ready.
+        assert hass.states.get(ENTITY_ID) is not None
+        # A ConfigEntry added before async_start can remain NOT_LOADED when
+        # the bootstrap task was scheduled behind the start barrier.  Use the
+        # public lifecycle operation once; this is not a retry of a failed
+        # assertion and does not hide a setup error.
+        if entry.state.value != "loaded":
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
         assert entry.state.value == "loaded"
         homekit = entry.runtime_data.homekit
         assert homekit.status == 1

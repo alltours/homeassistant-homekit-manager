@@ -1,11 +1,11 @@
 {
-  "integration_version": "0.10.11",
-  "file_count": 51,
+  "integration_version": "0.10.13",
+  "file_count": 57,
   "files": [
     {
       "path": "__init__.py",
-      "sha256": "2574381eb1c7db1489f0b8be714a7b683a003516e019ee98a07d48e33ed470df",
-      "size": 2540
+      "sha256": "0558173a988fa48a08acd1630a6c24bbc88409bfd563b3b15fb7ee6cd754b75f",
+      "size": 2990
     },
     {
       "path": "activation_store.py",
@@ -39,12 +39,12 @@
     },
     {
       "path": "config_source.py",
-      "sha256": "28289ba9c9f4ef3ec9e19c97e27be2daff7e0a59223f0c08bc747307f3b5b550",
-      "size": 4901
+      "sha256": "13f0faa0d31cfd2a5e647404d675a136d1e75e6d971d1dabd5c0569b36966f34",
+      "size": 8919
     },
     {
       "path": "const.py",
-      "sha256": "2c006588baccddecc9391619f18664d748551f7455f8eb3e7d6469debbbb3844",
+      "sha256": "c2a35012ea8292b5787c722f5029d6b1df414d51f48f9778ac802dd4b840d464",
       "size": 2747
     },
     {
@@ -54,8 +54,8 @@
     },
     {
       "path": "coordinator.py",
-      "sha256": "ee2559cf39f3ebfebaa9b2a1cc0a062f7ed2078259e34aefaf7c574afc0ab72e",
-      "size": 51817
+      "sha256": "ac9ca6d9b9f3134aafed004fe7e2bf60cc2af61815aec34b0d79b53515d30969",
+      "size": 52030
     },
     {
       "path": "device_config.py",
@@ -139,13 +139,38 @@
     },
     {
       "path": "manifest.json",
-      "sha256": "eef685b090f745107340047ba417624a6276d400467ab76903d46e3151b7a8dc",
+      "sha256": "779cab103ac7aea68d30e4da06faf2a8a664189b1c3b7d04869080765a034a90",
       "size": 517
     },
     {
       "path": "migration.py",
-      "sha256": "f9ed98ab76e67027e6c0badc23ec174a4b1a1a24ff95802e9a3e97f9482b1147",
+      "sha256": "3e334e9be335e888e993a94453231712171475f81b3932750600197c9b5f35d8",
       "size": 3168
+    },
+    {
+      "path": "migration_engine.py",
+      "sha256": "c0954708e854aa73528fdea0a83227597e61526340501edbe8ff51ccc50491aa",
+      "size": 17380
+    },
+    {
+      "path": "migration_journal.py",
+      "sha256": "a7b6aa66f20dffd1f6e2b4902b386e3d9ae4510b7a4b5b1126ba01a7ae0c6b8b",
+      "size": 9828
+    },
+    {
+      "path": "migration_lock.py",
+      "sha256": "036f4940b938432471345e5915b1eaa30ac9b617751320a1816f2cfc49b3b739",
+      "size": 3164
+    },
+    {
+      "path": "migration_recovery.py",
+      "sha256": "186c91acb6265c76e4fd2a91bf14e4b575f85555e280c0b3f4db34f4f575173c",
+      "size": 2770
+    },
+    {
+      "path": "migration_snapshot.py",
+      "sha256": "5587fc2879ffb15f4c291768b693e2aa8a6c222fc1f8413cb8d674ca7ff11595",
+      "size": 4604
     },
     {
       "path": "migration_store.py",
@@ -211,6 +236,11 @@
       "path": "source_model.py",
       "sha256": "c8a4a5be099c21360fdb911e0ed976d865af2c1b6e90f345f9272deb0f4b4c5d",
       "size": 3873
+    },
+    {
+      "path": "startup_recovery.py",
+      "sha256": "cf2e5d41322bfc9d27f1729da57d4b357905bbb0418a6de82360c738623141fb",
+      "size": 4177
     },
     {
       "path": "strings.json",

@@ -1,5 +1,14 @@
 # Changelog
 
+# 0.10.14 (development)
+
+- Add an isolated Home Assistant Core migration-boundary proof of concept with
+  pre-reconciliation recovery, strict source validation and fail-closed stale
+  YAML handling.
+- Add full-Core loopback HAP tests for UI→YAML and YAML→UI after SIGKILL and a
+  regression test proving that stale YAML cannot create a second bridge. Native
+  migration remains disabled in the Manager release path.
+
 # 0.10.13 (development)
 
 - Add fail-closed transactional migration scaffolding with durable

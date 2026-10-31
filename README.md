@@ -1,6 +1,6 @@
-# HomeKit Manager 0.10.13 (development)
+# HomeKit Manager 0.10.14 (development)
 
-Version 0.10.13 adds isolated transactional migration infrastructure around the
+Version 0.10.14 adds an isolated Core-owned migration boundary around the
 existing dual-mode administration surface for `UI / Bridge`
 and YAML include sources and adds isolated evidence for the unsupported native
 source-switching experiment. The safe production boundary remains unchanged.

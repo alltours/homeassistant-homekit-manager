@@ -85,7 +85,11 @@ def plan_changes(
         # A forged draft must not add an entity whose Core eligibility has
         # not been established. Existing includes remain untouched.
         if requested == "include" and current != "included":
-            unsafe = exclusion_reason(item)
+            # A hidden entity is safe only when its exact Entity-ID is
+            # explicitly present in the draft. Bulk scope previews keep the
+            # conservative hidden-entity exclusion; this path is the later
+            # exact include decision.
+            unsafe = exclusion_reason(item, allow_hidden=requested == "include")
             if unsafe:
                 counts["conflicts"] += 1
                 changes.append({"entity_id": entity_id, "current": current, "desired": desired_status,

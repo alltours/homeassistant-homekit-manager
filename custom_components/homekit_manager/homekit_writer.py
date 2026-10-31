@@ -70,6 +70,24 @@ def _has_broad_rules(config: Mapping[str, Any]) -> bool:
     )) or not config.get("include_entities")
 
 
+def _explicit_hidden_override_allowed(item: Mapping[str, Any]) -> bool:
+    """Allow only an enabled, supported, non-technical hidden entity.
+
+    Home Assistant's native EntityFilter accepts an exact include override for
+    a hidden registry entry. This exception is deliberately not generalized to
+    disabled, categorized, unsupported or unknown entries.
+    """
+    return bool(
+        item.get("hidden_by")
+        and not item.get("disabled_by")
+        and not item.get("device_disabled_by")
+        and not item.get("entity_category")
+        and (item.get("compatibility") or {}).get("status") == "supported"
+        and item.get("registry_entry_present") is True
+        and item.get("state_present") is True
+    )
+
+
 def _entry_options(bridge: Mapping[str, Any]) -> dict[str, Any]:
     data = bridge.get("data")
     options = bridge.get("options")
@@ -191,9 +209,17 @@ def build_options_diff(
                              if item.get("homekit", {}).get("configured_by_filter") is True}
         if observed_selected != migration_evidence.selected_ids:
             raise HomeKitWriteBlocked("Aktueller Core-Filter und Inventar stimmen für die Migration nicht überein")
-        unsafe_includes = {entity_id for entity_id, status in desired.items() if status == "include"} & migration_evidence.registry_blocked_ids
+        item_by_id = {item.get("entity_id"): item for item in inventory}
+        unsafe_includes = {
+            entity_id for entity_id, status in desired.items()
+            if status == "include"
+        } & migration_evidence.registry_blocked_ids
+        unsafe_includes = {
+            entity_id for entity_id in unsafe_includes
+            if not _explicit_hidden_override_allowed(item_by_id.get(entity_id, {}))
+        }
         if unsafe_includes:
-            raise HomeKitWriteBlocked("Positivliste würde bisher ausgeblendete oder kategorisierte Entitäten neu veröffentlichen: " + ", ".join(sorted(unsafe_includes)))
+            raise HomeKitWriteBlocked("Positivliste würde deaktivierte, kategorisierte oder nicht verifizierte Entitäten neu veröffentlichen: " + ", ".join(sorted(unsafe_includes)))
     plan = plan_changes(dict(bridge) | {"filter": dict(current_filter)}, desired_document, inventory, entry_id)
     if plan["summary"]["blocked"]:
         raise HomeKitWriteBlocked("Änderungsplan ist blockiert")

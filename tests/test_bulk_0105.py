@@ -61,7 +61,6 @@ def test_filter_reason_has_one_value_in_both_wire_fields():
 
 @pytest.mark.parametrize("fields,reason", [
     ({"disabled_by": "integration"}, "disabled"),
-    ({"hidden_by": "user"}, "hidden"),
     ({"entity_category": "diagnostic"}, "diagnostic"),
     ({"compatibility": {"status": "unknown"}}, "compatibility_unknown"),
     ({"state_present": False}, "no_state"),

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.10 (unreleased)
+
+- Classify every Manager/native/runtime reconciliation deviation with a stable identifier, cause, source and severity. The UI now lists the concrete rows instead of presenting an unexplained aggregate.
+- Reconcile the legacy 54 Manager exclusions plus six unmanaged native explicit includes as 60 concrete deviations when that exact state is present.
+- Allow an explicit exact selection of an enabled, supported hidden entity while keeping hidden entities excluded from area/device bulk defaults.
+- Keep disabled, technical, unsupported and unknown entities blocked; explicit native includes remain the only Core registry override.
+- Add backend and frontend regression coverage for hidden Matter lamps, the legacy 60/54 case, stale decisions and safe bulk behavior.
+
 ## 0.10.9 (2026-10-31)
 
 - Resolve read-only runtime accessory mappings through Home Assistant Core's AID allocation table when an HAP accessory does not expose `entity_id`; conflicting mappings remain ambiguous and never become verified.

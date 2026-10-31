@@ -1,4 +1,9 @@
-# HomeKit Manager 0.10.9
+# HomeKit Manager 0.10.10
+
+Version 0.10.10 makes reconciliation explainable at entity level and supports
+explicit selection of enabled, compatible hidden entities. Hidden entities are
+never included by area/device bulk defaults; they require an exact user
+selection and remain visibly marked as hidden.
 
 Version 0.10.9 hardens the existing positive-list workflow. Runtime diagnosis
 can resolve accessories through Core's read-only AID allocation table when an
@@ -28,7 +33,7 @@ entry.
 The positive-list assistant remains confirmation-driven. Recommendations and
 device/area previews never create includes. New devices and new entities are
 not automatically included, existing exclusions remain explicit, and an empty
-positive list remains blocked by the 0.10.7 safety gates. See the release notes
+positive list remains blocked by the 0.10.10 safety gates. See the release notes
 and migration documentation before any later, separately authorized Apply.
 
 Version 0.10.7 makes the explicit entity positive list the safe migration

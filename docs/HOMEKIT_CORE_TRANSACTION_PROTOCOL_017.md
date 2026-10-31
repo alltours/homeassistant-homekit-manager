@@ -27,6 +27,12 @@ Each v2 request contains:
 
 Pairing secrets and controller credentials are never stored in the request.
 
+The Core journal is written through Home Assistant's `Store` with
+`atomic_writes=True`; the underlying atomic writer fsyncs the temporary file
+before replacement. Config-entry storage, YAML and HAP persistence remain
+separate stores and therefore are verified independently rather than being
+presented as one physical transaction.
+
 ## State transitions
 
 The protocol uses the following forward-only states:

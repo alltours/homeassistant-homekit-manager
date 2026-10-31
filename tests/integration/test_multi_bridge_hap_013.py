@@ -7,6 +7,7 @@ import socket
 
 from aiohomekit.controller.controller import Controller
 from aiohomekit.controller.ip.discovery import IpDiscovery
+from aiohomekit.exceptions import AuthenticationError
 from aiohomekit.zeroconf import HomeKitService
 from homeassistant import config_entries
 
@@ -38,13 +39,22 @@ def _free_port() -> int:
 
 async def _pair(entry, label: str):
     homekit = entry.runtime_data.homekit
-    controller = Controller()
-    discovery = IpDiscovery(controller, HomeKitService.from_service_info(homekit.driver.mdns_service_info))
-    try:
-        finish = await asyncio.wait_for(discovery.async_start_pairing(label), 10)
-        pairing = await asyncio.wait_for(finish(homekit.driver.state.pincode.decode()), 10)
-    finally:
-        await discovery.close()
+    await _wait_for_hap_listener(entry.data["port"])
+    for attempt in (1, 2):
+        controller = Controller()
+        discovery = IpDiscovery(controller, HomeKitService.from_service_info(homekit.driver.mdns_service_info))
+        try:
+            finish = await asyncio.wait_for(discovery.async_start_pairing(label), 10)
+            pairing = await asyncio.wait_for(finish(homekit.driver.state.pincode.decode()), 10)
+        except AuthenticationError:
+            await discovery.close()
+            if attempt == 2 or homekit.driver.state.paired:
+                raise
+            await _wait_for_hap_listener(entry.data["port"])
+            continue
+        else:
+            await discovery.close()
+            break
     await homekit.hass.async_add_executor_job(homekit.driver.persist)
     accessories = await asyncio.wait_for(pairing.list_accessories_and_characteristics(), 10)
     identity = {
@@ -54,6 +64,24 @@ async def _pair(entry, label: str):
     }
     await pairing.shutdown()
     return controller, identity
+
+
+async def _wait_for_hap_listener(port: int) -> None:
+    """Wait for a TCP listener before pairing; do not mask HAP assertions."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + 10
+    while loop.time() < deadline:
+        try:
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection("127.0.0.1", port), 0.5
+            )
+        except (ConnectionError, OSError, TimeoutError):
+            await asyncio.sleep(0.05)
+        else:
+            writer.close()
+            await writer.wait_closed()
+            return
+    raise AssertionError(f"HAP listener did not become ready on port {port}")
 
 
 async def _observe(controller: Controller, pairing_data: dict, identity: dict) -> None:

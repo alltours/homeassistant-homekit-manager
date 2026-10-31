@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import inspect
+import os
 from pathlib import Path
 
 from homeassistant import bootstrap
 from homeassistant.components import homekit
+import homeassistant
 
 
 def test_core_loads_entries_before_parallel_integration_setup():
@@ -42,11 +44,13 @@ def test_manager_startup_observation_cannot_authorize_native_mutation():
 
 
 def test_stable_and_beta_core_sources_have_the_same_relevant_boundary():
-    """Verify the source contract against both locally installed Core trees."""
-    roots = (
-        Path(".venv-ha-0.10.10/lib/python3.14/site-packages/homeassistant"),
-        Path(".venv-ha-0.10.10-beta/lib/python3.14/site-packages/homeassistant"),
-    )
+    """Verify the source contract against the active and declared Core trees."""
+    roots = [Path(homeassistant.__file__).parent]
+    for variable in ("HKM_STABLE_CORE_ROOT", "HKM_BETA_CORE_ROOT"):
+        value = os.environ.get(variable)
+        if value:
+            roots.append(Path(value).resolve() / "homeassistant")
+    roots = list(dict.fromkeys(roots))
     for root in roots:
         bootstrap_source = (root / "bootstrap.py").read_text(encoding="utf-8")
         homekit_source = (root / "components/homekit/__init__.py").read_text(encoding="utf-8")

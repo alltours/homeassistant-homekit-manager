@@ -1,4 +1,5 @@
 """Isolate real HA tests in filesystems and ports."""
+import os
 from pathlib import Path
 
 import pytest
@@ -29,6 +30,11 @@ async def isolated_config_directory(hass, tmp_path):
     # write-grant tests intentionally require a private configuration
     # directory, so make that precondition explicit instead of relying on the
     # process umask or the runner implementation.
-    tmp_path.chmod(0o700)
-    hass.config.config_dir = str(tmp_path)
-    (tmp_path / "configuration.yaml").write_text("# isolated HomeKit Manager test\n")
+    previous_umask = os.umask(0o077)
+    try:
+        tmp_path.chmod(0o700)
+        hass.config.config_dir = str(tmp_path)
+        (tmp_path / "configuration.yaml").write_text("# isolated HomeKit Manager test\n")
+        yield
+    finally:
+        os.umask(previous_umask)

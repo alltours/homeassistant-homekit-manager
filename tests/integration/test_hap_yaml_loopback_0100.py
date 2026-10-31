@@ -16,6 +16,7 @@ import pytest
 
 from custom_components.homekit_manager.homekit_writer import HomeKitWriteBlocked
 from custom_components.homekit_manager.operations import HomeKitOperationService
+from file_helpers import secure_private_source
 
 
 class LocalAdvertiser:
@@ -64,13 +65,13 @@ async def test_yaml_filter_reload_retains_local_hap_pairing_and_ids(hass, tmp_pa
     hass.states.async_set("light.after", "off")
     await hass.async_block_till_done()
     (tmp_path / "configuration.yaml").write_text("homekit: !include hap_bridges.yaml\n")
-    (tmp_path / "configuration.yaml").chmod(0o600)
+    secure_private_source(tmp_path / "configuration.yaml")
     source = tmp_path / "hap_bridges.yaml"
     source.write_text(
         f"- name: YAML HAP\n  port: {port}\n  ip_address: 127.0.0.1\n"
         "  advertise_ip:\n  - 127.0.0.1\n  filter:\n    include_entities:\n    - light.before\n"
     )
-    source.chmod(0o600)
+    secure_private_source(source)
     assert await async_setup_component(hass, "homekit", await async_hass_config_yaml(hass))
     await hass.async_block_till_done()
     entry = hass.config_entries.async_entries("homekit")[0]

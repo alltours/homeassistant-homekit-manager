@@ -6,6 +6,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
 
 from custom_components.homekit_manager.operations import HomeKitOperationService
+from file_helpers import secure_private_source
 
 
 async def test_admin_operation_websocket_isolated_apply_and_verify(hass, enable_custom_integrations, hass_ws_client, monkeypatch):
@@ -71,10 +72,10 @@ async def test_admin_operation_websocket_isolated_yaml_apply_and_verify(hass, tm
     monkeypatch.setattr("homeassistant.components.homekit.HomeKit.async_start", no_network_start)
     monkeypatch.setattr("homeassistant.components.homekit.async_port_is_available", lambda _port: True)
     (tmp_path / "configuration.yaml").write_text("homekit: !include bridges.yaml\n")
-    (tmp_path / "configuration.yaml").chmod(0o600)
+    secure_private_source(tmp_path / "configuration.yaml")
     source = tmp_path / "bridges.yaml"
     source.write_text("- name: WebSocket YAML Bridge\n  port: 21087\n  filter:\n    include_entities:\n    - light.before\n")
-    source.chmod(0o600)
+    secure_private_source(source)
     assert await async_setup_component(hass, "homekit", await async_hass_config_yaml(hass))
     await hass.async_block_till_done()
     imported = hass.config_entries.async_entries("homekit")[0]
@@ -134,7 +135,7 @@ async def test_admin_websocket_direct_yaml_apply_preserves_other_config(hass, tm
         b"  default: warning\n"
     )
     source.write_bytes(before)
-    source.chmod(0o600)
+    secure_private_source(source)
     assert await async_setup_component(hass, "homekit", await async_hass_config_yaml(hass))
     await hass.async_block_till_done()
     entry = hass.config_entries.async_entries("homekit")[0]

@@ -9,6 +9,7 @@ from homeassistant.setup import async_setup_component
 from custom_components.homekit_manager.homekit_writer import HomeKitWriteBlocked, HomeKitWriteDisabled
 from custom_components.homekit_manager.operations import HomeKitOperationService
 from custom_components.homekit_manager.native_adapter import NativeHomeKitAdapter
+from file_helpers import secure_private_source
 
 
 def desired(entry_id):
@@ -80,12 +81,12 @@ async def test_yaml_operation_is_verified_by_core_only_in_isolation(hass, tmp_pa
     monkeypatch.setattr("homeassistant.components.homekit.HomeKit.async_start", no_network_start)
     monkeypatch.setattr("homeassistant.components.homekit.async_port_is_available", lambda _port: True)
     (tmp_path / "configuration.yaml").write_text("homekit: !include bridges.yaml\n")
-    (tmp_path / "configuration.yaml").chmod(0o600)
+    secure_private_source(tmp_path / "configuration.yaml")
     source = tmp_path / "bridges.yaml"
     source.write_text(
         "- name: Operation YAML\n  port: 21083\n  filter:\n    include_entities:\n    - light.before\n"
     )
-    source.chmod(0o600)
+    secure_private_source(source)
     assert await async_setup_component(hass, "homekit", await async_hass_config_yaml(hass))
     await hass.async_block_till_done()
     entry = hass.config_entries.async_entries("homekit")[0]

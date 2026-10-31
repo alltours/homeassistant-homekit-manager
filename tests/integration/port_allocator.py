@@ -5,8 +5,9 @@ import fcntl
 import hashlib
 import os
 from pathlib import Path
+import tempfile
 
-_LOCK_DIR = Path(os.environ.get("HKM_TEST_PORT_LOCK_DIR", "/tmp"))
+_LOCK_DIR = Path(os.environ.get("HKM_TEST_PORT_LOCK_DIR", tempfile.gettempdir()))
 _BASE_PORT = 18000
 _PORT_SPAN = 10000
 _HAP_BASE_PORT = 28000

@@ -33,11 +33,19 @@ the current repository therefore has no CI evidence for this job.
 
 ## Local evidence versus CI evidence
 
-All results in this sprint were local executions. They are `TEST VERIFIED`,
-not `CI VERIFIED`. No GitHub Actions run or PR status was available during the
-sprint. HACS and Hassfest are defined in `.github/workflows/hacs.yml`, but no
-local executables were installed and no remote Actions result was claimed:
-`NOT VERIFIED`.
+The first push of commit `7759582` exposed two CI-only issues. The quality job
+failed because runner-created temporary directories did not always satisfy the
+write-grant security precondition; the beta job incorrectly included
+`experimental_core` tests against the unpatched official beta Core. Both causes
+were corrected in the follow-up commit documented below.
+
+The first HACS workflow run `41247564145` completed successfully: both HACS and
+Hassfest are `CI VERIFIED`. The first general CI run `41247564342` was
+`FAILED` before the follow-up correction; its experimental Core job was
+skipped, as expected, because no trusted archive variables are configured.
+
+The corrected commit requires a new GitHub Actions run before the final CI
+state can be called `CI VERIFIED`. Local evidence remains `TEST VERIFIED`.
 
 ## Parallelization policy
 

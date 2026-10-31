@@ -49,6 +49,14 @@ After the corrections:
 - browser backend: `2 passed in 1.92s` — TEST VERIFIED;
 - Playwright Chromium/WebKit: `108 passed in 20.1s` — TEST VERIFIED.
 
+The first CI run additionally exposed a runner-specific permissions issue in
+write-grant tests. The test fixture now explicitly sets every pytest temporary
+configuration directory to mode `0700`, preserving the production fail-closed
+check while removing dependence on the runner umask. The beta runner was also
+corrected to exclude tests marked `experimental_core`; those tests must run only
+against the pinned experimental Core. A fresh beta environment then produced
+`117 passed, 68 deselected` and the beta HAP filter/reconnect sequence passed.
+
 The historical aggregate of 57 is therefore not claimed as fully reassembled
 from raw evidence. The currently reproducible failures were all classified and
 resolved or explicitly separated by a deterministic test gate.

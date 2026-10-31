@@ -206,7 +206,7 @@ async def _wait_for_hap_listener(port: int) -> None:
             )
         except (TimeoutError, OSError):
             if attempt == 49:
-                raise AssertionError(f"HAP listener did not become ready on port {port}")
+                raise AssertionError(f"HAP listener did not become ready on port {port}") from None
             await asyncio.sleep(0.05)
             continue
         writer.close()

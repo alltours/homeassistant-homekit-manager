@@ -110,8 +110,22 @@ partial clean-room evidence. The repository still needs a CI run with a
 trusted experimental Core archive before the experimental gate can be marked
 CI VERIFIED.
 
-## HACS and Hassfest
+## Beta, HACS and Hassfest
 
-The workflows remain present and syntactically valid, but neither the HACS
-Action nor Hassfest was executed locally and no GitHub result was available:
+The beta-compatible integration suite was also executed in a separate fresh
+Python 3.14.9 environment:
+
+```text
+/Users/felixalshut/Documents/ChatGPT/.hkm-beta-314/bin/python scripts/run_beta_integration.py
+```
+
+Result: `117 passed, 68 deselected, 19.68s` — `TEST VERIFIED`. The 68 excluded
+tests are the `experimental_core` migration tests, which require the separate
+pinned Core prototype. The subsequent beta HAP bootstrap, native filter,
+reload, and reconnect sequence also passed — `TEST VERIFIED`.
+
+The first GitHub HACS workflow run `41247564145` completed successfully. Its
+`hacs` and `hassfest` jobs are `CI VERIFIED`. The first general CI run
+`41247564342` failed before the final infrastructure corrections; its corrected
+replacement run is not yet available at report time, so that final state is
 `NOT VERIFIED`.

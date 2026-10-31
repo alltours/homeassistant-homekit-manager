@@ -1,8 +1,12 @@
-"""Run the complete isolated integration suite against Core 2026.11.0b0.
+"""Run the compatible isolated integration suite against Core 2026.11.0b0.
 
 The pinned pytest helper currently imports a logger hook removed by the beta
 Core. The adapter is deliberately limited to that import compatibility and
 does not modify Home Assistant source or bypass any test assertion.
+
+Native migration tests are explicitly marked ``experimental_core`` and require
+the separately pinned Core prototype. Running them against the official beta
+would turn an intentional capability guard into a misleading CI failure.
 """
 
 from __future__ import annotations
@@ -38,6 +42,8 @@ raise SystemExit(
         [
             "-q",
             "tests/integration",
+            "-m",
+            "not experimental_core",
             "--disable-warnings",
             "--maxfail=1",
             "-p",

@@ -1,5 +1,13 @@
 # Changelog
 
+# 0.10.11 (unreleased)
+
+- Add a dual-mode administration contract for UI/Bridge and YAML draft views.
+- Keep the native Home Assistant configuration source explicit and authoritative.
+- Add a read-only mode assistant with safe YAML preview/export/validation and a server-side source-migration blocker.
+- Validate native HomeKit projections against Core 2026.11.0b0 in addition to 2026.10.4.
+- Preserve existing filter, draft, pairing-safety and fail-closed write boundaries.
+
 ## 0.10.10 (unreleased)
 
 - Classify every Manager/native/runtime reconciliation deviation with a stable identifier, cause, source and severity. The UI now lists the concrete rows instead of presenting an unexplained aggregate.

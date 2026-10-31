@@ -13,7 +13,7 @@ class ConversionBlocked(ValueError):
 _DATA = frozenset({"name", "port", "ip_address", "advertise_ip"})
 _OPTIONS = frozenset({"filter", "entity_config", "mode", "devices"})
 _FILTER = frozenset({"include_entities", "exclude_entities", "include_domains", "exclude_domains", "include_entity_globs", "exclude_entity_globs"})
-_SUPPORTED_VERSION = "2026.10.4"
+_SUPPORTED_VERSIONS = frozenset({"2026.10.4", "2026.11.0b0"})
 
 
 @dataclass(frozen=True)
@@ -30,7 +30,7 @@ class ConvertedValues:
 
 
 def _check(value: Mapping[str, Any], core_version: str) -> None:
-    if core_version != _SUPPORTED_VERSION:
+    if core_version not in _SUPPORTED_VERSIONS:
         raise ConversionBlocked("Core-Version wurde für die Feldkonvertierung nicht geprüft")
     unknown = set(value) - _DATA - _OPTIONS
     if unknown:

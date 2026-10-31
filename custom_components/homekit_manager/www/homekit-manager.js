@@ -20,7 +20,7 @@ class HomeKitManagerPanel extends HTMLElement {
     Object.assign(this, { _hass: null, _loaded: false, _narrow: false, renderCount: 0, entities: [], bridges: [], bridge: null,
       overview: {}, diagnostics: { findings: [], summary: {} }, historyEntries: [], rulesPreview: null,
       performance: null, devicePreview: null, yamlStatus: {}, modeStatus: {}, activationStatus: { state: "unknown" }, managementStatus: { state: "unknown" }, migrationPlan: null, migrationStatus: { state: "unknown", stale: true },
-      view: "home", settingsView: "configuration", groupMode: "areas", selectionMode: false, expanded: new Set(), query: "", page: 0,
+      view: "home", settingsView: "configuration", groupMode: "areas", selectionMode: false, expanded: new Set(), query: "", page: 0, administrationMode: null,
       filters: { status: "", compatibility: "", domain: "", integration: "", area: "", availability: "", published: "", changed: "" },
       selected: new Set(), draft: new Map(), fingerprint: null, serverPreview: null, error: null, loading: false, statusMessage: "Keine Änderungen", expandedBridges: new Set(), activationMessage: "", actionMenuOpen: false, diagnosticFilter: "", filtersOpen: false,
       display: { disabled: false, hidden: false, technical: false, unsupported: false }, unassignedPage: 0, areaEntityPages: new Map() });
@@ -192,6 +192,14 @@ class HomeKitManagerPanel extends HTMLElement {
   }
   selectView(view) { this.view = view; if (view === "settings") this.settingsView = "general"; this.render(); }
   setSettingsView(view) { this.settingsView = view; this.view = "settings"; this.render(); this.loadSettingsData(); }
+  selectAdministrationMode(mode) {
+    const options = this.modeStatus?.dual_mode?.available_modes || ["ui_bridge", "yaml"];
+    if (!options.includes(mode)) return;
+    this.administrationMode = mode;
+    this.statusMessage = "Verwaltungsmodus für die Vorschau ausgewählt · native Quelle bleibt unverändert";
+    this.statusTone = "neutral";
+    this.render();
+  }
   setFilter(key, value) { this.filters[key] = value; this.page = 0; this.filtersOpen = true; this.render(); }
   setDraft(id, value, render = true) {
     const entity = this.entities.find(item => item.entity_id === id);
@@ -518,7 +526,21 @@ class HomeKitManagerPanel extends HTMLElement {
     const state = bridge.state === "loaded" ? "Geladen" : bridge.state ? "Nicht geladen" : "Unbekannt";
     return `<article class="bridge-card"><div class="device-head"><div class="entity-copy"><strong>${this.escape(bridge.title || "Unbenannte Bridge")}</strong><small>${state}${selected ? " · Ausgewählte Bridge" : ""}</small></div><div class="actions">${!selected ? `<button data-bridge-card="${this.escape(bridge.entry_id)}">Auswählen</button>` : ""}<button data-bridge-expand="${this.escape(bridge.entry_id)}" aria-expanded="${open}">Details</button></div></div>${open ? `<dl class="definition-list"><div><dt>Entry-ID</dt><dd><code>${this.escape(bridge.entry_id)}</code></dd></div><div><dt>Nativer Modus</dt><dd>${this.escape(bridge.mode || "Unbekannt")}</dd></div><div><dt>Native Quelle</dt><dd><code>${this.escape(bridge.source || "unknown")}</code></dd></div><div><dt>Port</dt><dd>${this.escape(bridge.port ?? "Unbekannt")}</dd></div></dl><details class="technical" data-detail-key="bridge:${this.escape(bridge.entry_id)}"><summary>Konfigurationswerte anzeigen</summary><p>Gespeicherte Entry-Werte; sensible Felder sind ausgeblendet. YAML-Kommentare und Quelldatei gehören nicht zu diesen Werten.</p><pre class="config-values">${this.escape(JSON.stringify({ data: bridge.data || {}, options: bridge.options || {} }, null, 2))}</pre></details>` : ""}</article>`;
   }
-  sourceCard() { const source = this.managementStatus.configuration_source; const label = this.overview.snapshot_stale ? "Unbekannt" : source === "home_assistant" ? "Native Home-Assistant-Konfiguration" : source === "yaml" ? "YAML-Konfiguration" : "Unbekannt"; return `<div class="source-option selected"><strong>${this.escape(label)}</strong><small>Quelle dieser Bridge · bleibt bei Änderungen erhalten</small></div>`; }
+  sourceCard() {
+    const dual = this.modeStatus?.dual_mode || {};
+    const native = dual.native_configuration_source || {
+      key: this.managementStatus.configuration_source === "yaml" ? "import" : this.managementStatus.configuration_source === "home_assistant" ? "user" : "unknown",
+      label: this.overview.snapshot_stale ? "Unbekannte native Konfigurationsquelle" : this.managementStatus.configuration_source_label || "Unbekannt",
+      short_label: this.managementStatus.configuration_source_label || "Unbekannt",
+    };
+    const options = dual.mode_options || [
+      { key: "ui_bridge", label: "UI / Bridge", selected: native.key === "user", description: "Native Home-Assistant-Bridge verwalten." },
+      { key: "yaml", label: "YAML", selected: native.key === "import", description: "YAML-Projektion als Entwurf prüfen und exportieren." },
+    ];
+    const selected = this.administrationMode || dual.administration_mode || options.find(item => item.selected)?.key || "ui_bridge";
+    const plan = dual.plans?.[selected];
+    return `<section class="surface dual-mode-card"><div class="section-heading"><div><h3>Verwaltungsmodus</h3><p class="muted">Die Auswahl steuert die HomeKit-Manager-Oberfläche.</p></div><span class="state">${this.escape(options.find(item => item.key === selected)?.label || "Unbekannt")}</span></div><div class="source-options">${options.map(option => `<button class="source-option${option.key === selected ? " selected" : ""}" data-admin-mode="${this.escape(option.key)}" aria-pressed="${option.key === selected}"><strong>${this.escape(option.label)}</strong><small>${this.escape(option.description || "")}</small></button>`).join("")}</div><div class="notice"><strong>Native Konfigurationsquelle</strong><p>${this.escape(native.label || native.short_label || "Unbekannt")}</p><small>Diese Quelle bleibt autoritativ und wird durch die Auswahl nicht geändert.</small></div>${plan ? `<div class="notice${plan.status === "blocked" ? " warning" : ""}"><strong>Prüfung: ${this.escape(plan.title || "Modus prüfen")}</strong><p>${this.escape(plan.message || "Keine weitere Prüfung verfügbar.")}</p><dl class="definition-list"><div><dt>Quellenmigration</dt><dd>${plan.source_migration_supported ? "Unterstützt" : "Gesperrt"}</dd></div><div><dt>Sichere Aktion</dt><dd>${this.escape(({ manage_existing_source: "Bestehende Quelle verwalten", preview_export_validate: "Vorschau / Export / Validierung", read_existing_source: "Lesesicht" })[plan.safe_action] || "Keine")}</dd></div><div><dt>Pairing-Erhalt</dt><dd>${plan.pairing_preservation_proven ? "Nachgewiesen" : "Nicht nachgewiesen"}</dd></div></dl></div>` : ""}</section>`;
+  }
   managementCard() {
     const policy = this.overview.operation_policy || {};
     return `<p class="lock-note">${this.escape(policy.reason || "HomeKit-Schreiben ist gesperrt.")}</p><p class="muted">HomeKit Manager zeigt und plant Änderungen für die ausgewählte Bridge. Die Konfigurationsquelle bleibt erhalten.</p>`;
@@ -596,7 +618,7 @@ class HomeKitManagerPanel extends HTMLElement {
   settingsTemplate() {
     const tabs = [["general", "Allgemein"], ["configuration", "Konfiguration"], ["diagnostics", "Diagnose"], ["rules", "Regeln"], ["history", "Historie"], ["performance", "Performance"]];
     let body;
-    if (this.settingsView === "configuration") body = `<h3>Konfigurationsquelle</h3><p class="muted">Aktive Bridge-Konfiguration und Manager-Entwürfe sind getrennte Daten.</p><div class="source-options">${this.sourceCard()}</div>${this.managementCard()}${this.positiveListCard()}${this.testWriteModeCard()}<dl class="definition-list"><div><dt>Gespeicherter Entwurf</dt><dd>${!this.yamlStatus.valid ? "Ungültig" : this.yamlStatus.exists ? "Vorhanden" : "Nicht vorhanden"}</dd></div><div><dt>Letzte Entwurfsspeicherung</dt><dd>${this.formatTime(this.yamlStatus.last_modified)}</dd></div></dl><p class="lock-note">Änderungen bewahren die bestehende Konfigurationsquelle der Bridge.</p>`;
+    if (this.settingsView === "configuration") body = `<h3>Konfigurationsquelle</h3><p class="muted">Verwaltungsmodus und native Konfigurationsquelle werden getrennt angezeigt.</p>${this.sourceCard()}${this.managementCard()}${this.positiveListCard()}${this.testWriteModeCard()}<dl class="definition-list"><div><dt>Gespeicherter Entwurf</dt><dd>${!this.yamlStatus.valid ? "Ungültig" : this.yamlStatus.exists ? "Vorhanden" : "Nicht vorhanden"}</dd></div><div><dt>Letzte Entwurfsspeicherung</dt><dd>${this.formatTime(this.yamlStatus.last_modified)}</dd></div></dl><p class="lock-note">Eine Auswahl des YAML-Modus erzeugt keinen SOURCE_IMPORT-Entry und ändert keine produktive HomeKit-Quelle.</p>`;
     else if (this.settingsView === "diagnostics") {
       const findings = this.diagnostics.grouped_findings || this.diagnostics.findings || [];
       const runtime = this.overview.runtime_diagnosis || {};
@@ -648,6 +670,7 @@ class HomeKitManagerPanel extends HTMLElement {
     all(".main-nav [data-nav]", "keydown", event => { const ids = ["home", "devices", "changes", "settings"], index = ids.indexOf(this.view); const next = event.key === "ArrowRight" ? (index + 1) % 4 : event.key === "ArrowLeft" ? (index + 3) % 4 : event.key === "Home" ? 0 : event.key === "End" ? 3 : null; if (next != null) { event.preventDefault(); this.selectView(ids[next]); this.shadowRoot.querySelector(`#nav-${ids[next]}`)?.focus(); } });
     all("[data-refresh]", "click", () => this.refresh());
     all("[data-settings-view]", "click", event => this.setSettingsView(event.currentTarget.dataset.settingsView));
+    all("[data-admin-mode]", "click", event => this.selectAdministrationMode(event.currentTarget.dataset.adminMode));
     one("[data-performance]", "click", () => this.loadSettingsData());
     one("[data-query]", "input", event => { this.query = event.target.value; this.page = 0; this.render(); });
     all("[data-filter]", "change", event => this.setFilter(event.target.dataset.filter, event.target.value));

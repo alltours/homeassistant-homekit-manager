@@ -46,6 +46,7 @@ from .selection_reconciliation import reconcile_selection
 from .positive_list import read_runtime_publication
 from .runtime_diagnostics import diagnose_runtime, runtime_publication_summary
 from .inventory_export import build_inventory_export, export_inventory_snapshot
+from .dual_mode import build_dual_mode_status
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -502,8 +503,15 @@ class HomeKitManagerCoordinator:
             "supported_modes": list(MANAGEMENT_MODES),
             "bridge_count": len(self.bridges),
             "bridge_selection_required": len(self.bridges) > 1,
-            "message": "Quellenmigration ist weder für 0.9.24 noch für 0.10.0 vorgesehen; bestehende Bridges behalten ihre Quelle.",
+            "message": "Der Verwaltungsmodus ist von der nativen Konfigurationsquelle getrennt; eine SOURCE_USER/SOURCE_IMPORT-Migration bleibt gesperrt.",
             "source_detection": self.configuration_sources,
+            "dual_mode": build_dual_mode_status(
+                bridge,
+                core_version=CORE_VERSION,
+                yaml_valid=self.yaml_snapshot.valid,
+                yaml_exists=self.yaml_snapshot.exists,
+                snapshot_stale=bool(self.last_error),
+            ),
         }
 
     def migration_plan(self, target: str | None = None) -> dict[str, Any]:

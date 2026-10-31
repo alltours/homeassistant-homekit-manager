@@ -61,7 +61,7 @@
                 unavailable_entities: 1,
                 compatible_entities: 1,
                 configured_entities: 1,
-                integration_version: "0.10.10", core_version: params.has("core-beta") ? "2026.11.0b0" : "2026.10.4", last_updated: "2026-10-27T08:00:00Z", refresh_duration_ms: 3.2, refresh_count: 1, unavailable_entities: 1, accessories: 1, write_policy: { enabled: false }, operation_policy: { enabled: isolatedWrite || testModeActive, reason: isolatedWrite ? "Nur isolierte Testinstanz" : testModeActive ? "Befristeter nativer Testmodus aktiv" : "HomeKit-Schreibpfad gesperrt" },
+                integration_version: "0.10.11", core_version: params.has("core-beta") ? "2026.11.0b0" : "2026.10.4", last_updated: "2026-10-27T08:00:00Z", refresh_duration_ms: 3.2, refresh_count: 1, unavailable_entities: 1, accessories: 1, write_policy: { enabled: false }, operation_policy: { enabled: isolatedWrite || testModeActive, reason: isolatedWrite ? "Nur isolierte Testinstanz" : testModeActive ? "Befristeter nativer Testmodus aktiv" : "HomeKit-Schreibpfad gesperrt" },
                 test_write_mode: { enabled: testModeActive, entry_id: testModeActive ? "fixture-bridge" : null, expires_at: testModeActive ? "2026-10-28T23:00:00Z" : null, persistent: false, duration_minutes: 60 },
                 fingerprint: "fixture-fingerprint",
               },
@@ -98,7 +98,19 @@
             return { exists: Object.keys(savedDocument.bridges || {}).length > 0, valid: true, document: savedDocument, file_version: "fixture-version", fingerprint: "fixture-fingerprint", is_applied: false };
           }
           if (message.type === "homekit_manager/mode_status") {
-            return { active_mode: "homekit_bridge", desired_mode: "homekit_bridge", transition: "stable", matrix: {} };
+            return { active_mode: "homekit_bridge", desired_mode: "homekit_bridge", transition: "stable", matrix: {}, dual_mode: {
+              administration_mode: "ui_bridge", administration_mode_label: "UI / Bridge", available_modes: ["ui_bridge", "yaml"],
+              native_configuration_source: { key: "user", label: "Home Assistant UI / Config Entry", short_label: "UI / Bridge" },
+              mode_options: [
+                { key: "ui_bridge", label: "UI / Bridge", selected: true, description: "Native Home-Assistant-Bridge verwalten." },
+                { key: "yaml", label: "YAML", selected: false, description: "YAML-Projektion als Entwurf prüfen und exportieren." },
+              ],
+              plans: {
+                ui_bridge: { status: "same_native_source", title: "Verwaltungsmodus kann sicher verwendet werden", message: "Die gewählte Oberfläche entspricht der nativen Quelle.", safe_action: "manage_existing_source", source_migration_supported: false, pairing_preservation_proven: false },
+                yaml: { status: "draft_only", title: "YAML nur als sicherer Entwurf verfügbar", message: "Eine YAML-Projektion kann geprüft und exportiert werden.", safe_action: "preview_export_validate", source_migration_supported: false, pairing_preservation_proven: false },
+              },
+              source_migration: { supported: false, status: "blocked" },
+            } };
           }
           if (message.type === "homekit_manager/set_mode") {
             throw new Error("Quellenmigration ist nicht vorgesehen");

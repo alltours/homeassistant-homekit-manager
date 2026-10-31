@@ -11,7 +11,7 @@ from aiohomekit.zeroconf import HomeKitService
 from homeassistant import config_entries
 import pytest
 
-from custom_components.homekit_manager.homekit_writer import HomeKitWriteBlocked, HomeKitWriter, OptionsDiff
+from custom_components.homekit_manager.homekit_writer import HomeKitWriter, OptionsDiff
 from custom_components.homekit_manager.operations import HomeKitOperationService
 from custom_components.homekit_manager.filtering import evaluate_filter
 
@@ -195,6 +195,8 @@ async def test_broad_filter_migration_needs_live_hap_evidence_and_keeps_identity
     service.test_write_mode.enable(hass, entry.entry_id, entry.entry_id)
     bridge = {"entry_id": entry.entry_id, "source": "user", "filter": dict(entry.options["filter"])}
     inventory = [{"entity_id": name, "available": True,
+                  "registry_entry_present": True, "state_present": True,
+                  "hidden_by": "user" if name == hidden.entity_id else None,
                   "compatibility": {"status": "supported"},
                   "homekit": {"configured_by_filter": evaluate_filter(name, config=bridge["filter"]).configured}}
                  for name in ("light.keep", "light.remove", hidden.entity_id)]
@@ -206,9 +208,11 @@ async def test_broad_filter_migration_needs_live_hap_evidence_and_keeps_identity
         "policy": "positive_list", "migration_acknowledged": True,
         "entities": {"light.keep": "include", hidden.entity_id: "include"},
     }}}
-    with pytest.raises(HomeKitWriteBlocked, match="ausgeblendete"):
-        await service.plan_filter(entry_id=entry.entry_id, bridge=bridge,
-                                  document=unsafe, inventory=inventory)
+    hidden_plan = await service.plan_filter(entry_id=entry.entry_id, bridge=bridge,
+                                            document=unsafe, inventory=inventory)
+    # The hidden entity is already selected by the broad source filter; the
+    # positive-list diff still succeeds and only records the actual removal.
+    assert hidden_plan["changed_entities"] == ["light.remove"]
     plan = await service.plan_filter(entry_id=entry.entry_id, bridge=bridge,
                                      document=document, inventory=inventory)
     assert plan["migration"]["selected_before"] == 3

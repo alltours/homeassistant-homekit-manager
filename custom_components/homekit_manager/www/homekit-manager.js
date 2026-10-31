@@ -129,8 +129,19 @@ class HomeKitManagerPanel extends HTMLElement {
   updateConnectionState() { const node = this.shadowRoot.querySelector("[data-connection]"); if (node) node.textContent = this._hass ? "Verbunden" : "Nicht verbunden"; }
   escape(value) { return String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]); }
   currentStatus(entity) { const value = entity?.homekit?.current_status ?? entity?.homekit?.configured_by_filter; return value === true || value === "included" ? "included" : value === false || value === "excluded" ? "excluded" : "unknown"; }
-  plannedStatus(entity) { return this.draft.has(entity.entity_id) ? this.draft.get(entity.entity_id) : this.currentStatus(entity); }
-  status(entity) { return this.draft.has(entity.entity_id) && this.draft.get(entity.entity_id) !== this.currentStatus(entity) ? "planned" : this.currentStatus(entity); }
+  migrationBaselineStatus(entity) {
+    if (!this.positiveListMigration) return null;
+    const saved = this.yamlStatus.document?.bridges?.[this.bridge?.entry_id]?.entities?.[entity.entity_id];
+    if (saved === "exclude") return "excluded";
+    const explicitManagerInclude = this.managerDecision(entity) === "include";
+    const registryAllowed = entity.homekit?.registry_eligible !== false || explicitManagerInclude;
+    return this.currentStatus(entity) === "included" && registryAllowed && this.managerDecision(entity) !== "exclude" ? "included" : "excluded";
+  }
+  plannedStatus(entity) {
+    if (this.draft.has(entity.entity_id)) return this.draft.get(entity.entity_id);
+    return this.migrationBaselineStatus(entity) || this.currentStatus(entity);
+  }
+  status(entity) { return this.plannedStatus(entity) !== this.currentStatus(entity) ? "planned" : this.currentStatus(entity); }
   statusLabel(value) { return ({ included: "Eingeschlossen", include: "Eingeschlossen", excluded: "Ausgeschlossen", exclude: "Ausgeschlossen", unknown: "Unbekannt", no_state: "Ohne aktuellen State", disabled: "Deaktiviert", planned: "Vorgemerkt", mixed: "Gemischt", empty: "Keine relevanten Entitäten", unknown_only: "Nicht verifiziert", supported: "Unterstützt", conditionally_supported: "Eingeschränkt unterstützt", unsupported: "Nicht unterstützt", available: "Verfügbar", unavailable: "Nicht verfügbar", yes: "Ja", no: "Nein" })[value] || value; }
   runtimeLabel(value) { return ({ published_verified: "Veröffentlicht · verifiziert", not_published_verified: "Nicht veröffentlicht · verifiziert", mapping_ambiguous: "Zuordnung mehrdeutig", unknown: "Unbekannt", unsupported: "Nicht unterstützt" })[value] || "Unbekannt"; }
   managerDecision(entity) {
@@ -145,7 +156,18 @@ class HomeKitManagerPanel extends HTMLElement {
     const rest = full.slice(deviceName.length).replace(/^[\s:·–—-]+/, "").trim();
     return rest || full;
   }
-  changes() { const byId = new Map(this.entities.map(item => [item.entity_id, item])); return [...this.draft].map(([entity_id, desired]) => { const entity = byId.get(entity_id); return { entity_id, desired, current: entity ? this.currentStatus(entity) : "unknown", name: entity?.name || entity_id }; }).filter((item) => item.desired !== item.current); }
+  changes() {
+    const byId = new Map(this.entities.map(item => [item.entity_id, item]));
+    const ids = this.positiveListMigration
+      ? this.entities.map(item => item.entity_id)
+      : [...this.draft.keys()];
+    return ids.map(entity_id => {
+      const entity = byId.get(entity_id);
+      const current = entity ? this.currentStatus(entity) : "unknown";
+      const desired = entity ? this.plannedStatus(entity) : this.draft.get(entity_id);
+      return { entity_id, desired, current, name: entity?.name || entity_id };
+    }).filter((item) => item.desired !== item.current);
+  }
   activePositiveList() {
     const filter = this.bridge?.filter;
     return Array.isArray(filter?.include_entities) && filter.include_entities.length > 0
@@ -175,7 +197,7 @@ class HomeKitManagerPanel extends HTMLElement {
     const entity = this.entities.find(item => item.entity_id === id);
     if (!entity || this.currentStatus(entity) === "unknown" || (value === "included" && value !== this.currentStatus(entity) && this.bulkExclusionReason(entity))) return;
     if (!this.draft.size) this.draftFingerprint = this.fingerprint;
-    const current = this.currentStatus(entity);
+    const current = this.positiveListMigration ? this.migrationBaselineStatus(entity) : this.currentStatus(entity);
     if (!value || value === current) this.draft.delete(id); else this.draft.set(id, value);
     this.serverPreview = null;
     this.operationPlan = null; this.operationStatus = null;
@@ -204,6 +226,10 @@ class HomeKitManagerPanel extends HTMLElement {
     if (entity.compatibility?.status === "conditionally_supported") return "Nur bedingt unterstützt";
     if (!entity.compatibility?.status || entity.compatibility.status === "unknown") return "Kompatibilität unbekannt";
     return null;
+  }
+  individualExclusionReason(entity) {
+    const reason = this.bulkExclusionReason(entity);
+    return reason === "Ausgeblendet" ? null : reason;
   }
   async planSelection(ids, value, scope = null) {
     if (!this.bridge?.entry_id || !this.fingerprint || !ids.length) return;
@@ -380,9 +406,10 @@ class HomeKitManagerPanel extends HTMLElement {
   entityRow(entity, displayName = null) {
     const current = this.currentStatus(entity), desired = this.plannedStatus(entity), label = displayName || entity.name || entity.entity_id;
     const next = desired === "included" ? "excluded" : "included";
-    const blocked = current === "unknown" || (next === "included" && next !== current && Boolean(this.bulkExclusionReason(entity)));
+    const blocked = current === "unknown" || (next === "included" && next !== desired && Boolean(this.individualExclusionReason(entity)));
     const manager = this.managerDecision(entity), runtime = entity.homekit?.runtime_publication || "unknown";
-    return `<article class="entity-row"><div class="entity-copy"><strong>${this.escape(label)}</strong><div class="entity-meta"><span>${this.escape((entity.compatibility?.status === "unknown" ? "Nicht verifiziert" : this.statusLabel(entity.compatibility?.status || "unknown")))}</span><span class="${entity.available ? "" : "text-warning"}">${this.statusLabel(entity.availability_status || (entity.available ? "available" : "unavailable"))}</span><span>Native: ${this.escape(this.filterReasonLabel(entity.homekit?.filter_reason))}</span><span>Manager: ${this.escape(this.statusLabel(manager))}</span><span>Runtime: ${this.escape(this.runtimeLabel(runtime))}</span>${entity.homekit?.configured_by_filter === true && entity.homekit?.registry_eligible === false ? `<span class="text-warning">Core-Registry-Sperre</span>` : ""}</div></div><div class="entity-actions">${this.selectionMode ? `<input type="checkbox" data-select="${this.escape(entity.entity_id)}" aria-label="${this.escape(label)} auswählen"${this.selected.has(entity.entity_id) ? " checked" : ""}>` : ""}${desired !== current ? `<span class="muted">Aktuell</span>${this.badge(current)}<span class="muted">Entwurf</span>${this.badge(desired)}` : this.badge(current)}<button class="toggle ${desired === "included" ? "on" : ""}" role="switch" aria-checked="${desired === "included"}" aria-label="${this.escape(label)} im Entwurf einschließen" data-entity-toggle="${this.escape(entity.entity_id)}"${blocked ? " disabled" : ""}><span></span></button></div><details class="technical" data-detail-key="entity:${this.escape(entity.entity_id)}"><summary>Technische Details</summary><p>${this.escape(entity.compatibility?.reason || "Core-Abbildung vorhanden; Veröffentlichung in Apple Home nicht nachgewiesen.")}</p><dl class="definition-list"><div><dt>Entity-ID</dt><dd><code>${this.escape(entity.entity_id)}</code></dd></div><div><dt>Vollständiger Name</dt><dd>${this.escape(entity.name || entity.entity_id)}</dd></div><div><dt>Gerät/Bereich</dt><dd>${this.escape(entity.device_name || "Ohne Gerät")} · ${this.escape(entity.area_name || "Ohne Bereich")}</dd></div><div><dt>Entity-Registry</dt><dd>${entity.registry_entry_present === false ? "Kein Eintrag" : "Eintrag vorhanden"}</dd></div><div><dt>Aktueller State</dt><dd>${entity.state_present === false ? "Kein State" : this.escape(entity.state || "Unbekannt")}</dd></div><div><dt>Gerätereferenz</dt><dd>${this.escape(entity.device_registry_status || "Unbekannt")}</dd></div><div><dt>Bereichsquelle</dt><dd>${this.escape(entity.area_source || "Unbekannt")}</dd></div><div><dt>Deaktiviert durch</dt><dd>${this.escape(entity.disabled_by || entity.device_disabled_by || "Nein")}</dd></div><div><dt>Versteckt durch</dt><dd>${this.escape(entity.hidden_by || "Nein")}</dd></div><div><dt>Entity-Kategorie</dt><dd>${this.escape(entity.entity_category || "Keine")}</dd></div><div><dt>Integration</dt><dd>${this.escape(entity.integration_domain || "Unbekannt")}</dd></div><div><dt>Filterregel</dt><dd>${this.escape(this.filterReasonLabel(entity.homekit?.filter_reason))}</dd></div><div><dt>Manager-Entscheidung</dt><dd>${this.escape(this.statusLabel(manager))}</dd></div><div><dt>Runtime-Publikation</dt><dd>${this.escape(this.runtimeLabel(runtime))}</dd></div><div><dt>Core-Registry-Gate</dt><dd>${entity.homekit?.registry_eligible === true ? "Erlaubt" : entity.homekit?.registry_eligible === false ? "Gesperrt" : "Unbekannt"}</dd></div><div><dt>Laufzeitkandidat</dt><dd>${entity.homekit?.runtime_candidate === true ? "Ja" : entity.homekit?.runtime_candidate === false ? "Nein" : "Unbekannt"}</dd></div></dl><button data-entity-preview="${this.escape(entity.entity_id)}">Service-Vorschau</button></details></article>`;
+    const hiddenNote = entity.hidden_by ? `<span class="text-warning">Versteckt · explizite Auswahl nötig</span>` : "";
+    return `<article class="entity-row"><div class="entity-copy"><strong>${this.escape(label)}</strong><div class="entity-meta"><span>${this.escape((entity.compatibility?.status === "unknown" ? "Nicht verifiziert" : this.statusLabel(entity.compatibility?.status || "unknown")))}</span><span class="${entity.available ? "" : "text-warning"}">${this.statusLabel(entity.availability_status || (entity.available ? "available" : "unavailable"))}</span><span>Native: ${this.escape(this.filterReasonLabel(entity.homekit?.filter_reason))}</span><span>Manager: ${this.escape(this.statusLabel(manager))}</span><span>Runtime: ${this.escape(this.runtimeLabel(runtime))}</span>${hiddenNote}${entity.homekit?.configured_by_filter === true && entity.homekit?.registry_eligible === false ? `<span class="text-warning">Core-Registry-Sperre</span>` : ""}</div></div><div class="entity-actions">${this.selectionMode ? `<input type="checkbox" data-select="${this.escape(entity.entity_id)}" aria-label="${this.escape(label)} auswählen"${this.selected.has(entity.entity_id) ? " checked" : ""}>` : ""}${desired !== current ? `<span class="muted">Aktuell</span>${this.badge(current)}<span class="muted">Entwurf</span>${this.badge(desired)}` : this.badge(current)}<button class="toggle ${desired === "included" ? "on" : ""}" role="switch" aria-checked="${desired === "included"}" aria-label="${this.escape(label)} im Entwurf einschließen" data-entity-toggle="${this.escape(entity.entity_id)}"${blocked ? " disabled" : ""}><span></span></button></div><details class="technical" data-detail-key="entity:${this.escape(entity.entity_id)}"><summary>Technische Details</summary><p>${this.escape(entity.compatibility?.reason || "Core-Abbildung vorhanden; Veröffentlichung in Apple Home nicht nachgewiesen.")}</p><dl class="definition-list"><div><dt>Entity-ID</dt><dd><code>${this.escape(entity.entity_id)}</code></dd></div><div><dt>Vollständiger Name</dt><dd>${this.escape(entity.name || entity.entity_id)}</dd></div><div><dt>Gerät/Bereich</dt><dd>${this.escape(entity.device_name || "Ohne Gerät")} · ${this.escape(entity.area_name || "Ohne Bereich")}</dd></div><div><dt>Entity-Registry</dt><dd>${entity.registry_entry_present === false ? "Kein Eintrag" : "Eintrag vorhanden"}</dd></div><div><dt>Aktueller State</dt><dd>${entity.state_present === false ? "Kein State" : this.escape(entity.state || "Unbekannt")}</dd></div><div><dt>Gerätereferenz</dt><dd>${this.escape(entity.device_registry_status || "Unbekannt")}</dd></div><div><dt>Bereichsquelle</dt><dd>${this.escape(entity.area_source || "Unbekannt")}</dd></div><div><dt>Deaktiviert durch</dt><dd>${this.escape(entity.disabled_by || entity.device_disabled_by || "Nein")}</dd></div><div><dt>Versteckt durch</dt><dd>${this.escape(entity.hidden_by || "Nein")}</dd></div><div><dt>Entity-Kategorie</dt><dd>${this.escape(entity.entity_category || "Keine")}</dd></div><div><dt>Integration</dt><dd>${this.escape(entity.integration_domain || "Unbekannt")}</dd></div><div><dt>Filterregel</dt><dd>${this.escape(this.filterReasonLabel(entity.homekit?.filter_reason))}</dd></div><div><dt>Manager-Entscheidung</dt><dd>${this.escape(this.statusLabel(manager))}</dd></div><div><dt>Runtime-Publikation</dt><dd>${this.escape(this.runtimeLabel(runtime))}</dd></div><div><dt>Core-Registry-Gate</dt><dd>${entity.homekit?.registry_eligible === true ? "Erlaubt" : entity.homekit?.registry_eligible === false ? "Gesperrt" : "Unbekannt"}</dd></div><div><dt>Laufzeitkandidat</dt><dd>${entity.homekit?.runtime_candidate === true ? "Ja" : entity.homekit?.runtime_candidate === false ? "Nein" : "Unbekannt"}</dd></div></dl><button data-entity-preview="${this.escape(entity.entity_id)}">Service-Vorschau</button></details></article>`;
   }
   hierarchy() {
     const areaMap = new Map(), deviceMap = new Map(), seen = new Set();
@@ -506,7 +533,10 @@ class HomeKitManagerPanel extends HTMLElement {
     const alignment = this.overview.configuration_alignment;
     if (!alignment || alignment.state !== "mismatch") return "";
     const differences = alignment.differences || {};
-    return `<aside class="notice warning" role="alert"><strong>Deine Auswahl stimmt nicht mit der HomeKit-Konfiguration überein.</strong><p>${this.escape(alignment.message || "Gespeicherter Manager-Entwurf und native Filterkonfiguration weichen ab.")} ${differences.count || 0} Abweichungen: ${differences.desired_not_native?.length || 0} gewünschte Entitäten fehlen nativ, ${differences.native_not_desired?.length || 0} native Entitäten sind im Manager-Entwurf nicht gewünscht.</p><button data-load>Gespeicherten Entwurf laden</button><details class="technical"><summary>Aktive Veröffentlichung</summary><p>Der laufende Bridge-Status: ${this.escape(alignment.active?.state || "unbekannt")}. Eine Apple-Home-Sichtbarkeit wird nicht behauptet.</p></details></aside>`;
+    const labels = { manager_exclude_native: "Manager-Ausschluss wird nativ ausgewählt", native_explicit_unmanaged: "Native Entity-Auswahl ohne Manager-Entscheidung", manager_include_not_native: "Manager-Include fehlt nativ", stale_manager_decision: "Veraltete Manager-Entscheidung", invalid_manager_decision: "Ungültige Manager-Entscheidung", desired_not_native: "Positivlisten-Include fehlt nativ", native_not_desired: "Native Auswahl fehlt in der Positivliste", runtime_not_desired: "Runtime-Accessory fehlt in der Positivliste", desired_not_runtime: "Positivlisten-Entity ohne Runtime-Nachweis" };
+    const deviations = alignment.deviations || [];
+    const details = deviations.length ? `<details class="technical deviation-details"><summary>Abweichungsdetails (${deviations.length})</summary><ul class="deviation-list">${deviations.map(item => `<li><strong>${this.escape(labels[item.classification] || item.classification)}</strong> · <code>${this.escape(item.entity_id || "Bridge")}</code><br><span>${this.escape(item.cause || "Keine Ursache angegeben")}</span></li>`).join("")}</ul></details>` : "";
+    return `<aside class="notice warning" role="alert"><strong>Deine Auswahl stimmt nicht mit der HomeKit-Konfiguration überein.</strong><p>${this.escape(alignment.message || "Gespeicherter Manager-Entwurf und native Filterkonfiguration weichen ab.")} ${differences.count || 0} Abweichungen: ${differences.desired_not_native?.length || 0} gewünschte Entitäten fehlen nativ, ${differences.native_not_desired?.length || 0} native Entitäten sind im Manager-Entwurf nicht gewünscht.</p>${details}<button data-load>Gespeicherten Entwurf laden</button><details class="technical"><summary>Aktive Veröffentlichung</summary><p>Der laufende Bridge-Status: ${this.escape(alignment.active?.state || "unbekannt")}. Eine Apple-Home-Sichtbarkeit wird nicht behauptet.</p></details></aside>`;
   }
   migrationNotice() {
     if (!this.positiveListMigration) return "";

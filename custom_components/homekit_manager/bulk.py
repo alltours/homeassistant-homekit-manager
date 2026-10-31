@@ -7,7 +7,7 @@ from typing import Any, Mapping
 MAX_BULK_SCOPE = 10000
 
 
-def exclusion_reason(item: Mapping[str, Any]) -> str | None:
+def exclusion_reason(item: Mapping[str, Any], *, allow_hidden: bool = False) -> str | None:
     """Return the first reason an entity must stay out of automatic actions.
 
     This is intentionally stricter than Core's explicit include override. A
@@ -21,7 +21,7 @@ def exclusion_reason(item: Mapping[str, Any]) -> str | None:
         return "device_missing"
     if item.get("disabled_by") or item.get("device_disabled_by"):
         return "disabled"
-    if item.get("hidden_by"):
+    if item.get("hidden_by") and not allow_hidden:
         return "hidden"
     if item.get("entity_category") == "diagnostic":
         return "diagnostic"
@@ -70,7 +70,11 @@ def preview_bulk(
         raise ValueError("Der ausgewählte Knoten enthält keine Entitäten")
     if len(members) > MAX_BULK_SCOPE:
         raise ValueError("Der ausgewählte Knoten überschreitet die sichere Vorschaugrenze")
-    reasons = Counter(reason for item in members if (reason := exclusion_reason(item)))
-    eligible = [item["entity_id"] for item in members if exclusion_reason(item) is None]
+    # A direct entity selection is already an explicit user scope, so an
+    # enabled, compatible hidden entity may be selected. Device/area actions
+    # remain conservative and require a separate explicit individual choice.
+    allow_hidden = kind == "selection"
+    reasons = Counter(reason for item in members if (reason := exclusion_reason(item, allow_hidden=allow_hidden)))
+    eligible = [item["entity_id"] for item in members if exclusion_reason(item, allow_hidden=allow_hidden) is None]
     return {"total": len(members), "eligible_entity_ids": eligible,
             "skipped": dict(sorted(reasons.items())), "skipped_total": sum(reasons.values())}

@@ -69,6 +69,13 @@ jobs:
           python scripts/build_release.py --output /tmp/hkm-release-one
           python scripts/build_release.py --output /tmp/hkm-release-two
           cmp /tmp/hkm-release-one/*.zip /tmp/hkm-release-two/*.zip
+          sha256sum /tmp/hkm-release-one/*.zip > /tmp/hkm-release-one/homekit-manager-release.sha256
+      - name: Archive reproducible release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: homekit-manager-0.10.28-release
+          path: /tmp/hkm-release-one/
+          if-no-files-found: error
       - name: Install pinned browser dependencies for real backend E2E
         run: |
           npm ci

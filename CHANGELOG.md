@@ -1,5 +1,13 @@
 # Changelog
 
+# 0.10.24 (development)
+
+- Finalize the stable HACS product boundary against official Home Assistant Core.
+- Keep native UI↔YAML source migration unavailable in the stable integration.
+- Clarify that inventory, diagnostics, planning, preview and export are the
+  supported stable operations; productive HomeKit Apply remains authorization-
+  gated and fail-closed.
+
 # 0.10.18 (development)
 
 - Add a Core-owned rollback executor for unfinished UI↔YAML migrations.

@@ -1,6 +1,12 @@
-# HomeKit Manager 0.10.18 (development)
+# HomeKit Manager 0.10.24 (development)
 
-Version 0.10.18 adds an experimental Core-owned rollback executor around the
+Version 0.10.24 is the stable-product finalization line. It runs against the
+official Home Assistant Core and exposes inventory, diagnostics, planning,
+preview and export. Native UI↔YAML source migration remains permanently
+disabled in the stable integration; the experimental Core-owned migration
+prototype is not part of the HACS product path.
+
+Version 0.10.18 added an experimental Core-owned rollback executor around the
 existing migration boundary. It defines durable rollback, HAP verification and
 commit states, with full-Core SIGKILL coverage in both directions. Native
 migration remains disabled in the production Manager path.

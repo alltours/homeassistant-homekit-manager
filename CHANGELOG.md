@@ -1,5 +1,13 @@
 # Changelog
 
+# 0.10.28
+
+- Finalize the installable stable build for the official Home Assistant Core.
+- Verify the reproducible release package, read-only first start, persistent
+  upgrade path and real Core/HAP acceptance boundary.
+- Keep native UI↔YAML source migration, Config Entry source changes, pairing
+  changes and direct HAP persistence mutation disabled.
+
 # 0.10.27 (release candidate)
 
 - Finalize the official-Core release-candidate acceptance path.

@@ -1,4 +1,4 @@
-# HomeKit Manager 0.10.27 release-candidate acceptance
+# HomeKit Manager 0.10.28 stable acceptance
 
 This directory contains the isolated official-Core acceptance worker. It never
 uses the production configuration directory and does not install the
@@ -7,13 +7,13 @@ experimental Core patch.
 ## Reproduction
 
 ```text
-mkdir -p /tmp/hkm027-acceptance
-HKM_ACCEPTANCE_DIR=/tmp/hkm027-acceptance \
+mkdir -p /tmp/hkm028-acceptance
+HKM_ACCEPTANCE_DIR=/tmp/hkm028-acceptance \
 HKM_ACCEPTANCE_PHASE=pair_apply \
 PYTHONPATH=tests/integration:tests/acceptance \
 <official-core-venv>/bin/python tests/acceptance/real_core_hap_apply_026.py
 
-HKM_ACCEPTANCE_DIR=/tmp/hkm027-acceptance \
+HKM_ACCEPTANCE_DIR=/tmp/hkm028-acceptance \
 HKM_ACCEPTANCE_PHASE=reconnect \
 PYTHONPATH=tests/integration:tests/acceptance \
 <official-core-venv>/bin/python tests/acceptance/real_core_hap_apply_026.py
@@ -29,5 +29,5 @@ For the persistent upgrade check, stage the 0.10.24 component from the
 verified Git commit into a temporary directory, run the baseline with
 `HKM_ACCEPTANCE_SKIP_APPLY=1` and `HKM_ACCEPTANCE_COMPONENT_SOURCE=...`, then
 run the `reconnect` phase without that override. The reconnect phase installs
-the current 0.10.27 component into the same config directory and verifies the
+the current 0.10.28 component into the same config directory and verifies the
 original HAP pairings after a full Core restart.

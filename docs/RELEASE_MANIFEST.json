@@ -59,8 +59,8 @@
     },
     {
       "path": "core_migration.py",
-      "sha256": "bdbac0d68cdaa8376c7a6e010d462f98b1707223ea03b78f322a08bee4e08356",
-      "size": 4831
+      "sha256": "cce5e820cdd2ad3a2f1f15c408315eded070cff8fd562b43f8c00fea152e374d",
+      "size": 4902
     },
     {
       "path": "device_config.py",

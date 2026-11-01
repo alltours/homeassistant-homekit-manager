@@ -21,6 +21,16 @@ changes, pairing changes and direct HAP persistence mutation remain disabled.
 - Chromium and WebKit browser suites: **TEST VERIFIED**, 54 passed per engine.
 - HACS and Hassfest: **CI VERIFIED** in the final branch workflow.
 
+Final CI evidence:
+
+- Stable CI run `41312372680`: <https://github.com/alltours/homeassistant-homekit-manager/actions/runs/41312372680>
+- Quality: **CI VERIFIED**
+- Browser: **CI VERIFIED**
+- Official Core HAP acceptance: **CI VERIFIED**
+- HAP evidence artifact `official-core-hap-acceptance-027`: **CI VERIFIED**
+- HACS/Hassfest run `41312372606`: <https://github.com/alltours/homeassistant-homekit-manager/actions/runs/41312372606>
+- HACS and Hassfest: **CI VERIFIED**
+
 ## Explicit limitation
 
 An authenticated HACS UI installation and HACS UI upgrade were not executed in

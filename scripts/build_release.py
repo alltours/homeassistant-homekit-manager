@@ -7,6 +7,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import subprocess
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,8 +24,22 @@ def release_manifest(root: Path = ROOT) -> dict:
         raise ValueError("Python and integration versions disagree")
     if json.loads((root / "package.json").read_text())["version"] != version:
         raise ValueError("Frontend development version disagrees")
+    # A developer checkout may contain unrelated untracked files (for example
+    # editor copies or test artefacts).  Only tracked integration files may
+    # enter a release built from a Git worktree.  Temporary fixture trees used
+    # by unit tests have no .git directory and deliberately retain the strict
+    # filesystem scan below so unexpected files are still rejected there.
+    git_dir = root / ".git"
+    if git_dir.exists():
+        tracked = subprocess.check_output(
+            ["git", "-C", str(root), "ls-files", "--", str(SOURCE)],
+            text=True,
+        ).splitlines()
+        candidates = [root / item for item in tracked]
+    else:
+        candidates = [path for path in source.rglob("*") if path.is_file()]
     files = []
-    for path in sorted(source.rglob("*")):
+    for path in sorted(candidates):
         if path.is_dir() or "__pycache__" in path.parts:
             continue
         if path.suffix in {".pyc", ".pyo"}:

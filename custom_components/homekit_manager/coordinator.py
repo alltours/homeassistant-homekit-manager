@@ -410,6 +410,8 @@ class HomeKitManagerCoordinator:
             "snapshot_checks": dict(self.snapshot_checks),
             "diagnostics": diagnostics_summary(self.diagnostic_findings),
             "configuration_alignment": self.selection_reconciliation,
+            "open_selection_deviations": self.selection_reconciliation.get("deviation_count", 0),
+            "selection_deviation_summary": dict(self.selection_reconciliation.get("deviation_summary", {})),
             "desired_selection": self.selection_reconciliation.get("desired", {}),
             "native_selection": self.selection_reconciliation.get("native", {}),
             "active_publication": self.selection_reconciliation.get("active", {"state": "unknown"}),

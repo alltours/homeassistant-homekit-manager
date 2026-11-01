@@ -41,7 +41,11 @@ def test_fresh_release_extraction_has_installable_structure_and_compiles(tmp_pat
 
 
 def test_release_rejects_stale_manifest_and_unexpected_source_files(tmp_path):
-    shutil.copytree(release.ROOT / release.SOURCE, tmp_path / release.SOURCE, ignore=shutil.ignore_patterns("__pycache__"))
+    source = tmp_path / release.SOURCE
+    for item in release.release_manifest()["files"]:
+        target = source / item["path"]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(release.ROOT / release.SOURCE / item["path"], target)
     shutil.copy(release.ROOT / "package.json", tmp_path)
     (tmp_path / "docs").mkdir()
     shutil.copy(release.ROOT / release.MANIFEST, tmp_path / release.MANIFEST)

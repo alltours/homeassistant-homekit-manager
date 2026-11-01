@@ -148,6 +148,7 @@ def reconcile_selection(
     mismatch = bool(deviations) or (policy == "positive_list" and not native_known)
     classification_counts = dict(sorted(Counter(row["classification"] for row in deviations).items()))
     return {
+        "scope": "manager_native_runtime_selection",
         "policy": policy,
         "manager": {
             "includes": sorted(includes),
@@ -183,6 +184,7 @@ def reconcile_selection(
         },
         "deviations": deviations,
         "deviation_summary": classification_counts,
+        "deviation_count": len(deviations),
         "aligned": not mismatch,
         "state": "aligned" if not mismatch else "mismatch" if native_known else "unknown",
         "message": (

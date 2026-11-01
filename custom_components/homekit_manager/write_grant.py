@@ -15,7 +15,7 @@ import re
 import stat
 from typing import Any
 
-from .const import SUPPORTED_CORE_VERSION
+from .const import NATIVE_FILTER_WRITE_CORE_VERSIONS
 from .safety import has_extended_acl
 
 
@@ -107,7 +107,7 @@ def _read(path: Path) -> ProductionWriteGrant | None:
         raise GrantBlocked("HomeKit-Schreibfreigabe ist kein gültiges JSON") from err
     if not isinstance(data, dict) or set(data) != _KEYS:
         raise GrantBlocked("HomeKit-Schreibfreigabe enthält fehlende oder unbekannte Felder")
-    if type(data["version"]) is not int or data["version"] != 1 or data["core_version"] != SUPPORTED_CORE_VERSION:
+    if type(data["version"]) is not int or data["version"] != 1 or data["core_version"] not in NATIVE_FILTER_WRITE_CORE_VERSIONS:
         raise GrantBlocked("Version der HomeKit-Schreibfreigabe oder Core-Version passt nicht")
     if not isinstance(data["grant_id"], str) or re.fullmatch(r"[0-9a-f]{32}", data["grant_id"]) is None:
         raise GrantBlocked("HomeKit-Schreibfreigabe benötigt eine zufällige 128-Bit-ID")

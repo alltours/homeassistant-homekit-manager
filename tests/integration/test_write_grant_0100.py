@@ -36,10 +36,10 @@ from custom_components.homekit_manager.yaml_adapter import YamlAdapterBlocked, Y
 from file_helpers import secure_private_source
 
 
-def grant_data(entry_id: str, source: str = "user") -> dict:
+def grant_data(entry_id: str, source: str = "user", core_version: str = "2026.10.4") -> dict:
     now = datetime.now(UTC)
     return {"version": 1, "grant_id": uuid4().hex, "entry_id": entry_id, "source": source,
-            "core_version": "2026.10.4", "allowed_fields": ["filter"],
+            "core_version": core_version, "allowed_fields": ["filter"],
             "issued_at": (now - timedelta(minutes=1)).isoformat(),
             "expires_at": (now + timedelta(hours=1)).isoformat()}
 
@@ -111,6 +111,13 @@ async def test_grant_file_permissions_and_symlink_fail_closed(hass, tmp_path):
         await read_production_grant(hass)
 
 
+async def test_beta_core_grant_is_accepted(hass, tmp_path):
+    save_grant(tmp_path, grant_data("isolated-entry", core_version="2026.11.0b0"))
+    grant = await read_production_grant(hass)
+    assert grant is not None
+    assert grant.entry_id == "isolated-entry"
+
+
 @pytest.mark.skipif(sys.platform != "darwin", reason="macOS ACL semantics")
 async def test_macos_grant_acl_is_rejected(hass, tmp_path):
     save_grant(tmp_path, grant_data("isolated-entry"))
@@ -175,7 +182,7 @@ async def test_native_grant_revoked_while_waiting_for_bridge_lock(hass, tmp_path
         first_check.set()
 
     monkeypatch.setattr(ProductionWriteGrant, "verify", observe_verify)
-    lock = writer_module._locks.setdefault(entry.entry_id, asyncio.Lock())
+    lock = writer_module.lock_for(entry.entry_id)
     await lock.acquire()
     task = asyncio.create_task(HomeKitWriter(hass, production_grant=grant,
                                             expected_source_revision=native_source(entry, "2026.10.4").revision).async_apply(diff))

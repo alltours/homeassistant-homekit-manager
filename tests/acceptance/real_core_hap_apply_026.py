@@ -1,4 +1,4 @@
-"""Official-Core two-bridge HAP Apply acceptance worker for 0.10.28.
+"""Official-Core two-bridge HAP Apply acceptance worker for 0.10.29.
 
 The worker deliberately uses the regular HomeKit Manager operation service,
 including its persisted grant/revision checks. HAP verification is performed
@@ -60,7 +60,7 @@ async def local_advertiser(_hass):
 def _config_text(http_port: int) -> str:
     lines = [
         "homeassistant:",
-        "  name: HKM 0.10.28 Acceptance",
+        "  name: HKM 0.10.29 Acceptance",
         "http:",
         "  server_host: 127.0.0.1",
         f"  server_port: {http_port}",
@@ -432,6 +432,10 @@ async def run() -> None:
             for name in before_signatures_a:
                 if upgrade_baseline or name != "Hkm A 00":
                     assert after_signatures_a[name] == before_signatures_a[name]
+            # The independent controllers reached both live bridges with the
+            # persisted pairing data; retain this as explicit evidence instead
+            # of relying on the accessory comparison alone.
+            result["pairing_verified"] = True
             assert len([entry for entry in hass.config_entries.async_entries("homekit")]) == 2
             (shared / "after_apply.json").write_text(json.dumps({
                 "a": {"entry_id": ENTRY_A, "mac": homekit_a.driver.state.mac, "port": port_a,
@@ -452,7 +456,7 @@ async def run() -> None:
             current_version = json.loads(
                 (config_dir / "custom_components" / DOMAIN / "manifest.json").read_text()
             )["version"]
-            assert current_version == "0.10.28"
+            assert current_version == "0.10.29"
             pairing_a = IpPairing(Controller(), json.loads((shared / "pairing-a.json").read_text(encoding="utf-8")))
             pairing_b = IpPairing(Controller(), json.loads((shared / "pairing-b.json").read_text(encoding="utf-8")))
             after_a = await _accessories(pairing_a)

@@ -1,5 +1,14 @@
 # Changelog
 
+# 0.10.29
+
+## Stabilization and diagnostic clarity
+
+- Distinguishes selection-reconciliation deviations from technical diagnostic findings.
+- Exposes stable reconciliation scopes and category counts in the backend snapshot.
+- Clarifies that open selection deviations are not a count of unsupported entities or stale filter references.
+- Keeps native UI↔YAML source migration disabled and the production write boundary fail-closed.
+
 # 0.10.28
 
 - Finalize the installable stable build for the official Home Assistant Core.

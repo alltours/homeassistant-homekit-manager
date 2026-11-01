@@ -118,7 +118,7 @@ async def test_revocation_while_waiting_for_native_lock_prevents_mutation(hass, 
     diff = OptionsDiff(entry.entry_id, {"filter": before},
                        {"filter": {"include_entities": ["light.after"]}},
                        ("filter",), ("light.after",), {"summary": {"blocked": False}})
-    lock = writer_module._locks.setdefault(entry.entry_id, asyncio.Lock())
+    lock = writer_module.lock_for(entry.entry_id)
     first_check = asyncio.Event()
     original_verify = ModeAuthority.verify
 

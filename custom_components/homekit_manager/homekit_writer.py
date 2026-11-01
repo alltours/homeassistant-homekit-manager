@@ -59,8 +59,20 @@ _FILTER_LIST_KEYS = (
     "include_entities", "exclude_entities", "include_domains", "exclude_domains",
     "include_entity_globs", "exclude_entity_globs",
 )
-_locks: dict[str, asyncio.Lock] = {}
+_locks: dict[tuple[str, int], asyncio.Lock] = {}
 ACTIVATION_TIMEOUT = 30.0
+
+
+def lock_for(entry_id: str) -> asyncio.Lock:
+    """Return the bridge lock for the currently running Home Assistant loop.
+
+    Home Assistant has one long-lived loop, while pytest creates a fresh loop
+    for each async test. Keying by loop identity prevents an unlocked asyncio
+    lock from being reused after its loop has been closed without weakening
+    serialization within a live Core process.
+    """
+    key = (entry_id, id(asyncio.get_running_loop()))
+    return _locks.setdefault(key, asyncio.Lock())
 
 
 def _has_broad_rules(config: Mapping[str, Any]) -> bool:
@@ -307,7 +319,7 @@ class HomeKitWriter:
             FILTER_SCHEMA(dict(candidate_filter))
         except Exception as err:
             raise HomeKitWriteBlocked("HomeKit-Core-Filter-Schema lehnt den Diff ab") from err
-        lock = _locks.setdefault(diff.entry_id, asyncio.Lock())
+        lock = lock_for(diff.entry_id)
         async with lock:
             # The grant may have expired or been revoked while another apply
             # held this bridge lock. Recheck before the Core mutation.

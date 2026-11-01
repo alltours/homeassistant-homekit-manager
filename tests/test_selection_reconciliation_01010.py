@@ -57,6 +57,8 @@ class SelectionReconciliation01010Tests(unittest.TestCase):
         })
 
         self.assertEqual(result["differences"]["count"], 60)
+        self.assertEqual(result["scope"], "manager_native_runtime_selection")
+        self.assertEqual(result["deviation_count"], 60)
         self.assertEqual(result["deviation_summary"], {
             "manager_exclude_native": 54,
             "native_explicit_unmanaged": 6,
@@ -75,6 +77,7 @@ class SelectionReconciliation01010Tests(unittest.TestCase):
             {"include_domains": ["light"]},
         )
         self.assertEqual(result["differences"]["count"], 2)
+        self.assertEqual(result["deviation_count"], 2)
         self.assertEqual(result["manager"]["stale_decisions"], ["sensor.gone"])
         self.assertEqual(result["manager"]["invalid_decisions"], ["sensor.invalid"])
 

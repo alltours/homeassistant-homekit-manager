@@ -1,5 +1,13 @@
 # Changelog
 
+# 0.10.27 (release candidate)
+
+- Finalize the official-Core release-candidate acceptance path.
+- Re-run authenticated WebSocket Apply, independent HAP verification and
+  multi-bridge isolation against the unchanged Stable product boundary.
+- Keep native UI↔YAML source migration, pairing changes and HAP persistence
+  mutation disabled.
+
 # 0.10.26 (development)
 
 - Add the real-world installation, upgrade and HAP Apply acceptance gate.

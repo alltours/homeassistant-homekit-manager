@@ -1,4 +1,4 @@
-"""Official-Core two-bridge HAP Apply acceptance worker for 0.10.26.
+"""Official-Core two-bridge HAP Apply acceptance worker for 0.10.27.
 
 The worker deliberately uses the regular HomeKit Manager operation service,
 including its persisted grant/revision checks. HAP verification is performed
@@ -28,9 +28,9 @@ from homeassistant.components.homekit import HomeKit
 from homeassistant.runner import RuntimeConfig
 from port_allocator import reserve_hap_port, reserve_http_port
 
-ENTRY_A = "acceptance-bridge-a-026"
-ENTRY_B = "acceptance-bridge-b-026"
-MANAGER_ENTRY = "acceptance-manager-026"
+ENTRY_A = "acceptance-bridge-a-027"
+ENTRY_B = "acceptance-bridge-b-027"
+MANAGER_ENTRY = "acceptance-manager-027"
 DOMAIN = "homekit_manager"
 A_IDS = tuple(f"input_boolean.hkm_a_{index:02d}" for index in range(25))
 B_IDS = tuple(f"input_boolean.hkm_b_{index:02d}" for index in range(25))
@@ -60,7 +60,7 @@ async def local_advertiser(_hass):
 def _config_text(http_port: int) -> str:
     lines = [
         "homeassistant:",
-        "  name: HKM 0.10.26 Acceptance",
+        "  name: HKM 0.10.27 Acceptance",
         "http:",
         "  server_host: 127.0.0.1",
         f"  server_port: {http_port}",
@@ -103,7 +103,7 @@ def _write_grant(config_dir: Path, entry_id: str) -> None:
     now = datetime.now(UTC)
     payload = {
         "version": 1,
-        "grant_id": "02602602602602602602602602602602",
+        "grant_id": "02702702702702702702702702702702",
         "entry_id": entry_id,
         "source": "user",
         "core_version": "2026.10.4",
@@ -352,8 +352,8 @@ async def run() -> None:
         assert homekit_a.status == 1 and homekit_b.status == 1
 
         if phase == "pair_apply":
-            pairing_a = await _pair(hass, homekit_a, "hkm-acceptance-a-026")
-            pairing_b = await _pair(hass, homekit_b, "hkm-acceptance-b-026")
+            pairing_a = await _pair(hass, homekit_a, "hkm-acceptance-a-027")
+            pairing_b = await _pair(hass, homekit_b, "hkm-acceptance-b-027")
             before_a = await _accessories(pairing_a)
             before_b = await _accessories(pairing_b)
             (shared / "pairing-a.json").write_text(json.dumps(pairing_a.pairing_data), encoding="utf-8")
@@ -452,7 +452,7 @@ async def run() -> None:
             current_version = json.loads(
                 (config_dir / "custom_components" / DOMAIN / "manifest.json").read_text()
             )["version"]
-            assert current_version == "0.10.26"
+            assert current_version == "0.10.27"
             pairing_a = IpPairing(Controller(), json.loads((shared / "pairing-a.json").read_text(encoding="utf-8")))
             pairing_b = IpPairing(Controller(), json.loads((shared / "pairing-b.json").read_text(encoding="utf-8")))
             after_a = await _accessories(pairing_a)

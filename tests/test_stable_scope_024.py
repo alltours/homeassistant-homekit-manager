@@ -1,4 +1,4 @@
-"""Stable product boundary regression tests for 0.10.26."""
+"""Stable product boundary regression tests for 0.10.27."""
 
 import json
 from pathlib import Path
@@ -17,7 +17,7 @@ def test_stable_version_metadata_is_consistent():
         )
     )
     package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
-    assert manifest["version"] == "0.10.26"
+    assert manifest["version"] == "0.10.27"
     assert manifest["version"] == INTEGRATION_VERSION == package["version"]
 
 

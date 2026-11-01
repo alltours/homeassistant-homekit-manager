@@ -14,6 +14,7 @@ import socket
 from aiohomekit.controller.controller import Controller
 from aiohomekit.controller.ip.discovery import IpDiscovery
 from aiohomekit.controller.ip.pairing import IpPairing
+from aiohomekit.exceptions import AuthenticationError
 from aiohomekit.zeroconf import HomeKitService
 from homeassistant import config_entries
 import pytest
@@ -100,12 +101,20 @@ async def test_worker(hass, monkeypatch, socket_enabled):
 
     controller = Controller()
     if phase == "pair":
-        discovery = IpDiscovery(controller, HomeKitService.from_service_info(homekit.driver.mdns_service_info))
-        try:
-            finish = await asyncio.wait_for(discovery.async_start_pairing("isolated-restart"), 10)
-            pairing = await asyncio.wait_for(finish(homekit.driver.state.pincode.decode()), 10)
-        finally:
-            await discovery.close()
+        for attempt in range(1, 3):
+            controller = Controller()
+            discovery = IpDiscovery(controller, HomeKitService.from_service_info(homekit.driver.mdns_service_info))
+            try:
+                finish = await asyncio.wait_for(discovery.async_start_pairing("isolated-restart"), 10)
+                pairing = await asyncio.wait_for(finish(homekit.driver.state.pincode.decode()), 10)
+            except AuthenticationError:
+                if attempt == 2:
+                    raise
+                await asyncio.sleep(0.05)
+            else:
+                break
+            finally:
+                await discovery.close()
         await hass.async_add_executor_job(homekit.driver.persist)
     else:
         assert homekit.driver.state.paired

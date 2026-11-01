@@ -1,6 +1,8 @@
 """Full-Core crash tests for the Core-owned transaction protocol v2."""
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import pytest
@@ -26,6 +28,19 @@ def test_protocol_v2_wal_boundaries_recover_or_block_safely(
             expected_source = "import" if direction == "ui_to_yaml" else "user"
         else:
             expected_source = "user" if direction == "ui_to_yaml" else "import"
+        if fault in {"AFTER_PREPARE_DURABLE", "AFTER_SOURCE_SWITCH_PENDING"}:
+            # These boundaries do not provide a verified target state. The
+            # 0.10.22 Core requires an explicit next transaction rather than
+            # publishing a bridge while the request is unfinished.
+            recovered = _run(directory, direction, "security_verify")
+            assert recovered.returncode == 0, recovered.stdout + recovered.stderr
+            evidence = json.loads(
+                (Path(directory) / "security-observation.json").read_text(encoding="utf-8")
+            )
+            assert evidence["journal"]["state"] == "MANUAL_RECOVERY_REQUIRED", evidence
+            assert evidence["reconnect"]["Bridge A"]["ok"] is False, evidence
+            assert evidence["reconnect"]["Bridge B"]["ok"] is True, evidence
+            return
         recovered = _run(directory, direction, "verify", expected_source=expected_source)
         assert recovered.returncode == 0, recovered.stdout + recovered.stderr
 

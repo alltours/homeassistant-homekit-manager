@@ -197,7 +197,13 @@ jobs:
         run: |
           set -euo pipefail
           tampered="$RUNNER_TEMP/hkm-core-tampered.patch"
-          cp .ci/experimental-core/hkm-core-2026.10.4-0.10.20.patch "$tampered"
+          patch_file="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          print(Path('.ci/experimental-core') / json.loads(Path('.ci/experimental-core/manifest.json').read_text())['patch_file'])
+          PY
+          )"
+          cp "$patch_file" "$tampered"
           printf '\n# tampered\n' >> "$tampered"
           if python scripts/verify_experimental_core_patch.py \
             --verify-only \

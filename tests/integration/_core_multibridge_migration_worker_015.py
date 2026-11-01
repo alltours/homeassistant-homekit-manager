@@ -270,9 +270,64 @@ async def _read_with_pairing(shared: Path, label: str) -> list[dict]:
         ),
     )
     try:
-        return await asyncio.wait_for(pairing.list_accessories_and_characteristics(), 10)
+        for attempt in range(2):
+            try:
+                return await asyncio.wait_for(
+                    pairing.list_accessories_and_characteristics(), 10
+                )
+            except TimeoutError:
+                if attempt == 1:
+                    raise
+                # A Core restart can finish ConfigEntry loading before the HAP
+                # listener is accepting connections. This is a bounded
+                # bootstrap retry, not an assertion retry or re-pairing.
+                await asyncio.sleep(0.2)
     finally:
         await pairing.shutdown()
+
+
+async def _security_observe(shared: Path, hass) -> None:
+    """Collect mutation observations without blessing a damaged bridge."""
+    entries = hass.config_entries.async_entries("homekit")
+    observations: dict[str, dict] = {}
+    for entry in entries:
+        homekit = getattr(getattr(entry, "runtime_data", None), "homekit", None)
+        observations[entry.data.get("name", entry.entry_id)] = {
+            "entry_id": entry.entry_id,
+            "source": entry.source,
+            "state": entry.state.value,
+            "homekit_status": getattr(homekit, "status", None),
+            "driver_started": bool(getattr(homekit, "driver", None) and getattr(homekit.driver, "accessory", None)),
+        }
+
+    reconnect: dict[str, dict] = {}
+    for name in ("Bridge A", "Bridge B"):
+        try:
+            accessories = await _read_with_pairing(shared, name)
+        except Exception as err:  # noqa: BLE001 - the negative control records the outcome
+            reconnect[name] = {"ok": False, "error": type(err).__name__}
+        else:
+            reconnect[name] = {
+                "ok": True,
+                "accessory_signature": _accessory_signature(accessories),
+                "accessory_count": len(accessories),
+            }
+
+    safe_observation = {
+        "migration": dict(hass.data.get("homekit_migration", {})),
+        "journal": json.loads(
+            (shared / ".storage" / "homekit.migration").read_text(encoding="utf-8")
+        )["data"],
+        "entry_count": len(entries),
+        "active_bridge_count": sum(
+            item["homekit_status"] == 1 for item in observations.values()
+        ),
+        "entries": observations,
+        "reconnect": reconnect,
+    }
+    (shared / "security-observation.json").write_text(
+        json.dumps(safe_observation, sort_keys=True), encoding="utf-8"
+    )
 
 
 def _save_baseline(shared: Path, name: str, pairing_data: dict, observed: dict) -> None:
@@ -403,6 +458,10 @@ async def run() -> None:
 
         await hass.async_start()
         await hass.async_block_till_done()
+        if phase == "security_verify":
+            await _security_observe(shared, hass)
+            await hass.async_stop(force=True)
+            return
         if phase == "verify_corrupt":
             observation = hass.data.get("homekit_migration", {})
             assert observation.get("action") == "manual_recovery", observation
@@ -419,8 +478,6 @@ async def run() -> None:
             )
             entry_a = entries["Bridge A"]
             baseline = _load_baseline(shared, "Bridge A")
-            await hass.config_entries.async_unload(entry_a.entry_id)
-            await hass.async_block_till_done()
             target = (
                 config_entries.SOURCE_IMPORT
                 if direction == "ui_to_yaml"
@@ -450,6 +507,8 @@ async def run() -> None:
             prepared = await async_prepare(hass, request)
             if prepared.get("state") != "PREPARED":
                 raise RuntimeError(f"HomeKit migration prepare failed: {prepared!r}")
+            await hass.config_entries.async_unload(entry_a.entry_id)
+            await hass.async_block_till_done()
             if target == config_entries.SOURCE_IMPORT:
                 write_configuration(shared, yaml_bridge=True, name=name, port=entry_a.data["port"])
             switched = await async_switch(hass, request["transaction_id"])

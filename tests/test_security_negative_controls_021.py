@@ -16,8 +16,10 @@ import pytest
 
 
 ROOT = Path(__file__).parents[1]
-PATCH = ROOT / ".ci/experimental-core/hkm-core-2026.10.4-0.10.20.patch"
 MANIFEST = ROOT / ".ci/experimental-core/manifest.json"
+PATCH = ROOT / ".ci/experimental-core" / json.loads(
+    MANIFEST.read_text(encoding="utf-8")
+)["patch_file"]
 VERIFY = ROOT / "scripts/verify_experimental_core_patch.py"
 
 

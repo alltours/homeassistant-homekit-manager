@@ -76,7 +76,7 @@ async def async_prepare(hass: Any, request: Mapping[str, Any]) -> dict[str, Any]
         return {
             "supported": True,
             "state": "BLOCKED",
-            "reason": type(err).__name__,
+            "reason": f"{type(err).__name__}: {err}",
         }
     return {"supported": True, "state": "PREPARED", **result}
 
@@ -93,7 +93,11 @@ async def async_switch(hass: Any, transaction_id: str) -> dict[str, Any]:
     try:
         entry = await api.async_switch_source(hass, transaction_id)
     except Exception as err:  # noqa: BLE001  # Never turn an uncertain result into success.
-        return {"supported": True, "state": "BLOCKED", "reason": type(err).__name__}
+        return {
+            "supported": True,
+            "state": "BLOCKED",
+            "reason": f"{type(err).__name__}: {err}",
+        }
     return {
         "supported": True,
         "state": "SOURCE_SWITCHED",

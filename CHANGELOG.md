@@ -1,5 +1,14 @@
 # Changelog
 
+# 0.10.25 (development)
+
+- Add the final stable installation, upgrade and HAP allowlist acceptance
+  gate for an unmodified official Home Assistant Core.
+- Keep native UI↔YAML source migration, pairing changes and HAP persistence
+  mutation unavailable in the stable integration.
+- Document the distinction between a real HACS installation, a compatible
+  package extraction and isolated acceptance limitations.
+
 # 0.10.24 (development)
 
 - Finalize the stable HACS product boundary against official Home Assistant Core.

@@ -38,6 +38,9 @@ def _run(
     if fault:
         environment["HKM_CORE_MIGRATION_TEST_MODE"] = "1"
         environment["HKM_CORE_MIGRATION_TEST_FAULT"] = fault
+        environment["HKM_CORE_MIGRATION_FAULT_MARKER"] = str(
+            Path(directory) / "fault-reached"
+        )
     if error_name:
         environment["HKM_CORE_MIGRATION_TEST_ERRNO"] = error_name
     if expected_source:

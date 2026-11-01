@@ -43,7 +43,7 @@ def test_core_journal_write_fault_keeps_both_bridges_safe(
         assert recovered.returncode == 0, recovered.stdout + recovered.stderr
 
 
-def test_corrupt_core_journal_blocks_only_the_pending_bridge() -> None:
+def test_corrupt_core_journal_blocks_native_publication_fail_closed() -> None:
     direction = "ui_to_yaml"
     with TemporaryDirectory(prefix="hkm-core-persist-016-corrupt-journal-") as directory:
         assert _run(directory, direction, "pair").returncode == 0

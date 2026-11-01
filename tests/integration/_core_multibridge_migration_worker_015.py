@@ -313,11 +313,16 @@ async def _security_observe(shared: Path, hass) -> None:
                 "accessory_count": len(accessories),
             }
 
+    try:
+        journal = json.loads(
+            (shared / ".storage" / "homekit.migration").read_text(encoding="utf-8")
+        )["data"]
+    except (OSError, TypeError, ValueError, json.JSONDecodeError) as err:
+        journal = {"parse_error": type(err).__name__}
+
     safe_observation = {
         "migration": dict(hass.data.get("homekit_migration", {})),
-        "journal": json.loads(
-            (shared / ".storage" / "homekit.migration").read_text(encoding="utf-8")
-        )["data"],
+        "journal": journal,
         "entry_count": len(entries),
         "active_bridge_count": sum(
             item["homekit_status"] == 1 for item in observations.values()
@@ -466,6 +471,14 @@ async def run() -> None:
             observation = hass.data.get("homekit_migration", {})
             assert observation.get("action") == "manual_recovery", observation
             assert observation.get("state") == "MANUAL_RECOVERY_REQUIRED", observation
+            # An unreadable or untrusted journal has no bridge identity.  The
+            # Core therefore blocks native YAML publication globally rather
+            # than guessing which entry is affected.  Record that safe
+            # fail-closed result without requiring either controller to
+            # reconnect to a deliberately blocked bridge.
+            await _security_observe(shared, hass)
+            await hass.async_stop(force=True)
+            return
         if phase in {"migrate", "rollback"}:
             entries = await wait_for_entries(
                 hass,

@@ -1,5 +1,12 @@
 # Changelog
 
+# 0.10.26 (development)
+
+- Add the real-world installation, upgrade and HAP Apply acceptance gate.
+- Keep native UI↔YAML source migration and pairing changes disabled.
+- Require independent HAP verification before treating a Stable Apply as
+  accepted.
+
 # 0.10.25 (development)
 
 - Add the final stable installation, upgrade and HAP allowlist acceptance

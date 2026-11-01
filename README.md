@@ -1,6 +1,6 @@
-# HomeKit Manager 0.10.25 (development)
+# HomeKit Manager 0.10.26 (development)
 
-Version 0.10.25 is the stable-product acceptance line. It runs against the
+Version 0.10.26 is the stable-product acceptance line. It runs against the
 official Home Assistant Core and exposes inventory, diagnostics, planning,
 preview and export. Native UI↔YAML source migration remains permanently
 disabled in the stable integration; the experimental Core-owned migration

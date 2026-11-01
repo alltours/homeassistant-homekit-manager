@@ -1,11 +1,11 @@
 {
-  "integration_version": "0.10.25",
+  "integration_version": "0.10.26",
   "file_count": 58,
   "files": [
     {
       "path": "__init__.py",
-      "sha256": "0558173a988fa48a08acd1630a6c24bbc88409bfd563b3b15fb7ee6cd754b75f",
-      "size": 2990
+      "sha256": "9f82b6d96f7b1e1fa31f30a0ec5a6827660a82ef13f201ad6230cec3c068e3b9",
+      "size": 2978
     },
     {
       "path": "activation_store.py",
@@ -44,7 +44,7 @@
     },
     {
       "path": "const.py",
-      "sha256": "7a350963834fd0e29239a3c71e5f02ed0ddb4df9e0fa4fd8020bdf249ca78610",
+      "sha256": "405ba7ac841373fabbf5145d5b25eddb53368fb80b5618fc1fb555671a69f680",
       "size": 2747
     },
     {
@@ -144,7 +144,7 @@
     },
     {
       "path": "manifest.json",
-      "sha256": "9b89909a30ba4ba64a24e45b59ed7d13aadeb6fdd4617e423c4a5e77ce94bbe3",
+      "sha256": "c83d7e75c7286b69d45422dacf3090e59aa6fa0dd6256f5f060bff78cc0fdcd8",
       "size": 517
     },
     {

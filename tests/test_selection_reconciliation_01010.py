@@ -11,9 +11,9 @@ if package not in sys.modules:
     module.__path__ = [str(Path(__file__).parents[1] / "custom_components" / "homekit_manager")]
     sys.modules[package] = module
 
-from custom_components.homekit_manager.bulk import preview_bulk
-from custom_components.homekit_manager.change_planner import plan_changes
-from custom_components.homekit_manager.selection_reconciliation import reconcile_selection
+from custom_components.homekit_manager.bulk import preview_bulk  # noqa: E402
+from custom_components.homekit_manager.change_planner import plan_changes  # noqa: E402
+from custom_components.homekit_manager.selection_reconciliation import reconcile_selection  # noqa: E402
 
 
 def entity(

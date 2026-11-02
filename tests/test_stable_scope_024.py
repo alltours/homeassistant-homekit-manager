@@ -10,8 +10,8 @@ if package not in sys.modules:
     module.__path__ = [str(Path(__file__).parents[1] / "custom_components" / "homekit_manager")]
     sys.modules[package] = module
 
-from custom_components.homekit_manager.const import INTEGRATION_VERSION
-from custom_components.homekit_manager.migration import build_migration_matrix
+from custom_components.homekit_manager.const import INTEGRATION_VERSION  # noqa: E402
+from custom_components.homekit_manager.migration import build_migration_matrix  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[1]

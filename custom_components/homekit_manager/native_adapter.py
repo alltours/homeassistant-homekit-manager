@@ -184,8 +184,15 @@ class NativeHomeKitAdapter:
         return "unknown_outcome"
 
     async def recover(self, plan: NativeFilterPlan) -> str:
-        """Isolated option reversal with native/HAP identity verification."""
-        if not self._isolated_test_authority:
+        """Restore the exact preimage after an explicitly confirmed apply.
+
+        Recovery is deliberately narrower than a new apply: the current entry
+        must still equal this operation's verified target.  A production grant
+        is re-read by ``HomeKitWriter`` at the mutation boundary, so a changed
+        or revoked grant fails closed.  The method never guesses after an
+        unknown outcome.
+        """
+        if not self._isolated_test_authority and self._production_grant is None:
             from .homekit_writer import HomeKitWriteDisabled
             from .safety import WRITE_LOCK_REASON
             raise HomeKitWriteDisabled(WRITE_LOCK_REASON)
@@ -193,7 +200,14 @@ class NativeHomeKitAdapter:
             raise HomeKitWriteBlocked("Aktuelle native Optionen entsprechen nicht exakt dem Plan")
         inverse = OptionsDiff(plan.entry_id, deepcopy(plan.diff.after), deepcopy(plan.diff.before),
                               plan.diff.changed_keys, plan.diff.changed_entities, plan.diff.plan)
-        await HomeKitWriter(self.hass, test_environment=True, apply_enabled=True).async_apply(inverse)
+        current = self.read(plan.entry_id)
+        await HomeKitWriter(
+            self.hass,
+            test_environment=self._isolated_test_authority,
+            apply_enabled=self._isolated_test_authority,
+            production_grant=self._production_grant,
+            expected_source_revision=current.revision,
+        ).async_apply(inverse)
         restored = self.hass.config_entries.async_get_entry(plan.entry_id)
         restored_filter = dict(restored.options).get("filter") if restored else None
         if restored is None or restored_filter != plan.diff.before.get("filter") or getattr(restored.state, "value", restored.state) != "loaded":

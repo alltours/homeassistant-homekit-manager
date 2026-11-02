@@ -63,7 +63,7 @@ class HomeKitOperationService:
             return {"enabled": False, "reason": "Filter-Apply ist für diese Quelle/Core-Version nicht verifiziert", "automatic_retry": False}
         records = await self._records()
         if any(isinstance(item, dict) and item.get("entry_id") == entry_id
-               and item.get("state") in {"applying", "prepared", "unknown_outcome"}
+               and item.get("state") in {"applying", "prepared", "unknown_outcome", "rolling_back", "rollback_unknown"}
                for item in records.values()):
             return {"enabled": False, "reason": "Früheren ungeklärten Vorgang zuerst lesend abgleichen", "automatic_retry": False}
         if source == "import":
@@ -124,7 +124,12 @@ class HomeKitOperationService:
             "change_type": "filter",
             "grant_id": grant_id or previous.get("grant_id"),
             "target_revision": plan.payload.target_revision if isinstance(plan.payload, YamlFilterPlan) else None,
-            "target_filter": dict(plan.payload.after_filter) if isinstance(plan.payload, YamlFilterPlan) else None,
+            "before_filter": dict(plan.payload.diff.before.get("filter", {})) if isinstance(plan.payload, NativeFilterPlan) else None,
+            "target_filter": (
+                dict(plan.payload.diff.after.get("filter", {}))
+                if isinstance(plan.payload, NativeFilterPlan)
+                else dict(plan.payload.after_filter) if isinstance(plan.payload, YamlFilterPlan) else None
+            ),
             "source_file": plan.payload.source_path.name if isinstance(plan.payload, YamlFilterPlan) else None,
             "state": state,
             "detail": detail,
@@ -134,7 +139,7 @@ class HomeKitOperationService:
 
     @staticmethod
     def _public(record: Mapping[str, Any]) -> dict[str, Any]:
-        return {key: value for key, value in record.items() if key not in {"target_filter", "source_file"}} | {"automatic_retry": False}
+        return {key: value for key, value in record.items() if key not in {"before_filter", "target_filter", "source_file"}} | {"automatic_retry": False}
 
     async def plan_filter(self, *, entry_id: str, bridge: Mapping[str, Any], document: Mapping[str, Any], inventory: list[Mapping[str, Any]]) -> dict[str, Any]:
         """Validate exact source and produce a server-held plan without writing."""
@@ -190,7 +195,7 @@ class HomeKitOperationService:
 
     async def status(self, operation_id: str) -> dict[str, Any] | None:
         record = (await self._records()).get(operation_id)
-        if record and record.get("state") in {"applying", "prepared"} and operation_id not in self._plans:
+        if record and record.get("state") in {"applying", "prepared", "rolling_back"} and operation_id not in self._plans:
             return self._public(record | {"state": "unknown_outcome"})
         return self._public(record) if record else None
 
@@ -238,6 +243,50 @@ class HomeKitOperationService:
                                   detail=None if result_state == "verified" else "Native Optionen verifiziert; laufende HAP-Veröffentlichung nicht vollständig lesbar")
             return {"operation_id": plan.operation_id, "entry_id": plan.entry_id, "state": result_state,
                     "runtime_verification": runtime_verification, "pairing_verified": False}
+
+    async def rollback(self, operation_id: str, *, entry_id: str,
+                       confirmed_operation_id: str, admin: bool = False) -> dict[str, Any]:
+        """Restore one verified native operation, never an arbitrary filter.
+
+        The operation must have completed successfully and the live native
+        filter must still equal the exact target written by that operation.
+        YAML source rollback remains isolated-only because Core reload scope is
+        not production-safe on the supported Core versions.
+        """
+        if not admin or not operation_id or confirmed_operation_id != operation_id:
+            raise HomeKitWriteBlocked("Adminberechtigung und Bestätigung der konkreten Operation erforderlich")
+        async with self._lock:
+            plan = self._plans.get(operation_id)
+            record = (await self._records()).get(operation_id)
+            if plan is None or record is None or record.get("state") not in {"verified", "verification_incomplete"}:
+                raise HomeKitWriteBlocked("Nur ein vollständig verifiziertes Apply kann wiederhergestellt werden")
+            if plan.entry_id != entry_id:
+                raise HomeKitWriteBlocked("Bridge weicht vom bestätigten Vorgang ab")
+            if not isinstance(plan.payload, NativeFilterPlan):
+                raise HomeKitWriteBlocked("YAML-Quellenrollback ist im produktiven Workflow gesperrt")
+            policy = await self.authority_status(entry_id, plan.source)
+            if not policy["enabled"]:
+                raise HomeKitWriteDisabled(policy["reason"])
+            if plan.authority_kind != policy.get("authority") or plan.authority_id != policy.get("grant_id"):
+                raise HomeKitWriteDisabled("Schreibfreigabe hat sich seit dem Apply geändert")
+            grant = None if self._isolated_write_authority else await self._production_grant(entry_id, plan.source)
+            await self._set_state(plan, "rolling_back", grant_id=grant.grant_id if grant else None)
+            try:
+                adapter = NativeHomeKitAdapter(
+                    self.hass,
+                    isolated_test_authority=self._isolated_write_authority,
+                    production_grant=grant,
+                )
+                state = await adapter.recover(plan.payload)
+                if state != "verified_options_restore":
+                    raise HomeKitWriteBlocked("Wiederherstellung wurde nicht verifiziert")
+            except Exception:
+                await self._set_state(plan, "rollback_unknown", detail="Wiederherstellung lesend abgleichen; kein automatischer Retry")
+                raise
+            await self._set_state(plan, "rolled_back")
+            return {"operation_id": operation_id, "entry_id": entry_id,
+                    "state": "rolled_back", "pairing_verified": False,
+                    "automatic_retry": False}
 
     async def reconcile(self, operation_id: str) -> dict[str, Any]:
         """Read actual state after a lost response; never call a writer."""

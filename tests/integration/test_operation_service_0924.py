@@ -162,3 +162,35 @@ async def test_reconcile_waits_for_running_native_apply(hass, monkeypatch):
     release.set()
     assert (await applying)["state"] == "verification_incomplete"
     assert (await reconciling)["state"] == "verified"
+
+
+async def test_verified_native_operation_can_be_explicitly_restored(hass, monkeypatch):
+    async def no_network_start(_self):
+        return None
+    monkeypatch.setattr("homeassistant.components.homekit.HomeKit.async_start", no_network_start)
+    monkeypatch.setattr("homeassistant.components.homekit.async_port_is_available", lambda _port: True)
+    entry = config_entries.ConfigEntry(
+        version=1, minor_version=1, domain="homekit", title="Rollback Native",
+        data={"name": "Rollback Native", "port": 21088},
+        options={"mode": "bridge", "filter": {"include_entities": ["light.before"]}},
+        source=config_entries.SOURCE_USER, entry_id="rollback-native", unique_id=None,
+        discovery_keys={}, subentries_data=None,
+    )
+    await hass.config_entries.async_add(entry)
+    await hass.async_block_till_done()
+    service = HomeKitOperationService(hass, isolated_write_authority=True)
+    bridge = {"entry_id": entry.entry_id, "source": "user", "filter": dict(entry.options["filter"])}
+    plan = await service.plan_filter(entry_id=entry.entry_id, bridge=bridge,
+                                    document=desired(entry.entry_id), inventory=inventory())
+    applied = await service.apply(plan["operation_id"], entry_id=entry.entry_id,
+                                  expected_revision=plan["source_revision"],
+                                  confirmed_operation_id=plan["operation_id"], admin=True)
+    assert applied["state"] == "verification_incomplete"
+    restored = await service.rollback(plan["operation_id"], entry_id=entry.entry_id,
+                                      confirmed_operation_id=plan["operation_id"], admin=True)
+    assert restored["state"] == "rolled_back"
+    assert entry.options["filter"]["include_entities"] == ["light.before"]
+    assert (await service.status(plan["operation_id"]))["state"] == "rolled_back"
+    with pytest.raises(HomeKitWriteBlocked, match="vollständig verifiziert"):
+        await service.rollback(plan["operation_id"], entry_id=entry.entry_id,
+                               confirmed_operation_id=plan["operation_id"], admin=True)

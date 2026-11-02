@@ -33,6 +33,10 @@ async def test_every_manager_websocket_route_rejects_authenticated_non_admin(
             "operation_id": "none", "entry_id": "none", "source_revision": "none",
             "expected_fingerprint": "none", "confirmed_operation_id": "none",
         },
+        "homekit_manager/operation_rollback": {
+            "operation_id": "none", "entry_id": "none",
+            "expected_fingerprint": "none", "confirmed_operation_id": "none",
+        },
         "homekit_manager/operation_status": {"operation_id": "none"},
         "homekit_manager/operation_reconcile": {"operation_id": "none"},
         "homekit_manager/test_write_mode_enable": {
@@ -50,7 +54,7 @@ async def test_every_manager_websocket_route_rejects_authenticated_non_admin(
         args[command] = {"document": document}
 
     routes = {handler._ws_command for handler in REGISTERED_HANDLERS}
-    assert len(routes) == len(REGISTERED_HANDLERS) == 37
+    assert len(routes) == len(REGISTERED_HANDLERS) == 38
     for route in sorted(routes):
         await client.send_json_auto_id({"type": route, **args.get(route, {})})
         response = await client.receive_json()

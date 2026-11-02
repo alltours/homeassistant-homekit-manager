@@ -803,6 +803,20 @@ class HomeKitManagerCoordinator:
                                                   expected_revision=source_revision,
                                                   confirmed_operation_id=confirmed_operation_id, admin=True)
 
+    async def async_rollback_operation(self, operation_id: str, entry_id: str,
+                                       expected_fingerprint: str,
+                                       confirmed_operation_id: str) -> dict[str, Any]:
+        """Restore only the exact target of a previously verified operation."""
+        bridge = self.selected_bridge()
+        if self.last_error or not bridge or bridge.get("entry_id") != entry_id or self.fingerprint != expected_fingerprint:
+            raise HomeKitWriteBlocked("Bridge-Kontext oder Inventar-Fingerprint wurde geändert")
+        return await self.operation_service.rollback(
+            operation_id,
+            entry_id=entry_id,
+            confirmed_operation_id=confirmed_operation_id,
+            admin=True,
+        )
+
     async def async_enable_test_write_mode(self, entry_id: str, expected_fingerprint: str,
                                            confirmed_entry_id: str) -> dict[str, Any]:
         """Admin WebSocket activation; the authority vanishes on Core restart."""
@@ -815,7 +829,7 @@ class HomeKitManagerCoordinator:
             raise TestModeBlocked("Bridge-Kontext oder Inventarstand ist nicht mehr aktuell")
         records = await self.operation_service._records()
         if any(isinstance(item, dict) and item.get("entry_id") == entry_id
-               and item.get("state") in {"applying", "unknown_outcome"}
+               and item.get("state") in {"applying", "unknown_outcome", "rolling_back", "rollback_unknown"}
                for item in records.values()):
             raise TestModeBlocked("Ungeklärten früheren Vorgang zuerst lesend abgleichen")
         authority = self.operation_service.test_write_mode.enable(self.hass, entry_id, confirmed_entry_id)

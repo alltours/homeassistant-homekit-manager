@@ -1,7 +1,14 @@
 """Static release-gate assertions for the 0.10.30 stable product boundary."""
 
 import json
+import sys
 from pathlib import Path
+
+package = "custom_components.homekit_manager"
+if package not in sys.modules:
+    module = type(sys)(package)
+    module.__path__ = [str(Path(__file__).parents[1] / "custom_components" / "homekit_manager")]
+    sys.modules[package] = module
 
 from custom_components.homekit_manager.const import INTEGRATION_VERSION
 from custom_components.homekit_manager.migration import build_migration_matrix

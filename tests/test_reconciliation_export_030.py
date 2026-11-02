@@ -16,9 +16,24 @@ from custom_components.homekit_manager.inventory_export import (  # noqa: E402
     build_reconciliation_export,
     export_reconciliation_snapshot,
 )
+from custom_components.homekit_manager.selection_reconciliation import reconcile_selection  # noqa: E402
 
 
 class ReconciliationExport030Tests(unittest.TestCase):
+    @staticmethod
+    def synthetic_entity(entity_id, *, configured=True, reason="explicit_include", device_id="device-1", area_id="area-1"):
+        domain = entity_id.split(".", 1)[0]
+        return {
+            "entity_id": entity_id,
+            "device_id": device_id,
+            "device_name": "Testgerät" if device_id else None,
+            "area_id": area_id,
+            "area_name": "Testbereich" if area_id else None,
+            "domain": domain,
+            "compatibility": {"status": "supported"},
+            "homekit": {"configured_by_filter": configured, "filter_reason": reason},
+        }
+
     def snapshot(self):
         overview = {
             "integration_version": "0.10.30",
@@ -142,6 +157,91 @@ class ReconciliationExport030Tests(unittest.TestCase):
         decoded = json.loads(exported)
         self.assertEqual(overview, source)
         self.assertEqual(decoded["reconciliation"]["deviations"][0]["security_relevance"], "MEDIUM")
+
+    def test_production_category_shape_is_exactly_23_plus_6_and_separate(self):
+        native_ids = [f"light.native_{index}" for index in range(23)]
+        stale_ids = [f"sensor.deleted_{index}" for index in range(6)]
+        inventory = [self.synthetic_entity(entity_id) for entity_id in native_ids]
+        document = {"bridges": {"bridge-1": {
+            "policy": "explicit_overrides",
+            "entities": {entity_id: "exclude" for entity_id in stale_ids},
+        }}}
+        reconciliation = reconcile_selection(
+            document,
+            "bridge-1",
+            inventory,
+            {"include_entities": native_ids},
+            {"state": "unknown", "entity_ids": []},
+            {
+                "completeness": "verified",
+                "entity_status": {entity_id: "published_verified" for entity_id in native_ids},
+                "accessories": [
+                    {"entity_id": entity_id, "aid": index + 1, "iid_signature": f"iid-{index}"}
+                    for index, entity_id in enumerate(native_ids)
+                ],
+            },
+        )
+        technical = [
+            {"code": "selection_mismatch", "severity": "warning", "title": "Technical", "detail": "Technical"},
+            *[{"code": "unsupported_entity", "severity": "warning", "title": "Unsupported", "detail": "Unsupported", "entity_id": f"sensor.unsupported_{index}"} for index in range(4)],
+            *[{"code": "stale_filter_reference", "severity": "warning", "title": "Stale filter", "detail": "Stale filter", "entity_id": f"sensor.stale_{index}"} for index in range(2)],
+        ]
+        snapshot = build_reconciliation_export(
+            {
+                "integration_version": "0.10.30",
+                "core_version": "2026.11.0b0",
+                "snapshot_timestamp": "2026-11-02T12:00:00+00:00",
+                "snapshot_revision": 1,
+                "fingerprint": "synthetic",
+                "selected_bridge_id": "bridge-1",
+                "snapshot_complete": True,
+                "configuration_alignment": reconciliation,
+            },
+            [{"entry_id": "bridge-1", "title": "Test", "source": "user", "state": "loaded", "mode": "bridge", "name": "Test", "port": 21063, "filter": {}}],
+            {"findings": technical, "summary": {"total": len(technical)}},
+            {
+                "state": "verified", "completeness": "verified", "accessory_count": 23,
+                "mapped_accessory_count": 23, "ambiguous_accessory_count": 0,
+                "accessories": [{"entity_id": entity_id, "aid": index + 1, "mapping_source": "accessory.entity_id"} for index, entity_id in enumerate(native_ids)],
+                "entity_status": {entity_id: "published_verified" for entity_id in native_ids},
+                "ambiguous_accessories": [],
+            },
+        )
+        rows = snapshot["reconciliation"]["deviations"]
+        self.assertEqual(len(rows), 29)
+        self.assertEqual(snapshot["summary"]["selection_deviation_categories"], {
+            "native_explicit_unmanaged": 23,
+            "stale_manager_decision": 6,
+        })
+        self.assertEqual(len(snapshot["technical_findings"]), 7)
+        self.assertEqual(len(snapshot["runtime"]["entity_assignments"]), 23)
+        self.assertTrue(snapshot["complete"])
+        self.assertTrue(snapshot["completeness"]["complete"])
+        csv_output = export_reconciliation_snapshot(snapshot, "csv")
+        self.assertEqual(len(list(csv.DictReader(StringIO(csv_output["content"])))), 29)
+        self.assertEqual(len(list(csv.DictReader(StringIO(csv_output["technical_content"])))), 7)
+        self.assertEqual(len(list(csv.DictReader(StringIO(csv_output["runtime_content"])))), 23)
+        self.assertEqual({row["entity_id"] for row in rows if row["entity_id"] in native_ids}, set(native_ids))
+        self.assertEqual({row["entity_id"] for row in rows if row["entity_id"] in stale_ids}, set(stale_ids))
+
+    def test_incomplete_snapshot_never_reports_complete(self):
+        overview = self.snapshot()
+        overview["snapshot_complete"] = False
+        runtime = {
+            "state": "partial", "completeness": "partial", "accessory_count": 1,
+            "accessories": [{"entity_id": None, "aid": 7, "mapping_source": "unresolved"}],
+            "ambiguous_accessories": [{"aid": 7}],
+        }
+        snapshot = build_reconciliation_export(
+            overview,
+            [{"entry_id": "bridge-1"}],
+            {"findings": [], "summary": {}},
+            runtime,
+        )
+        self.assertFalse(snapshot["completeness"]["snapshot_complete"])
+        self.assertFalse(snapshot["completeness"]["runtime_complete"])
+        self.assertFalse(snapshot["complete"])
+        self.assertFalse(snapshot["completeness"]["complete"])
 
 
 if __name__ == "__main__":

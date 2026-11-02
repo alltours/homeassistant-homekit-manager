@@ -212,6 +212,8 @@ def build_reconciliation_export(
     runtime_baseline = dict(runtime_diagnosis.get("hap_baseline", {}))
     runtime_complete = runtime_diagnosis.get("completeness") == "verified"
     row_count_matches = len(deviations) == deviation_count
+    runtime_assignment_rows_complete = runtime_complete and not runtime_diagnosis.get("ambiguous_accessories")
+    export_complete = bool(overview.get("snapshot_complete")) and row_count_matches and runtime_assignment_rows_complete
     return {
         "schema_version": 1,
         "export_type": "homekit_manager_reconciliation",
@@ -220,6 +222,7 @@ def build_reconciliation_export(
         "snapshot_timestamp": overview.get("snapshot_timestamp"),
         "snapshot_revision": overview.get("snapshot_revision"),
         "snapshot_fingerprint": overview.get("fingerprint"),
+        "complete": export_complete,
         "bridge": _safe_bridge(bridges, overview.get("selected_bridge_id")),
         "summary": {
             "selection_deviation_count": deviation_count,
@@ -237,7 +240,8 @@ def build_reconciliation_export(
             "reconciliation_row_count": len(deviations),
             "reconciliation_expected_count": deviation_count,
             "runtime_complete": runtime_complete,
-            "runtime_assignment_rows_complete": runtime_complete and not runtime_diagnosis.get("ambiguous_accessories"),
+            "runtime_assignment_rows_complete": runtime_assignment_rows_complete,
+            "complete": export_complete,
             "verification_status_counts": status_counts,
             "fields_with_not_verified_values": missing_fields,
         },

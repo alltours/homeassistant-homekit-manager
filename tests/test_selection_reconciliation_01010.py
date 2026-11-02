@@ -2,6 +2,14 @@
 from __future__ import annotations
 
 import unittest
+import sys
+from pathlib import Path
+
+package = "custom_components.homekit_manager"
+if package not in sys.modules:
+    module = type(sys)(package)
+    module.__path__ = [str(Path(__file__).parents[1] / "custom_components" / "homekit_manager")]
+    sys.modules[package] = module
 
 from custom_components.homekit_manager.bulk import preview_bulk
 from custom_components.homekit_manager.change_planner import plan_changes

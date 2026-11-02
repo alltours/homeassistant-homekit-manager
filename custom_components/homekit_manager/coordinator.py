@@ -463,7 +463,7 @@ class HomeKitManagerCoordinator:
         result = {
             "format": format_name,
             "filename": f"{stem}.json" if format_name == "json" else f"{stem}-deviations.csv",
-            "complete": snapshot["completeness"]["reconciliation_rows_complete"],
+            "complete": snapshot["completeness"]["complete"],
             "snapshot_revision": self.snapshot_revision,
             "fingerprint": self.fingerprint,
             "content": serialized["content"],

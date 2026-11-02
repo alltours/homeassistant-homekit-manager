@@ -50,7 +50,7 @@ async def test_every_manager_websocket_route_rejects_authenticated_non_admin(
         args[command] = {"document": document}
 
     routes = {handler._ws_command for handler in REGISTERED_HANDLERS}
-    assert len(routes) == len(REGISTERED_HANDLERS) == 36
+    assert len(routes) == len(REGISTERED_HANDLERS) == 37
     for route in sorted(routes):
         await client.send_json_auto_id({"type": route, **args.get(route, {})})
         response = await client.receive_json()
@@ -115,5 +115,43 @@ async def test_inventory_export_is_read_only_and_value_free(hass, enable_custom_
     csv_response = await client.receive_json()
     assert csv_response["success"] and csv_response["result"]["content"].startswith("entity_id,")
     await client.send_json_auto_id({"type": "homekit_manager/inventory_export", "format": "yaml"})
+    assert (await client.receive_json())["error"]["code"] == "invalid_format"
+    assert dict(native.options) == before
+
+
+async def test_reconciliation_export_is_read_only_separate_and_fail_closed(
+    hass, enable_custom_integrations, hass_ws_client,
+):
+    native = MockConfigEntry(
+        domain="homekit", entry_id="reconciliation-bridge", source="user",
+        data={"name": "Reconciliation Bridge", "mode": "bridge"}, options={"filter": {}},
+    )
+    native.add_to_hass(hass)
+    hass.states.async_set("light.reconciliation", "on", {"friendly_name": "Reconciliation light"})
+    flow = await hass.config_entries.flow.async_init("homekit_manager", context={"source": "user"})
+    await hass.config_entries.flow.async_configure(flow["flow_id"], {})
+    before = dict(native.options)
+    client = await hass_ws_client()
+
+    await client.send_json_auto_id({"type": "homekit_manager/reconciliation_export", "format": "json"})
+    response = await client.receive_json()
+    assert response["success"], response
+    result = response["result"]
+    document = json.loads(result["content"])
+    assert document["schema_version"] == 1
+    assert "reconciliation" in document and "technical_findings" in document and "runtime" in document
+    assert result["complete"] is False
+    assert "private_key" not in result["content"] and "pincode" not in result["content"]
+    assert dict(native.options) == before
+
+    await client.send_json_auto_id({"type": "homekit_manager/reconciliation_export", "format": "csv"})
+    csv_response = await client.receive_json()
+    assert csv_response["success"]
+    files = {item["kind"]: item for item in csv_response["result"]["files"]}
+    assert set(files) == {"deviations", "technical", "runtime"}
+    assert files["deviations"]["content"].startswith("entity_id,deviation_type,")
+    assert dict(native.options) == before
+
+    await client.send_json_auto_id({"type": "homekit_manager/reconciliation_export", "format": "yaml"})
     assert (await client.receive_json())["error"]["code"] == "invalid_format"
     assert dict(native.options) == before

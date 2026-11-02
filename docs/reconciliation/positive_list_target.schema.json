@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/alltours/homeassistant-homekit-manager/blob/main/docs/reconciliation/positive_list_target.schema.json",
+  "title": "HomeKit Manager local positive-list audit target",
+  "type": "object",
+  "required": ["schema_version", "document_type", "planning_only", "source", "entity_ids", "constraints"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "document_type": {"const": "homekit_manager_positive_list_audit_target"},
+    "planning_only": {"const": true},
+    "write_performed": {"const": false},
+    "source": {"type": "string", "minLength": 1},
+    "bridge_entry_id": {"type": "string"},
+    "entity_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[^.]+\\.[^.]+$",
+        "not": {"pattern": "[*?\\[\\]]"}
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "required": ["allow_wildcards", "allow_domain_rules", "auto_extend", "auto_rename", "auto_replace"],
+      "properties": {
+        "allow_wildcards": {"const": false},
+        "allow_domain_rules": {"const": false},
+        "auto_extend": {"const": false},
+        "auto_rename": {"const": false},
+        "auto_replace": {"const": false}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

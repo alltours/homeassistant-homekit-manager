@@ -29,3 +29,4 @@ secrets.yaml
 test-results/
 playwright-report/
 .audit/
+docs/reconciliation/*_approved_selection.json

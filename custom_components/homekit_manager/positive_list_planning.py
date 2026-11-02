@@ -12,7 +12,8 @@ from typing import Any
 
 
 PLAN_SCHEMA_VERSION = 1
-_SELECTION_STATUSES = frozenset({"published_verified", "published", "unknown"})
+_SUPPORTED_HISTORICAL_SCHEMA_VERSIONS = frozenset({1, 2})
+_KNOWN_RUNTIME_STATUSES = frozenset({"published_verified", "published", "unknown"})
 
 
 def _normalise_ids(entity_ids: Iterable[str]) -> tuple[list[str], list[str]]:
@@ -46,21 +47,32 @@ def build_positive_list_plan(
     stale-filter finding for that exact ID.
     """
     target_ids, target_errors = _normalise_ids(approved_entity_ids)
-    reconciliation = snapshot.get("reconciliation", {})
+    raw_reconciliation = snapshot.get("reconciliation", {})
+    reconciliation = raw_reconciliation if isinstance(raw_reconciliation, Mapping) else {}
     bridge = snapshot.get("bridge") or {}
+    bridge = bridge if isinstance(bridge, Mapping) else {}
     filter_config = bridge.get("filter") or {}
+    filter_config = filter_config if isinstance(filter_config, Mapping) else {}
+    if not isinstance(raw_reconciliation, Mapping):
+        malformed_reconciliation = True
+    else:
+        malformed_reconciliation = False
     native_filter_ids = set(filter_config.get("include_entities") or [])
-    technical = [row for row in snapshot.get("technical_findings", []) or [] if isinstance(row, Mapping)]
+    raw_technical = snapshot.get("technical_findings", []) or []
+    technical = [row for row in raw_technical if isinstance(row, Mapping)] if isinstance(raw_technical, list) else []
     stale_filter_ids = {
         row.get("entity_id") for row in technical
         if row.get("code") == "stale_filter_reference" and isinstance(row.get("entity_id"), str)
     }
     current_native_ids = native_filter_ids - stale_filter_ids
     runtime = snapshot.get("runtime") or {}
-    assignments = [row for row in runtime.get("entity_assignments", []) or [] if isinstance(row, Mapping)]
+    runtime = runtime if isinstance(runtime, Mapping) else {}
+    raw_assignments = runtime.get("entity_assignments", []) or []
+    assignments = [row for row in raw_assignments if isinstance(row, Mapping)] if isinstance(raw_assignments, list) else []
     runtime_ids = {row.get("entity_id") for row in assignments if isinstance(row.get("entity_id"), str)}
     runtime_status = runtime.get("entity_status") or {}
-    deviations = [row for row in reconciliation.get("deviations", []) or [] if isinstance(row, Mapping)]
+    raw_deviations = reconciliation.get("deviations", []) or []
+    deviations = [row for row in raw_deviations if isinstance(row, Mapping)] if isinstance(raw_deviations, list) else []
     observed_present_ids = {
         row.get("entity_id") for row in deviations
         if isinstance(row.get("entity_id"), str)
@@ -68,6 +80,7 @@ def build_positive_list_plan(
     } | current_native_ids | runtime_ids
 
     completeness = snapshot.get("completeness") or {}
+    completeness = completeness if isinstance(completeness, Mapping) else {}
     blocking_reasons: list[dict[str, Any]] = []
 
     def block(reason_code: str, detail: str, **extra: Any) -> None:
@@ -79,18 +92,42 @@ def build_positive_list_plan(
         block("invalid_target_id", "Entity-ID ist ungültig, doppelt oder enthält eine Wildcard.", entity_id=error)
     if not snapshot.get("complete") or not completeness.get("snapshot_complete"):
         block("incomplete_snapshot", "Der Snapshot ist nicht vollständig.")
+    if malformed_reconciliation or not isinstance(raw_deviations, list):
+        block("malformed_reconciliation", "Die Reconciliation-Struktur oder ihre Zeilen sind ungültig.")
+    if isinstance(raw_deviations, list) and any(not isinstance(row, Mapping) for row in raw_deviations):
+        block("malformed_reconciliation_rows", "Reconciliation enthält nicht strukturierte Zeilen.")
+    if not isinstance(raw_technical, list):
+        block("malformed_technical_findings", "Die technischen Befunde haben einen ungültigen Datentyp.")
+    if isinstance(raw_technical, list) and any(not isinstance(row, Mapping) for row in raw_technical):
+        block("malformed_technical_rows", "Technische Befunde enthalten nicht strukturierte Zeilen.")
+    if not isinstance(raw_assignments, list):
+        block("malformed_runtime_assignments", "Die Runtime-Zuordnungen haben einen ungültigen Datentyp.")
+    if isinstance(raw_assignments, list) and any(not isinstance(row, Mapping) for row in raw_assignments):
+        block("malformed_runtime_rows", "Runtime-Zuordnungen enthalten nicht strukturierte Zeilen.")
+    if not isinstance(runtime_status, Mapping):
+        block("malformed_runtime_status", "Die Runtime-Statusstruktur hat einen ungültigen Datentyp.")
+        runtime_status = {}
+    schema_version = snapshot.get("schema_version")
+    if schema_version not in _SUPPORTED_HISTORICAL_SCHEMA_VERSIONS:
+        block("unsupported_schema", "Die Export-Schema-Version ist unbekannt.", schema_version=schema_version)
+    elif schema_version != 2:
+        block("historical_schema", "Schema-1-Daten sind historische Evidenz und keine aktuelle Migrationsfreigabe.", schema_version=schema_version)
+    if schema_version == 2 and any(
+        key not in reconciliation for key in ("selection_conflict", "diagnostic_state", "migration_blocked", "differences")
+    ):
+        block("missing_reconciliation_semantics", "Schema 2 enthält nicht alle Konflikt- und Blockierungsfelder.")
     if not completeness.get("reconciliation_rows_complete"):
         block("incomplete_reconciliation", "Die Reconciliation-Zeilen sind unvollständig.")
     if not completeness.get("runtime_complete") or not completeness.get("runtime_assignment_rows_complete"):
         block("incomplete_runtime", "Die Runtime-Zuordnung ist nicht vollständig verifiziert.")
     if not filter_config.get("include_entities") or any(
-        filter_config.get(key) for key in (
-            "include_domains", "exclude_domains", "include_entity_globs", "exclude_entity_globs",
-        )
+        filter_config.get(key) for key in filter_config if key != "include_entities"
     ):
         block("unsafe_native_filter", "Ein leerer oder breiter nativer Filter ist keine sichere Positivliste.")
     if reconciliation.get("selection_conflict") or reconciliation.get("diagnostic_state") == "selection_conflict":
         block("selection_conflict", "Ein echter Auswahlkonflikt ist ungeklärt.")
+    if reconciliation.get("diagnostic_state") in {"metadata_unresolved", "incomplete"} or reconciliation.get("migration_blocked") is True:
+        block("unresolved_reconciliation_metadata", "Reconciliation-Metadaten oder Snapshot-Evidenz sind ungeklärt.")
     for row in deviations:
         if row.get("severity") == "critical":
             block(
@@ -107,10 +144,40 @@ def build_positive_list_plan(
                 code=row.get("code"),
                 entity_id=row.get("entity_id"),
             )
+        if row.get("code") == "stale_filter_reference":
+            block(
+                "stale_filter_reference",
+                "Eine native Filterreferenz ist veraltet und vor der Migration ungeklärt.",
+                entity_id=row.get("entity_id"),
+            )
+
+    summary = snapshot.get("summary") or {}
+    summary = summary if isinstance(summary, Mapping) else {}
+    if summary.get("selection_deviation_count") is not None and summary.get("selection_deviation_count") != len(deviations):
+        block("reconciliation_count_mismatch", "Reconciliation-Summe und exportierte Zeilen widersprechen sich.")
+    if summary.get("technical_finding_count") is not None and summary.get("technical_finding_count") != len(technical):
+        block("technical_count_mismatch", "Technische Summe und exportierte Befunde widersprechen sich.")
+    if summary.get("runtime_entity_assignment_count") is not None and summary.get("runtime_entity_assignment_count") != len(assignments):
+        block("runtime_count_mismatch", "Runtime-Summe und exportierte Zuordnungen widersprechen sich.")
+    assignment_ids = [row.get("entity_id") for row in assignments]
+    if len(assignment_ids) != len(set(assignment_ids)):
+        block("duplicate_runtime_assignment", "Runtime-Zuordnungen enthalten doppelte Entity-IDs.")
+    unknown_runtime_statuses = sorted({
+        value for value in runtime_status.values()
+        if value not in _KNOWN_RUNTIME_STATUSES
+    }, key=str)
+    if unknown_runtime_statuses:
+        block("unknown_runtime_status", "Runtime enthält einen unbekannten Status.", statuses=unknown_runtime_statuses)
 
     unknown_target_ids = sorted(set(target_ids) - observed_present_ids)
     for entity_id in unknown_target_ids:
         block("target_not_observed", "Soll-Entity ist im aktuellen Snapshot nicht nachgewiesen.", entity_id=entity_id)
+
+    assignment_by_id = {row.get("entity_id"): row for row in assignments if isinstance(row.get("entity_id"), str)}
+    for entity_id in sorted(set(target_ids) & set(runtime_ids)):
+        assignment = assignment_by_id.get(entity_id, {})
+        if assignment.get("aid") is None or assignment.get("iid_signature") is None:
+            block("missing_hap_identity", "Für eine Soll-Entity fehlt die HAP-AID/IID-Evidenz.", entity_id=entity_id)
 
     unexpected_native_ids = sorted(current_native_ids - set(target_ids))
     for entity_id in unexpected_native_ids:

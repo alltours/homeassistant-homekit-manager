@@ -20,10 +20,11 @@ classification is not a permission change.
 
 ## Audit target
 
-[`homekit_manager_0.10.31_approved_selection.json`](reconciliation/homekit_manager_0.10.31_approved_selection.json)
-is planning-only evidence of the user's explicit decision to retain exactly 23
-entities. It contains no secrets and is never loaded as the Manager's stored
-decision document.
+The concrete target list is installation-specific and must be supplied from a
+local file outside the public repository. The repository contains only the
+generic [target schema](reconciliation/positive_list_target.schema.json). The
+target is planning-only evidence and is never loaded as the Manager's stored
+decision document or included in the integration ZIP.
 
 ## Offline plan
 
@@ -32,7 +33,7 @@ Create a plan from a read-only export without contacting Home Assistant:
 ```sh
 python scripts/plan_positive_list.py \
   --snapshot /path/to/reconciliation.json \
-  --target docs/reconciliation/homekit_manager_0.10.31_approved_selection.json \
+  --target /path/outside/repository/approved_selection.json \
   --output /path/to/positive-list-plan.json
 ```
 

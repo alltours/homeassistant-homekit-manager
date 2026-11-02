@@ -1,7 +1,6 @@
 """0.10.31 mismatch semantics and positive-list planning tests."""
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
@@ -107,28 +106,27 @@ def test_export_preserves_conflict_classification_and_blocker_fields():
 
 
 def production_snapshot() -> tuple[list[str], dict]:
-    target = json.loads(
-        (Path(__file__).parents[1] / "docs/reconciliation/homekit_manager_0.10.31_approved_selection.json").read_text(
-            encoding="utf-8"
-        )
-    )["entity_ids"]
+    # Use synthetic IDs in the public test suite.  Real installation-specific
+    # targets are intentionally supplied from a local file outside the repo.
+    target = [f"light.approved_{index:02d}" for index in range(23)]
     stale = [
-        "binary_sensor.flur_flur_haustur_sensor_haustur_1",
-        "binary_sensor.flur_flur_haustur_sensor_haustur_2",
+        "binary_sensor.stale_filter_01",
+        "binary_sensor.stale_filter_02",
     ]
     stale_manager = [
-        "input_select.anwesenheit_aktionsstatus",
-        "sensor.anwesenheit_catarina_kindle",
-        "sensor.anwesenheit_catarina_kindle_wifi",
-        "sensor.anwesenheit_catarina_switch",
-        "sensor.anwesenheit_catarina_switch_wifi",
-        "sensor.robot_battery",
+        "sensor.stale_manager_01",
+        "sensor.stale_manager_02",
+        "sensor.stale_manager_03",
+        "sensor.stale_manager_04",
+        "sensor.stale_manager_05",
+        "sensor.stale_manager_06",
     ]
     snapshot = {
+        "schema_version": 2,
         "complete": True,
         "bridge": {
-            "entry_id": "01KTHHYVPZ1T9804NQTJSCCXFJ",
-            "port": 21064,
+            "entry_id": "bridge-1",
+            "port": 21063,
             "filter": {"include_entities": target + stale},
         },
         "completeness": {
@@ -140,6 +138,8 @@ def production_snapshot() -> tuple[list[str], dict]:
         "reconciliation": {
             "selection_conflict": False,
             "diagnostic_state": "metadata_unresolved",
+            "migration_blocked": True,
+            "differences": {"desired_not_native": [], "native_not_desired": [], "unknown_entities": [], "count": 6},
             "deviations": [
                 {"entity_id": entity_id, "native_selection": None, "runtime_selection": "unknown", "severity": "critical", "classification": "stale_manager_decision"}
                 for entity_id in stale_manager
@@ -156,7 +156,12 @@ def production_snapshot() -> tuple[list[str], dict]:
                 {"entity_id": entity_id, "aid": index + 1, "iid_signature": f"iid-{index}"}
                 for index, entity_id in enumerate(target)
             ],
-            "hap_baseline": {"mac": "1F:67:33:3C:6E:F7", "port": 21064},
+            "hap_baseline": {"mac": "AA:BB:CC:DD:EE:FF", "port": 21063},
+        },
+        "summary": {
+            "selection_deviation_count": 6,
+            "technical_finding_count": 2,
+            "runtime_entity_assignment_count": 23,
         },
     }
     return target, snapshot
@@ -200,3 +205,37 @@ def test_incomplete_snapshot_and_unknown_target_are_fail_closed():
     assert "incomplete_snapshot" in codes
     assert "target_not_observed" in codes
     assert plan["migration_ready"] is False
+
+
+def test_metadata_unresolved_blocks_even_without_critical_rows():
+    target, snapshot = production_snapshot()
+    snapshot["reconciliation"]["deviations"] = [
+        {"entity_id": target[0], "native_selection": True, "runtime_selection": "published_verified", "severity": "warning", "classification": "native_explicit_unmanaged"},
+    ]
+    snapshot["reconciliation"]["migration_blocked"] = False
+    snapshot["summary"]["selection_deviation_count"] = 1
+    snapshot["technical_findings"] = []
+    snapshot["summary"]["technical_finding_count"] = 0
+    plan = build_positive_list_plan(target, snapshot)
+    assert any(row["code"] == "unresolved_reconciliation_metadata" for row in plan["blocking_reasons"])
+    assert plan["migration_ready"] is False
+
+
+def test_historical_schema_is_accepted_as_evidence_but_never_as_migration_ready():
+    target, snapshot = production_snapshot()
+    snapshot["schema_version"] = 1
+    plan = build_positive_list_plan(target, snapshot)
+    assert any(row["code"] == "historical_schema" for row in plan["blocking_reasons"])
+    assert plan["migration_ready"] is False
+
+
+def test_inconsistent_counts_unknown_status_and_missing_hap_identity_block():
+    target, snapshot = production_snapshot()
+    snapshot["summary"]["runtime_entity_assignment_count"] = 999
+    snapshot["runtime"]["entity_status"][target[0]] = "not_a_runtime_status"
+    snapshot["runtime"]["entity_assignments"][0]["iid_signature"] = None
+    plan = build_positive_list_plan(target, snapshot)
+    codes = {row["code"] for row in plan["blocking_reasons"]}
+    assert "runtime_count_mismatch" in codes
+    assert "unknown_runtime_status" in codes
+    assert "missing_hap_identity" in codes

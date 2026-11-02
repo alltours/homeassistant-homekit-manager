@@ -73,7 +73,7 @@ jobs:
       - name: Archive reproducible release package
         uses: actions/upload-artifact@v4
         with:
-          name: homekit-manager-0.10.29-release
+          name: homekit-manager-0.10.30-release
           path: /tmp/hkm-release-one/
           if-no-files-found: error
       - name: Install pinned browser dependencies for real backend E2E
@@ -159,18 +159,18 @@ jobs:
           PY
           acceptance_dir="$(mktemp -d)"
           HKM_ACCEPTANCE_DIR="$acceptance_dir" HKM_ACCEPTANCE_PHASE=pair_apply \
-            python tests/acceptance/real_core_hap_apply_026.py | tee "$RUNNER_TEMP/hkm027-pair.log"
+            python tests/acceptance/real_core_hap_apply_026.py | tee "$RUNNER_TEMP/hkm030-pair.log"
           HKM_ACCEPTANCE_DIR="$acceptance_dir" HKM_ACCEPTANCE_PHASE=reconnect \
-            python tests/acceptance/real_core_hap_apply_026.py | tee "$RUNNER_TEMP/hkm027-reconnect.log"
-          cp "$acceptance_dir/baseline.json" "$RUNNER_TEMP/hkm027-baseline.json"
-          cp "$acceptance_dir/after_apply.json" "$RUNNER_TEMP/hkm027-after-apply.json"
+            python tests/acceptance/real_core_hap_apply_026.py | tee "$RUNNER_TEMP/hkm030-reconnect.log"
+          cp "$acceptance_dir/baseline.json" "$RUNNER_TEMP/hkm030-baseline.json"
+          cp "$acceptance_dir/after_apply.json" "$RUNNER_TEMP/hkm030-after-apply.json"
           EVIDENCE_DIR="$RUNNER_TEMP" python - <<'PY'
           import json
           import os
           from pathlib import Path
           evidence = Path(os.environ["EVIDENCE_DIR"])
-          baseline = json.loads((evidence / "hkm027-baseline.json").read_text())
-          after = json.loads((evidence / "hkm027-after-apply.json").read_text())
+          baseline = json.loads((evidence / "hkm030-baseline.json").read_text())
+          after = json.loads((evidence / "hkm030-after-apply.json").read_text())
           assert baseline["b"]["names"] == after["b"]["names"]
           assert baseline["b"]["signatures"] == after["b"]["signatures"]
           assert baseline["a"]["mac"] == after["a"]["mac"]
@@ -184,8 +184,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: official-core-hap-acceptance-027
+          name: official-core-hap-acceptance-030
           path: |
-            ${{ runner.temp }}/hkm027-*.log
-            ${{ runner.temp }}/hkm027-*.json
+            ${{ runner.temp }}/hkm030-*.log
+            ${{ runner.temp }}/hkm030-*.json
           if-no-files-found: ignore

@@ -14,7 +14,10 @@ export default defineConfig({
     reuseExistingServer: false,
   },
   use: {
-    baseURL: "http://127.0.0.1:4173",
+    // WebKit on macOS returns `resource unavailable` for query URLs on the
+    // numeric loopback origin, while `localhost` resolves to the same local
+    // fixture server and supports those URLs reliably.
+    baseURL: "http://localhost:4173",
     screenshot: "only-on-failure",
   },
 });

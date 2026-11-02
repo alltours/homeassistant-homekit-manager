@@ -143,6 +143,35 @@ async def _run_engine_source_switch(hass, shared: Path, entry, identity: dict, b
 
     source = SOURCE_USER if entry.source == SOURCE_USER else SOURCE_IMPORT
     target_source = SOURCE_IMPORT if target == SOURCE_IMPORT else SOURCE_USER
+
+    if os.environ.get("HKM_CORE_SOURCE_MIGRATION_POC") == "1":
+        # This branch is only used when the isolated official Core checkout
+        # provides source_migration.py.  It deliberately bypasses the manager's
+        # experimental engine so the Core prototype itself is exercised against
+        # the real HAP driver and aiohomekit controller.
+        from homeassistant.components.homekit.source_migration import (
+            HomeKitSourceMigrationManager,
+        )
+
+        if target_source == SOURCE_IMPORT:
+            target_yaml = _config(
+                shared,
+                "homekit:\n" + _yaml_fragment(identity["port"])
+                + "input_boolean:\n  native_migration_test:\n    name: Native migration test\n",
+            ).encode()
+        else:
+            target_yaml = _config(shared, _base_config()).encode()
+        migration = HomeKitSourceMigrationManager(hass, entry.entry_id)
+        plan = await migration.prepare(target_source, target_yaml=target_yaml)
+        await migration.commit(plan)
+        after = await _pair_or_reconnect(hass, shared, entry, False)
+        assert after["source"] == target_source
+        assert after["entry_id"] == before["entry_id"] == identity["entry_id"]
+        assert after["mac"] == before["mac"] == identity["mac"]
+        assert after["aids"] == before["aids"] == identity["aids"]
+        assert after["entity_iids"] == before["entity_iids"] == identity["entity_iids"]
+        return
+
     snapshot = MigrationSnapshot.build(
         transaction_id="pending",
         bridge_id=entry.entry_id,

@@ -138,7 +138,7 @@ async def test_reconciliation_export_is_read_only_separate_and_fail_closed(
     assert response["success"], response
     result = response["result"]
     document = json.loads(result["content"])
-    assert document["schema_version"] == 1
+    assert document["schema_version"] == 2
     assert "reconciliation" in document and "technical_findings" in document and "runtime" in document
     assert result["complete"] is False
     assert "private_key" not in result["content"] and "pincode" not in result["content"]

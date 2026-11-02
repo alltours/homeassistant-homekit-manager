@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from homeassistant.helpers.storage import Store
 
@@ -39,9 +39,12 @@ class OperationPlan:
 class HomeKitOperationService:
     """Prepare and verify supported filter edits without a third config source."""
 
-    def __init__(self, hass: Any, *, isolated_write_authority: bool = False):
+    def __init__(self, hass: Any, *, isolated_write_authority: bool = False, fault_injector: Callable[[str], None] | None = None):
         self.hass = hass
         self._isolated_write_authority = isolated_write_authority
+        # Fault injection is dependency-injected by isolated tests only.  The
+        # normal coordinator never supplies this callback.
+        self._fault_injector = fault_injector
         self._store = Store(hass, 1, "homekit_manager.operations")
         self._plans: dict[str, OperationPlan] = {}
         self._lock = asyncio.Lock()
@@ -219,12 +222,16 @@ class HomeKitOperationService:
             if plan.authority_kind != policy.get("authority") or plan.authority_id != policy.get("grant_id"):
                 raise HomeKitWriteDisabled("Schreibfreigabe hat sich seit der Vorschau geändert")
             grant = None if self._isolated_write_authority else await self._production_grant(entry_id, plan.source)
+            if self._fault_injector is not None:
+                self._fault_injector("after_lock")
             await self._set_state(plan, "applying", grant_id=grant.grant_id if grant else None)
+            if self._fault_injector is not None:
+                self._fault_injector("after_snapshot")
             try:
                 runtime_verification = "verified"
                 if isinstance(plan.payload, NativeFilterPlan):
                     result = await NativeHomeKitAdapter(self.hass, isolated_test_authority=self._isolated_write_authority,
-                                                        production_grant=grant).apply(plan.payload)
+                                                        production_grant=grant, fault_injector=self._fault_injector).apply(plan.payload)
                     verified = result.get("verification") == "verified_options"
                     runtime_verification = result.get("runtime_verification", "incomplete")
                 else:
@@ -241,6 +248,8 @@ class HomeKitOperationService:
             result_state = "verified" if runtime_verification == "verified" else "verification_incomplete"
             await self._set_state(plan, result_state,
                                   detail=None if result_state == "verified" else "Native Optionen verifiziert; laufende HAP-Veröffentlichung nicht vollständig lesbar")
+            if self._fault_injector is not None:
+                self._fault_injector("after_operation_journal")
             return {"operation_id": plan.operation_id, "entry_id": plan.entry_id, "state": result_state,
                     "runtime_verification": runtime_verification, "pairing_verified": False}
 
@@ -270,12 +279,15 @@ class HomeKitOperationService:
             if plan.authority_kind != policy.get("authority") or plan.authority_id != policy.get("grant_id"):
                 raise HomeKitWriteDisabled("Schreibfreigabe hat sich seit dem Apply geändert")
             grant = None if self._isolated_write_authority else await self._production_grant(entry_id, plan.source)
+            if self._fault_injector is not None:
+                self._fault_injector("rollback_after_lock")
             await self._set_state(plan, "rolling_back", grant_id=grant.grant_id if grant else None)
             try:
                 adapter = NativeHomeKitAdapter(
                     self.hass,
                     isolated_test_authority=self._isolated_write_authority,
                     production_grant=grant,
+                    fault_injector=self._fault_injector,
                 )
                 state = await adapter.recover(plan.payload)
                 if state != "verified_options_restore":
@@ -284,6 +296,8 @@ class HomeKitOperationService:
                 await self._set_state(plan, "rollback_unknown", detail="Wiederherstellung lesend abgleichen; kein automatischer Retry")
                 raise
             await self._set_state(plan, "rolled_back")
+            if self._fault_injector is not None:
+                self._fault_injector("rollback_after_journal")
             return {"operation_id": operation_id, "entry_id": entry_id,
                     "state": "rolled_back", "pairing_verified": False,
                     "automatic_retry": False}

@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from copy import deepcopy
 import asyncio
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 from uuid import uuid4
 
 from homeassistant.helpers.storage import Store
@@ -40,10 +40,11 @@ class NativeFilterPlan:
 
 
 class NativeHomeKitAdapter:
-    def __init__(self, hass: Any, *, isolated_test_authority: bool = False, production_grant: Any = None):
+    def __init__(self, hass: Any, *, isolated_test_authority: bool = False, production_grant: Any = None, fault_injector: Callable[[str], None] | None = None):
         self.hass = hass
         self._isolated_test_authority = isolated_test_authority
         self._production_grant = production_grant
+        self._fault_injector = fault_injector
         self._store = Store(hass, 1, "homekit_manager.native_operations")
 
     async def _records(self) -> dict[str, Any]:
@@ -123,6 +124,8 @@ class NativeHomeKitAdapter:
             if self.read(plan.entry_id).revision != plan.source_revision:
                 raise HomeKitWriteBlocked("Native Config-Entry-Revision ist veraltet")
             await self._record(plan, "applying")
+            if self._fault_injector is not None:
+                self._fault_injector("after_operation_journal")
             try:
                 def check_migration_evidence() -> None:
                     if plan.migration_evidence is None:
@@ -137,7 +140,10 @@ class NativeHomeKitAdapter:
                                              apply_enabled=self._isolated_test_authority,
                                              production_grant=self._production_grant,
                                              expected_source_revision=plan.source_revision,
-                                             pre_mutation_check=check_migration_evidence).async_apply(plan.diff)
+                                             pre_mutation_check=check_migration_evidence,
+                                             fault_injector=self._fault_injector).async_apply(plan.diff)
+                if self._fault_injector is not None:
+                    self._fault_injector("after_native_verification")
                 if self.reconcile(plan) != "verified_options":
                     raise HomeKitWriteBlocked("Native Nachverifikation fehlgeschlagen")
                 if plan.migration_evidence is not None:
@@ -207,7 +213,10 @@ class NativeHomeKitAdapter:
             apply_enabled=self._isolated_test_authority,
             production_grant=self._production_grant,
             expected_source_revision=current.revision,
+            fault_injector=self._fault_injector,
         ).async_apply(inverse)
+        if self._fault_injector is not None:
+            self._fault_injector("after_rollback_write")
         restored = self.hass.config_entries.async_get_entry(plan.entry_id)
         restored_filter = dict(restored.options).get("filter") if restored else None
         if restored is None or restored_filter != plan.diff.before.get("filter") or getattr(restored.state, "value", restored.state) != "loaded":

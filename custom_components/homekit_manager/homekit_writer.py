@@ -270,7 +270,7 @@ class HomeKitWriter:
     The authority is rechecked at the Core mutation boundary.
     """
 
-    def __init__(self, hass: Any, *, test_environment: bool = False, apply_enabled: bool = False, allow_production: bool = False, production_grant: Any = None, expected_source_revision: str | None = None, pre_mutation_check: Callable[[], None] | None = None):
+    def __init__(self, hass: Any, *, test_environment: bool = False, apply_enabled: bool = False, allow_production: bool = False, production_grant: Any = None, expected_source_revision: str | None = None, pre_mutation_check: Callable[[], None] | None = None, fault_injector: Callable[[str], None] | None = None):
         self.hass = hass
         self.test_environment = test_environment
         self.apply_enabled = bool(apply_enabled)
@@ -278,6 +278,9 @@ class HomeKitWriter:
         self.production_grant = production_grant
         self.expected_source_revision = expected_source_revision
         self.pre_mutation_check = pre_mutation_check
+        # Only an explicitly supplied isolated-test callback can inject a
+        # fault.  There is no environment-variable or production escape hatch.
+        self.fault_injector = fault_injector
 
     async def async_apply(self, diff: OptionsDiff) -> dict[str, Any]:
         """Apply a Core-validated filter diff only after backend authorization."""
@@ -343,8 +346,14 @@ class HomeKitWriter:
                 next_options[key] = copy.deepcopy(diff.after[key])
             if self.pre_mutation_check is not None:
                 self.pre_mutation_check()
+            if self.fault_injector is not None:
+                self.fault_injector("before_native_options")
             self.hass.config_entries.async_update_entry(entry, options=next_options)
+            if self.fault_injector is not None:
+                self.fault_injector("after_native_options")
             if hasattr(self.hass, "async_block_till_done"):
+                if self.fault_injector is not None:
+                    self.fault_injector("before_reload")
                 try:
                     await asyncio.wait_for(
                         self.hass.async_block_till_done(), ACTIVATION_TIMEOUT
@@ -353,6 +362,8 @@ class HomeKitWriter:
                     raise HomeKitActivationUnknown(
                         "Aktivierung wurde nicht innerhalb des Zeitlimits bestätigt"
                     ) from err
+                if self.fault_injector is not None:
+                    self.fault_injector("after_reload")
             # Check Core's persisted entry view after its update listener has
             # run.  A successful call alone does not prove the intended value.
             observed = self.hass.config_entries.async_get_entry(diff.entry_id)

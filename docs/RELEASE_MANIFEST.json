@@ -1,5 +1,5 @@
 {
-  "integration_version": "0.10.31",
+  "integration_version": "0.10.32-rc.1",
   "file_count": 59,
   "files": [
     {
@@ -44,8 +44,8 @@
     },
     {
       "path": "const.py",
-      "sha256": "50b803e48f6341f082f1068024818305971178ecefcf6e4ba0828ab883e6cc89",
-      "size": 2873
+      "sha256": "eb6c78a72a2484abacae9076157e0eb4777e9fec2d3ea2bd61016fd879f62dad",
+      "size": 2878
     },
     {
       "path": "conversion.py",
@@ -124,8 +124,8 @@
     },
     {
       "path": "homekit_writer.py",
-      "sha256": "a60716bc618330760297f794132d3382ff28c83f08a1b1b65f4661ca80457b58",
-      "size": 19310
+      "sha256": "e1a801d09632c18ecd6b8803338a315b2826aa38cf78de269e4b62da77b5d4f8",
+      "size": 19995
     },
     {
       "path": "inventory.py",
@@ -144,8 +144,8 @@
     },
     {
       "path": "manifest.json",
-      "sha256": "835a8ab8a28ca598923b497a57587dd96bb1ff854b70a1705c91e9a62a07f064",
-      "size": 517
+      "sha256": "9ad5e3cfefca916f4b5b4611be7310c281b82a465d07951ce80a169100cce430",
+      "size": 522
     },
     {
       "path": "migration.py",
@@ -189,13 +189,13 @@
     },
     {
       "path": "native_adapter.py",
-      "sha256": "8091fb11ecfe75fb2a5e4864b50485457f72aa331125157d3bc16e1ad61fbee5",
-      "size": 12971
+      "sha256": "3a39b96b79aed7903fd338c8061426bfe25a63456f153f7d44487eaf5f106762",
+      "size": 13549
     },
     {
       "path": "operations.py",
-      "sha256": "de8c63d973bb8ade4ac520cf5532b654c9db720995379574a63391a8f9adf32a",
-      "size": 22241
+      "sha256": "9fdbedfe9f8dfd050fa8522c49dfc60a57e8072453bcbd0f017c7f6aa4866319",
+      "size": 23119
     },
     {
       "path": "panel.py",

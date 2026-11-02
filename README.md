@@ -1,6 +1,13 @@
-# HomeKit Manager 0.10.29
+# HomeKit Manager 0.10.30
 
-Version 0.10.29 is the stable-product line. It runs against the
+Version 0.10.30 adds a complete, authenticated read-only reconciliation export
+for JSON and CSV. Selection deviations, separate technical findings, runtime
+Entity-to-HAP assignments and non-secret HAP identity evidence are exported
+from the same atomic snapshot. Native filter Apply, write grants, source
+migration and HAP persistence writes remain unchanged and unavailable to this
+feature.
+
+Version 0.10.29 is the stable-product baseline. It runs against the
 official Home Assistant Core and exposes inventory, diagnostics, planning,
 preview and export. Native UI↔YAML source migration remains permanently
 disabled in the stable integration; the experimental Core-owned migration

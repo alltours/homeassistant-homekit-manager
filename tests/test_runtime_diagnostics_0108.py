@@ -60,6 +60,9 @@ class RuntimeDiagnostics0108Tests(unittest.TestCase):
         self.assertNotIn("pairing", result)
         self.assertNotIn("private_key", result)
         self.assertNotIn("state", result["accessories"][0])
+        self.assertEqual(result["accessories"][0]["aid"], 1)
+        self.assertIsNotNone(result["accessories"][0]["iid_signature"])
+        self.assertEqual(result["hap_baseline"]["pairing_status"], "NOT_VERIFIED")
         self.assertEqual(len(result["accessories"][0]["accessory_id_fingerprint"]), 20)
         self.assertEqual(runtime_publication_summary(result)["entity_ids"], ["light.living", "sensor.temperature"])
 

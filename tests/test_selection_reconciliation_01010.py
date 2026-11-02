@@ -81,6 +81,38 @@ class SelectionReconciliation01010Tests(unittest.TestCase):
         self.assertEqual(result["manager"]["stale_decisions"], ["sensor.gone"])
         self.assertEqual(result["manager"]["invalid_decisions"], ["sensor.invalid"])
 
+    def test_deviation_rows_include_entity_and_runtime_evidence(self):
+        inventory = [entity("light.present", configured=True, reason="explicit_include")]
+        inventory[0]["name"] = "Ceiling"
+        inventory[0]["device_id"] = "device-1"
+        inventory[0]["device_name"] = "Lamp"
+        inventory[0]["area_id"] = "area-1"
+        inventory[0]["area_name"] = "Hall"
+        inventory[0]["domain"] = "light"
+        inventory[0]["homekit"]["runtime_publication"] = "published_verified"
+        result = reconcile_selection(
+            {"bridges": {"bridge": {"policy": "explicit_overrides", "entities": {}}}},
+            "bridge",
+            inventory,
+            {"include_entities": ["light.present"]},
+            {
+                "state": "verified",
+                "entity_status": {"light.present": "published_verified"},
+                "accessories": [{"entity_id": "light.present", "aid": 7, "iid_signature": "iid"}],
+            },
+            {"completeness": "verified", "entity_status": {"light.present": "published_verified"}},
+        )
+        self.assertEqual(result["deviation_count"], 1)
+        row = result["deviations"][0]
+        self.assertEqual(row["classification"], "native_explicit_unmanaged")
+        self.assertEqual(row["device_name"], "Lamp")
+        self.assertEqual(row["area_name"], "Hall")
+        self.assertTrue(row["native_selection"])
+        self.assertIsNone(row["manager_decision"])
+        self.assertEqual(row["runtime_selection"], "published_verified")
+        self.assertEqual(row["aid"], 7)
+        self.assertEqual(row["verification_status"], "VERIFIED")
+
     def test_hidden_entity_requires_explicit_selection_but_not_bulk_scope(self):
         hidden = entity("light.hidden", hidden="user")
         hidden["homekit"]["registry_eligible"] = False

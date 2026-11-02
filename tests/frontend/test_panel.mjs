@@ -77,6 +77,15 @@ panel.view = 'changes'; panel.activationStatus = { state: 'unknown', has_operati
 panel.render(); assert.match(panel.shadowRoot.innerHTML, /Ergebnis unbekannt/); assert.match(panel.shadowRoot.innerHTML, /Abweichungsdetails \(2\)/); assert.match(panel.shadowRoot.innerHTML, /sensor\.gone/); assert.match(panel.shadowRoot.innerHTML, /data-apply disabled/);
 panel.view = 'home'; panel.render(); assert.match(panel.shadowRoot.innerHTML, /offene Auswahlabweichungen/); assert.match(panel.shadowRoot.innerHTML, /Technische Diagnosebefunde werden separat gezählt/);
 panel.diagnostics = { summary: { total: 6 }, grouped_findings: [] }; panel.settingsView = 'diagnostics'; panel.view = 'settings'; panel.render(); assert.match(panel.shadowRoot.innerHTML, /Auswahlreconciliation: 2 offene Abweichungen/); assert.match(panel.shadowRoot.innerHTML, /Technische Diagnosebefunde: 6/);
+panel.overview.configuration_alignment.deviations = [
+  { classification: 'native_explicit_unmanaged', entity_id: 'light.flur_decke', device_name: 'Flurlicht', native_selection: true, manager_decision: null, runtime_selection: 'published_verified', hap_publication_status: 'published_verified', aid: 7, verification_status: 'VERIFIED', evidence_sources: ['runtime_hap_diagnosis'] },
+  { classification: 'stale_manager_decision', entity_id: 'sensor.gone', manager_decision: 'exclude', runtime_selection: 'unknown', verification_status: 'NOT_VERIFIED' },
+];
+panel.overview.snapshot_complete = true; panel.overview.snapshot_revision = 12; panel.settingsView = 'reconciliation'; panel.view = 'settings'; panel.render();
+assert.match(panel.shadowRoot.innerHTML, /Vollständige Reconciliation/);
+assert.match(panel.shadowRoot.innerHTML, /light\.flur_decke/);
+assert.match(panel.shadowRoot.innerHTML, /HAP-Publikation/);
+panel.reconciliationQuery = 'gone'; panel.render(); assert.doesNotMatch(panel.shadowRoot.innerHTML, /light\.flur_decke/); assert.match(panel.shadowRoot.innerHTML, /sensor\.gone/);
 panel.view = 'changes';
 panel.activationStatus = { state: 'unknown', has_operation: false };
 panel.render(); assert.match(panel.shadowRoot.innerHTML, /Keine Anwendung protokolliert/);

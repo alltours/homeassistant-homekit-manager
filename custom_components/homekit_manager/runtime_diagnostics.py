@@ -102,11 +102,28 @@ def diagnose_runtime(
         "characteristic_count": None,
         "accessories": [],
         "entity_status": {},
+        "hap_baseline": {
+            "entry_id": getattr(entry, "entry_id", None),
+            "mac": None,
+            "port": None,
+            "pairing_status": "NOT_VERIFIED",
+            "pairing_verified": False,
+        },
     }
     runtime_data = getattr(entry, "runtime_data", None)
     homekit = getattr(runtime_data, "homekit", None)
     bridge = getattr(homekit, "bridge", None)
     driver = getattr(homekit, "driver", None)
+    driver_state = getattr(driver, "state", None)
+    mac = _value(driver_state, "mac")
+    port = _value(driver_state, "port")
+    paired = _value(driver_state, "paired")
+    result["hap_baseline"].update({
+        "mac": mac if isinstance(mac, str) else None,
+        "port": port if isinstance(port, int) and not isinstance(port, bool) else None,
+        "pairing_status": "PAIRED" if paired is True else "NOT_PAIRED" if paired is False else "NOT_VERIFIED",
+        "pairing_verified": isinstance(paired, bool),
+    })
     accessories = _items(getattr(bridge, "accessories", None))
     if homekit is None or bridge is None or accessories is None:
         result["reason"] = "Core stellt keine vollständige laufende Bridge-Accessory-Sammlung bereit."
@@ -168,6 +185,7 @@ def diagnose_runtime(
             services_complete = services_complete and complete
         row = {
             "accessory_id_fingerprint": _fingerprint({"entry_id": getattr(entry, "entry_id", None), "aid": key}),
+            "aid": aid if isinstance(aid, (int, str)) and not isinstance(aid, bool) else None,
             "entity_id": entity_id if isinstance(entity_id, str) else None,
             "mapping_source": mapping_source,
             "name": _value(accessory, "display_name") or _value(accessory, "name"),
@@ -175,6 +193,10 @@ def diagnose_runtime(
             "services": service_rows,
             "service_count": len(service_rows),
             "characteristic_count": sum(item["characteristic_count"] for item in service_rows),
+            "iid_signature": _fingerprint([
+                item.get("iid_fingerprint") for item in service_rows
+                if item.get("iid_fingerprint")
+            ]) if any(item.get("iid_fingerprint") for item in service_rows) else None,
         }
         if (mapping_source == "mapping_ambiguous" or not isinstance(entity_id, str)
                 or entity_id not in inventory_ids or entity_id in mapped):
@@ -200,6 +222,13 @@ def diagnose_runtime(
         "accessories": accessory_rows,
         "ambiguous_accessories": ambiguous,
         "driver_loaded": driver is not None,
+    })
+    result["hap_baseline"].update({
+        "accessory_count": len(accessory_rows),
+        "service_count": service_count if services_complete else None,
+        "characteristic_count": characteristic_count if services_complete else None,
+        "mapped_accessory_count": len(mapped),
+        "ambiguous_accessory_count": len(ambiguous),
     })
     if complete_mapping:
         result["entity_status"] = {
@@ -243,4 +272,5 @@ def runtime_publication_summary(diagnosis: Mapping[str, Any]) -> dict[str, Any]:
         "ambiguous_accessory_count": diagnosis.get("ambiguous_accessory_count", 0),
         "service_count": diagnosis.get("service_count"),
         "characteristic_count": diagnosis.get("characteristic_count"),
+        "hap_baseline": dict(diagnosis.get("hap_baseline", {})),
     }

@@ -45,7 +45,12 @@ from homeassistant.const import __version__ as CORE_VERSION
 from .selection_reconciliation import reconcile_selection
 from .positive_list import read_runtime_publication
 from .runtime_diagnostics import diagnose_runtime, runtime_publication_summary
-from .inventory_export import build_inventory_export, export_inventory_snapshot
+from .inventory_export import (
+    build_inventory_export,
+    export_inventory_snapshot,
+    build_reconciliation_export,
+    export_reconciliation_snapshot,
+)
 from .dual_mode import build_dual_mode_status
 from .core_migration import capability as core_migration_capability
 
@@ -308,7 +313,8 @@ class HomeKitManagerCoordinator:
                     item["homekit"]["published"] = runtime_status
                 if selected_id:
                     self.selection_reconciliation = reconcile_selection(
-                        snapshot.document, selected_id, inventory, bridge_filter, active_publication
+                        snapshot.document, selected_id, inventory, bridge_filter, active_publication,
+                        runtime_diagnosis,
                     )
                 else:
                     self.selection_reconciliation = {
@@ -444,6 +450,31 @@ class HomeKitManagerCoordinator:
             "fingerprint": self.fingerprint,
             "content": export_inventory_snapshot(snapshot, format_name),
         }
+
+    def reconciliation_export(self, format_name: str = "json") -> dict[str, Any]:
+        """Export the current reconciliation and HAP evidence without writes."""
+        if format_name not in {"json", "csv"}:
+            raise ValueError("Reconciliation kann nur als JSON oder CSV exportiert werden")
+        snapshot = build_reconciliation_export(
+            self.overview(), self.bridges, self.diagnostics(), self.runtime_diagnosis,
+        )
+        serialized = export_reconciliation_snapshot(snapshot, format_name)
+        stem = f"homekit-manager-reconciliation-{self.snapshot_revision}"
+        result = {
+            "format": format_name,
+            "filename": f"{stem}.json" if format_name == "json" else f"{stem}-deviations.csv",
+            "complete": snapshot["completeness"]["reconciliation_rows_complete"],
+            "snapshot_revision": self.snapshot_revision,
+            "fingerprint": self.fingerprint,
+            "content": serialized["content"],
+        }
+        if format_name == "csv":
+            result["files"] = [
+                {"filename": result["filename"], "content": serialized["content"], "kind": "deviations"},
+                {"filename": f"{stem}-technical.csv", "content": serialized["technical_content"], "kind": "technical"},
+                {"filename": f"{stem}-runtime.csv", "content": serialized["runtime_content"], "kind": "runtime"},
+            ]
+        return result
 
     def activation_status(self, entry_id: str | None = None, request_id: str | None = None) -> dict[str, Any]:
         """Report evidence without resolving unknown into success or failure."""

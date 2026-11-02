@@ -1,5 +1,20 @@
 # Changelog
 
+# 0.10.30
+
+## Read-only reconciliation export
+
+- Export the complete entity-level selection reconciliation from the existing
+  atomic coordinator snapshot.
+- Keep selection deviations separate from technical findings and runtime HAP
+  assignments in JSON and CSV exports.
+- Add non-secret HAP baseline evidence for bridge MAC, port, pairing status,
+  AIDs and IID signatures where Core exposes it.
+- Add a searchable, category-filtered Reconciliation view with JSON/CSV export.
+- Neutralize spreadsheet formula values in CSV output.
+- Do not change the native filter writer, write-grant policy, migration lock or
+  any productive HomeKit mutation path.
+
 # 0.10.29
 
 ## Stabilization and diagnostic clarity

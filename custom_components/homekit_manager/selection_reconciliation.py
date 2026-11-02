@@ -15,6 +15,114 @@ FILTER_KEYS = (
 )
 
 
+_RECOMMENDATIONS = {
+    "native_explicit_unmanaged": "Manager-Entscheidung fachlich prüfen; nicht automatisch übernehmen.",
+    "stale_manager_decision": "Entity Registry und Historie prüfen; veraltete Entscheidung erst danach bereinigen.",
+    "manager_include_not_native": "Native Filterauswahl und Manager-Entscheidung abgleichen; Apply bleibt gesperrt.",
+    "manager_exclude_native": "Ausschlussentscheidung und native Auswahl prüfen; unbeabsichtigte Veröffentlichung ausschließen.",
+    "invalid_manager_decision": "Ungültige Manager-Entscheidung manuell korrigieren; keine automatische Auswahlübernahme.",
+    "desired_not_native": "Positivlisten-Entscheidung gegen den nativen Filter prüfen.",
+    "native_not_desired": "Native Auswahl gegen die explizite Positivliste prüfen.",
+    "runtime_not_desired": "Runtime-Accessory gegen die Positivliste prüfen; unerwartete Veröffentlichung blockieren.",
+    "desired_not_runtime": "Runtime-Nachweis für die Positivlisten-Entity prüfen.",
+}
+
+
+def _domain(entity_id: str | None) -> str | None:
+    if not isinstance(entity_id, str) or "." not in entity_id:
+        return None
+    return entity_id.split(".", 1)[0] or None
+
+
+def _runtime_rows(
+    active_publication: Mapping[str, Any],
+    runtime_diagnosis: Mapping[str, Any] | None,
+) -> dict[str, Mapping[str, Any]]:
+    rows = []
+    if isinstance(runtime_diagnosis, Mapping):
+        rows = runtime_diagnosis.get("accessories", []) or []
+    if not rows and isinstance(active_publication, Mapping):
+        rows = active_publication.get("accessories", []) or []
+    result: dict[str, Mapping[str, Any]] = {}
+    for row in rows:
+        entity_id = row.get("entity_id") if isinstance(row, Mapping) else None
+        if isinstance(entity_id, str) and entity_id not in result:
+            result[entity_id] = row
+    return result
+
+
+def _decorate_deviation(
+    row: Mapping[str, Any],
+    by_id: Mapping[str, Mapping[str, Any]],
+    decisions: Mapping[str, Any],
+    active_publication: Mapping[str, Any],
+    runtime_diagnosis: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    entity_id = row.get("entity_id")
+    item = by_id.get(entity_id) if isinstance(entity_id, str) else None
+    item = item if isinstance(item, Mapping) else {}
+    homekit = item.get("homekit", {}) if isinstance(item.get("homekit", {}), Mapping) else {}
+    runtime_statuses = active_publication.get("entity_status", {})
+    if (not isinstance(runtime_statuses, Mapping) or not runtime_statuses) and runtime_diagnosis:
+        runtime_statuses = runtime_diagnosis.get("entity_status", {})
+    runtime_status = runtime_statuses.get(entity_id, "unknown") if isinstance(runtime_statuses, Mapping) else "unknown"
+    runtime_row = _runtime_rows(active_publication, runtime_diagnosis).get(entity_id, {})
+    manager_decision = decisions.get(entity_id) if isinstance(entity_id, str) else None
+    if manager_decision not in {"include", "exclude"}:
+        manager_decision = None
+
+    evidence_sources = ["selection_reconciliation"]
+    if item:
+        evidence_sources.append("inventory_snapshot")
+    if homekit.get("configured_by_filter") is not None:
+        evidence_sources.append("native_config_entry_filter")
+    if manager_decision is not None:
+        evidence_sources.append("manager_draft")
+    if runtime_status != "unknown":
+        evidence_sources.append("runtime_hap_diagnosis")
+
+    native_selection = homekit.get("configured_by_filter") if item else None
+    unavailable_fields = []
+    fields = {
+        "device_id": item.get("device_id"),
+        "device_name": item.get("device_name"),
+        "area_id": item.get("area_id"),
+        "area_name": item.get("area_name"),
+        "aid": runtime_row.get("aid") if isinstance(runtime_row, Mapping) else None,
+        "iid_signature": runtime_row.get("iid_signature") if isinstance(runtime_row, Mapping) else None,
+    }
+    unavailable_fields.extend(key for key, value in fields.items() if value is None)
+    verification_status = "VERIFIED" if item and runtime_status != "unknown" else "PARTIAL" if item else "NOT_VERIFIED"
+
+    classification = row.get("classification")
+    severity = row.get("severity", "warning")
+    security_relevance = {
+        "critical": "HIGH",
+        "warning": "MEDIUM",
+        "info": "LOW",
+    }.get(severity, "NOT_VERIFIED")
+    return dict(row) | {
+        "deviation_type": classification,
+        "device_id": fields["device_id"],
+        "device_name": fields["device_name"],
+        "area_id": fields["area_id"],
+        "area_name": fields["area_name"],
+        "domain": item.get("domain") or _domain(entity_id),
+        "native_selection": native_selection,
+        "manager_decision": manager_decision,
+        "runtime_selection": runtime_status,
+        "hap_publication_status": runtime_status,
+        "aid": fields["aid"],
+        "iid_signature": fields["iid_signature"],
+        "technical_cause": row.get("cause"),
+        "security_relevance": security_relevance,
+        "recommendation": _RECOMMENDATIONS.get(classification, "Einzelfall lesend prüfen; keine automatische Änderung."),
+        "evidence_sources": evidence_sources,
+        "verification_status": verification_status,
+        "unavailable_fields": unavailable_fields,
+    }
+
+
 def _native_ids(inventory: list[Mapping[str, Any]]) -> set[str]:
     return {
         str(item["entity_id"])
@@ -113,6 +221,7 @@ def reconcile_selection(
     inventory: list[Mapping[str, Any]],
     native_filter: Mapping[str, Any] | None,
     active_publication: Mapping[str, Any] | None = None,
+    runtime_diagnosis: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return an explainable A/B/C comparison without changing any state.
 
@@ -145,6 +254,12 @@ def reconcile_selection(
     native_known = native_filter is not None
     active = dict(active_publication or {"state": "unknown", "reason": "Keine Laufzeitprüfung durchgeführt"})
     deviations = _decision_entries(document, entry_id, inventory, native_filter, active)
+    decisions = (document.get("bridges", {}).get(entry_id, {}) or {}).get("entities", {})
+    by_id = {item.get("entity_id"): item for item in inventory if item.get("entity_id")}
+    deviations = [
+        _decorate_deviation(row, by_id, decisions, active, runtime_diagnosis)
+        for row in deviations
+    ]
     mismatch = bool(deviations) or (policy == "positive_list" and not native_known)
     classification_counts = dict(sorted(Counter(row["classification"] for row in deviations).items()))
     return {

@@ -215,7 +215,7 @@ def build_reconciliation_export(
     runtime_assignment_rows_complete = runtime_complete and not runtime_diagnosis.get("ambiguous_accessories")
     export_complete = bool(overview.get("snapshot_complete")) and row_count_matches and runtime_assignment_rows_complete
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "export_type": "homekit_manager_reconciliation",
         "manager_version": overview.get("integration_version"),
         "core_version": overview.get("core_version"),
@@ -248,8 +248,13 @@ def build_reconciliation_export(
         "reconciliation": {
             "scope": alignment.get("scope"),
             "state": alignment.get("state"),
+            "diagnostic_state": alignment.get("diagnostic_state"),
+            "selection_conflict": alignment.get("selection_conflict"),
+            "migration_blocked": alignment.get("migration_blocked"),
+            "blocking_reasons": alignment.get("blocking_reasons", []),
             "policy": alignment.get("policy"),
             "message": alignment.get("message"),
+            "differences": alignment.get("differences", {}),
             "deviations": deviations,
         },
         "technical_findings": technical_findings,

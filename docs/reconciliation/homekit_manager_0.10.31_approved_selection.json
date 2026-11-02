@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "document_type": "homekit_manager_positive_list_audit_target",
+  "planning_only": true,
+  "write_performed": false,
+  "source": "user_explicit_decision",
+  "source_note": "Verbindliche fachliche Soll-Auswahl aus dem 0.10.31-Reconciliation-Auftrag",
+  "bridge_entry_id": "01KTHHYVPZ1T9804NQTJSCCXFJ",
+  "entity_ids": [
+    "binary_sensor.0x70ac08fffe7ccb2a_occupancy",
+    "binary_sensor.flur_og_flur_og_bewegung_flur_og_treppe",
+    "light.esstisch",
+    "light.flur_flur_decke_1",
+    "light.flur_flur_decke_2",
+    "light.flur_flur_decke_3",
+    "light.flur_flur_decke_4",
+    "light.flur_flur_decke_5",
+    "light.flur_flur_decke_6",
+    "light.flur_flur_decke_7",
+    "light.flur_flur_decke_8",
+    "light.katzengefangnis_deckenlampe",
+    "light.schlafzimmer_dachstuhl",
+    "light.schreibtisch_catarina",
+    "light.schreibtisch_felix",
+    "light.spiegel",
+    "light.tolomeo",
+    "light.treppe_og_4",
+    "light.vorgarten_garten_vorgartenbeleuchtung",
+    "switch.flur_eingang_steckdose",
+    "switch.katzengefangnis_steckdosen",
+    "switch.waschkuche_trockner",
+    "switch.waschkuche_waschmaschine"
+  ],
+  "constraints": {
+    "allow_wildcards": false,
+    "allow_domain_rules": false,
+    "auto_extend": false,
+    "auto_rename": false,
+    "auto_replace": false
+  }
+}

@@ -322,7 +322,7 @@ class HomeKitManagerCoordinator:
                         "message": "Keine eindeutig ausgewählte HomeKit-Bridge vorhanden.",
                         "differences": {"count": 0, "desired_not_native": [], "native_not_desired": [], "unknown_entities": []},
                     }
-                if self.selection_reconciliation.get("state") == "mismatch":
+                if self.selection_reconciliation.get("selection_conflict"):
                     differences = self.selection_reconciliation.get("differences", {})
                     findings.append({
                         "code": "manager_native_mismatch",
@@ -332,6 +332,16 @@ class HomeKitManagerCoordinator:
                         "desired_not_native": differences.get("desired_not_native", []),
                         "native_not_desired": differences.get("native_not_desired", []),
                         "recommendation": "Entwurf und native Konfiguration lesend vergleichen; keine automatische Migration durchführen.",
+                    })
+                elif self.selection_reconciliation.get("state") == "mismatch":
+                    differences = self.selection_reconciliation.get("differences", {})
+                    findings.append({
+                        "code": "selection_metadata_unresolved",
+                        "severity": "warning",
+                        "title": "Reconciliation-Metadaten sind ungeklärt",
+                        "detail": self.selection_reconciliation.get("message", "Die Auswahlmengen sind nicht direkt widersprüchlich, aber der Nachweis ist unvollständig."),
+                        "deviation_count": differences.get("count", 0),
+                        "recommendation": "Ungeklärte Manager-Entscheidungen und Evidenz manuell prüfen; Migration bleibt gesperrt.",
                     })
                 for bridge_item in bridge_data:
                     if bridge_item.get("entry_id") == selected_id:

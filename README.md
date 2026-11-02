@@ -1,4 +1,15 @@
-# HomeKit Manager 0.10.30
+# HomeKit Manager 0.10.31
+
+Version 0.10.31 is a development release for reconciliation finalization. It
+separates genuine native/desired selection conflicts from unresolved legacy
+metadata and adds an offline, read-only positive-list planning tool. The
+versioned audit target contains exactly 23 user-approved entities and is not a
+Manager decision or a productive Home Assistant configuration.
+
+The planner is fail-closed: empty or broad filters, incomplete snapshots,
+unknown entities, critical findings and ambiguous runtime evidence block a
+future migration. No filter Apply, write grant, pairing operation, HAP
+persistence change or native UI↔YAML migration is performed by this release.
 
 Version 0.10.30 adds a complete, authenticated read-only reconciliation export
 for JSON and CSV. Selection deviations, separate technical findings, runtime

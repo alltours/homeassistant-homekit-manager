@@ -1,6 +1,6 @@
 {
-  "integration_version": "0.10.30",
-  "file_count": 58,
+  "integration_version": "0.10.31",
+  "file_count": 59,
   "files": [
     {
       "path": "__init__.py",
@@ -44,7 +44,7 @@
     },
     {
       "path": "const.py",
-      "sha256": "6c99cc30990d5f300162b314adf10100e2620fe84e5073f856b0e0b9b36b7afb",
+      "sha256": "c958689efb01041d81bf3a486c653cd92e4f34ed9fe5c8139fd649698bd30c61",
       "size": 2813
     },
     {
@@ -54,8 +54,8 @@
     },
     {
       "path": "coordinator.py",
-      "sha256": "25120426a5e23e3ee167a1b32c591c50c2feac7050dbd736bc3314f56ee17db8",
-      "size": 53913
+      "sha256": "76d8e92a5094680de3d9be2473be6ac9b9d0c700cd7a1db834bbe33c951e8d40",
+      "size": 54711
     },
     {
       "path": "core_migration.py",
@@ -134,8 +134,8 @@
     },
     {
       "path": "inventory_export.py",
-      "sha256": "2563c3e78ec20f7ce089d3af42272058ab11a36a9eadbfcaa7749321bf261f17",
-      "size": 13299
+      "sha256": "79b32c53ca4f9d69ce3b8c4187ceb9152f7198b5e334a5143aca804e7d613634",
+      "size": 13638
     },
     {
       "path": "management_store.py",
@@ -144,7 +144,7 @@
     },
     {
       "path": "manifest.json",
-      "sha256": "2eb343187987e319072d287cdbe69d53fd81aa149bc9919bbc38cdc04391a3a9",
+      "sha256": "835a8ab8a28ca598923b497a57587dd96bb1ff854b70a1705c91e9a62a07f064",
       "size": 517
     },
     {
@@ -213,6 +213,11 @@
       "size": 6841
     },
     {
+      "path": "positive_list_planning.py",
+      "sha256": "aa41ac84377fd85676f68219aa8a300365da39b088ad45692eef1a3b46cb9888",
+      "size": 8978
+    },
+    {
       "path": "reconcile.py",
       "sha256": "9b58b1929b9d465fd8c8b7263f66d6b429bf300b0bf4605bb3f293eb0a6bafa6",
       "size": 1870
@@ -234,8 +239,8 @@
     },
     {
       "path": "selection_reconciliation.py",
-      "sha256": "45c20729774c42e33a9ff8752277d961a5ca318fbcc78bf650f4a9e75e578622",
-      "size": 14885
+      "sha256": "593f5d4b5a511bc1fa032206c4a41903b1106a0cac7a4ec84f523f698f508b49",
+      "size": 17003
     },
     {
       "path": "source_model.py",
@@ -279,8 +284,8 @@
     },
     {
       "path": "www/homekit-manager.js",
-      "sha256": "89eb993b9ba1005830e537f1989d70ecd87d716ea10f0fa3e48d2a233865b118",
-      "size": 122382
+      "sha256": "260ee12369e98860cfd510afd6b9db7ed315cbe9a3e1394be1dc35f76e08acd6",
+      "size": 122458
     },
     {
       "path": "yaml_adapter.py",

@@ -1,5 +1,19 @@
 # Changelog
 
+# 0.10.31 (development)
+
+## Reconciliation finalization and positive-list planning
+
+- Distinguish a real native/desired selection conflict from unresolved legacy
+  reconciliation metadata.
+- Keep unresolved metadata fail-closed for every later migration or Apply path;
+  no write authority or migration behavior is changed.
+- Add a pure, offline read-only positive-list planner and a versioned audit
+  target containing the 23 explicitly approved entities.
+- Prove the current production-shaped dry-run as 23 KEEP, zero new
+  publications and zero desired accessory removals, while retaining blockers
+  for stale decisions and incomplete evidence.
+
 # 0.10.30
 
 ## Read-only reconciliation export

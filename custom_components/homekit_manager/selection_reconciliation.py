@@ -28,6 +28,20 @@ _RECOMMENDATIONS = {
 }
 
 
+# These classifications describe a real disagreement between a selection
+# authority and another observed selection.  The remaining classifications are
+# still unresolved and therefore block a later write, but they are metadata or
+# evidence problems rather than proof that the native and desired sets differ.
+_DIRECT_SELECTION_CONFLICTS = frozenset({
+    "manager_include_not_native",
+    "manager_exclude_native",
+    "desired_not_native",
+    "native_not_desired",
+    "runtime_not_desired",
+    "desired_not_runtime",
+})
+
+
 def _domain(entity_id: str | None) -> str | None:
     if not isinstance(entity_id, str) or "." not in entity_id:
         return None
@@ -260,8 +274,34 @@ def reconcile_selection(
         _decorate_deviation(row, by_id, decisions, active, runtime_diagnosis)
         for row in deviations
     ]
+    direct_conflicts = [
+        row for row in deviations
+        if row.get("classification") in _DIRECT_SELECTION_CONFLICTS
+    ]
+    selection_conflict = bool(
+        direct_conflicts
+        or added
+        or removed
+        or (policy == "positive_list" and not native_known)
+    )
     mismatch = bool(deviations) or (policy == "positive_list" and not native_known)
+    if selection_conflict:
+        diagnostic_state = "selection_conflict"
+    elif deviations:
+        diagnostic_state = "metadata_unresolved"
+    elif policy == "positive_list" and not native_known:
+        diagnostic_state = "incomplete"
+    else:
+        diagnostic_state = "aligned"
     classification_counts = dict(sorted(Counter(row["classification"] for row in deviations).items()))
+    if not mismatch and active.get("state") == "verified":
+        message = "Manager-Auswahl, native Konfiguration und Laufzeitstatus stimmen überein."
+    elif selection_conflict:
+        message = "Die beobachteten Auswahlmengen widersprechen sich."
+    elif deviations:
+        message = "Die Auswahlmengen sind nicht direkt widersprüchlich; es bestehen ungeklärte Reconciliation-Metadaten."
+    else:
+        message = "Die native HomeKit-Konfiguration konnte nicht vollständig verglichen werden."
     return {
         "scope": "manager_native_runtime_selection",
         "policy": policy,
@@ -297,16 +337,28 @@ def reconcile_selection(
             "unknown_entities": unknown,
             "count": len(deviations),
         },
+        "selection_conflict": selection_conflict,
+        "diagnostic_state": diagnostic_state,
+        # Any unresolved row remains a write/migration blocker.  This is
+        # intentionally separate from ``selection_conflict`` so a diagnostic
+        # false positive cannot be fixed by weakening the safety gate.
+        "migration_blocked": bool(deviations) or (policy == "positive_list" and not native_known),
+        "blocking_reasons": [
+            {
+                "classification": row.get("classification"),
+                "entity_id": row.get("entity_id"),
+                "severity": row.get("severity"),
+            }
+            for row in deviations
+        ] + ([{
+            "classification": "native_snapshot_unavailable",
+            "entity_id": None,
+            "severity": "critical",
+        }] if policy == "positive_list" and not native_known else []),
         "deviations": deviations,
         "deviation_summary": classification_counts,
         "deviation_count": len(deviations),
         "aligned": not mismatch,
         "state": "aligned" if not mismatch else "mismatch" if native_known else "unknown",
-        "message": (
-            "Manager-Auswahl, native Konfiguration und Laufzeitstatus stimmen überein."
-            if not mismatch and active.get("state") == "verified"
-            else "Die Manager-Auswahl stimmt nicht mit der nativen HomeKit-Konfiguration überein."
-            if mismatch
-            else "Die native HomeKit-Konfiguration konnte nicht vollständig verglichen werden."
-        ),
+        "message": message,
     }

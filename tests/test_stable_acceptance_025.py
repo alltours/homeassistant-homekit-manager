@@ -1,4 +1,4 @@
-"""Static release-gate assertions for the 0.10.30 stable product boundary."""
+"""Static release-gate assertions for the 0.10.31 release-candidate boundary."""
 
 import json
 import sys
@@ -27,8 +27,8 @@ def test_acceptance_version_and_release_manifest_are_consistent():
     release = json.loads(
         (ROOT / "docs/RELEASE_MANIFEST.json").read_text(encoding="utf-8")
     )
-    assert manifest["version"] == package["version"] == INTEGRATION_VERSION == "0.10.30"
-    assert release["integration_version"] == "0.10.30"
+    assert manifest["version"] == package["version"] == INTEGRATION_VERSION == "0.10.31"
+    assert release["integration_version"] == "0.10.31"
 
 
 def test_acceptance_native_migration_is_fail_closed():

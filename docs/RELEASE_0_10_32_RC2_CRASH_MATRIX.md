@@ -51,6 +51,8 @@ The durable Config Entry flush is completed before a mutation is considered
 verified. Therefore a crash after the native write but before the final
 journal checkpoint is classified from the persisted native state rather than
 replayed. Unknown or contradictory states remain blocked and require explicit
-administrator recovery. The same matrix must be rerun by CI against Core
-2026.11.0b0 before any stable release; this document does not claim a local
-beta SIGKILL result.
+administrator recovery. The same 15-point Apply and 15-point Rollback matrix
+was also executed with Core 2026.11.0b0 in an isolated beta environment. All
+beta rows produced the same exit/recovery classes and passed their
+journal-integrity checks. The GitHub beta workflow additionally passed its
+isolated integration and HAP Apply/Reload/Reconnect suite.

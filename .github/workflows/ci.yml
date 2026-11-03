@@ -139,7 +139,7 @@ jobs:
     name: Official Core HAP acceptance
     runs-on: ubuntu-24.04
     env:
-      PYTHONPATH: tests/integration:tests/acceptance
+      PYTHONPATH: .:tests/integration:tests/acceptance
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

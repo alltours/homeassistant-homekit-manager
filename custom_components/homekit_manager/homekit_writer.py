@@ -367,8 +367,8 @@ class HomeKitWriter:
             # process crash after this point must not resurrect the preimage
             # even though the in-memory entry already contains the target.
             # Flush the Core-owned store before reporting a durable mutation;
-            # do not write .storage directly or create a second persistence
-            # format.  If the supported Core cannot expose the store, fail
+            # do not write Core persistence files directly or create a second
+            # persistence format.  If the supported Core cannot expose the store, fail
             # closed instead of claiming persistence.
             config_store = getattr(self.hass.config_entries, "_store", None)
             data_to_save = getattr(self.hass.config_entries, "_data_to_save", None)

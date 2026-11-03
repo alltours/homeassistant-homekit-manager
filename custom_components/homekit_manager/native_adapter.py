@@ -5,19 +5,29 @@ automatic recovery and rollback remain unavailable.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from copy import deepcopy
 import asyncio
-from typing import Any, Callable, Mapping
+from collections.abc import Callable, Mapping
+from copy import deepcopy
+from dataclasses import dataclass, field
+from typing import Any
 from uuid import uuid4
 
 from homeassistant.helpers.storage import Store
 
 from .const import NATIVE_FILTER_WRITE_CORE_VERSIONS
-from .homekit_writer import HomeKitWriter, HomeKitWriteBlocked, OptionsDiff, build_options_diff
+from .homekit_writer import (
+    HomeKitWriteBlocked,
+    HomeKitWriter,
+    OptionsDiff,
+    build_options_diff,
+)
+from .positive_list import (
+    PositiveListEvidence,
+    collect_migration_evidence,
+    read_runtime_publication,
+    verify_migration_runtime,
+)
 from .source_model import HomeKitSource, native_source, revision
-from .positive_list import PositiveListEvidence, collect_migration_evidence, read_runtime_publication, verify_migration_runtime
-
 
 _OPERATION_LOCKS: dict[str, asyncio.Lock] = {}
 
@@ -123,9 +133,11 @@ class NativeHomeKitAdapter:
                 raise HomeKitWriteBlocked("Operation-ID bereits vorhanden; zuerst lesend abgleichen")
             if self.read(plan.entry_id).revision != plan.source_revision:
                 raise HomeKitWriteBlocked("Native Config-Entry-Revision ist veraltet")
+            if self._fault_injector is not None:
+                self._fault_injector("before_native_operation_journal")
             await self._record(plan, "applying")
             if self._fault_injector is not None:
-                self._fault_injector("after_operation_journal")
+                self._fault_injector("after_native_operation_journal")
             try:
                 def check_migration_evidence() -> None:
                     if plan.migration_evidence is None:
@@ -213,10 +225,14 @@ class NativeHomeKitAdapter:
             apply_enabled=self._isolated_test_authority,
             production_grant=self._production_grant,
             expected_source_revision=current.revision,
-            fault_injector=self._fault_injector,
+            fault_injector=(
+                (lambda point: self._fault_injector(f"rollback_{point}"))
+                if self._fault_injector is not None else None
+            ),
         ).async_apply(inverse)
         if self._fault_injector is not None:
             self._fault_injector("after_rollback_write")
+            self._fault_injector("before_rollback_verification")
         restored = self.hass.config_entries.async_get_entry(plan.entry_id)
         restored_filter = dict(restored.options).get("filter") if restored else None
         if restored is None or restored_filter != plan.diff.before.get("filter") or getattr(restored.state, "value", restored.state) != "loaded":
@@ -230,5 +246,7 @@ class NativeHomeKitAdapter:
                 restored_evidence,
                 plan.migration_evidence.published_ids,
             )
+        if self._fault_injector is not None:
+            self._fault_injector("after_rollback_verification")
         await self._record(plan, "verified_options_restore")
         return "verified_options_restore"

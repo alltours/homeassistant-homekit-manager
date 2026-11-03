@@ -28,6 +28,8 @@ from homeassistant.components.homekit import HomeKit
 from homeassistant.runner import RuntimeConfig
 from port_allocator import reserve_hap_port, reserve_http_port
 
+from custom_components.homekit_manager.operations import HomeKitOperationService
+
 ENTRY_A = "acceptance-bridge-a-028"
 ENTRY_B = "acceptance-bridge-b-028"
 MANAGER_ENTRY = "acceptance-manager-028"
@@ -99,11 +101,11 @@ def _entry(entry_id: str, title: str, port: int, ids: tuple[str, ...]):
     )
 
 
-def _write_grant(config_dir: Path, entry_id: str) -> None:
+def _write_grant(config_dir: Path, entry_id: str, grant_id: str = "02802802802802802802802802802802") -> None:
     now = datetime.now(UTC)
     payload = {
         "version": 1,
-        "grant_id": "02802802802802802802802802802802",
+        "grant_id": grant_id,
         "entry_id": entry_id,
         "source": "user",
         "core_version": "2026.10.4",
@@ -203,6 +205,17 @@ async def _ws_call(hass, http_port: int, message: dict) -> dict:
             return response["result"]
 
 
+def _kill_on(shared: Path, requested: str | None):
+    """Return an opt-in test callback that kills only at one named point."""
+    def inject(point: str) -> None:
+        if requested != point:
+            return
+        (shared / "fault-reached").write_text(point, encoding="utf-8")
+        os.kill(os.getpid(), 9)
+
+    return inject
+
+
 def _names(accessories) -> set[str]:
     values: set[str] = set()
     for accessory in accessories:
@@ -265,6 +278,7 @@ def _signature_by_name(accessories) -> dict[str, dict]:
 async def run() -> None:
     shared = Path(os.environ["HKM_ACCEPTANCE_DIR"])
     phase = os.environ["HKM_ACCEPTANCE_PHASE"]
+    fault_point = os.environ.get("HKM_ACCEPTANCE_FAULT")
     print(f"acceptance: phase={phase} dir={shared}", flush=True)
     shared.mkdir(parents=True, exist_ok=True)
     config_dir = shared / "config"
@@ -281,8 +295,10 @@ async def run() -> None:
                 _config_text(http_port), encoding="utf-8"
             )
             print(f"acceptance: configuration written port={http_port}", flush=True)
-        elif phase == "reconnect":
+        elif phase in {"reconnect", "recover_crash"}:
             _install_isolated_custom_component(config_dir)
+            if phase == "reconnect":
+                _write_grant(config_dir, ENTRY_A, "02802802802802802802802802802803")
         print("acceptance: starting async_setup_hass", flush=True)
         hass = await async_setup_hass(
             RuntimeConfig(config_dir=str(config_dir), skip_pip=True,
@@ -350,6 +366,11 @@ async def run() -> None:
         homekit_a = hass.config_entries.async_get_entry(ENTRY_A).runtime_data.homekit
         homekit_b = hass.config_entries.async_get_entry(ENTRY_B).runtime_data.homekit
         assert homekit_a.status == 1 and homekit_b.status == 1
+        coordinator = hass.data[DOMAIN]["coordinator"]
+        if fault_point and phase in {"pair_apply", "reconnect"}:
+            coordinator.operation_service = HomeKitOperationService(
+                hass, fault_injector=_kill_on(shared, fault_point)
+            )
 
         if phase == "pair_apply":
             pairing_a = await _pair(hass, homekit_a, "hkm-acceptance-a-028")
@@ -373,7 +394,6 @@ async def run() -> None:
             }
             (shared / "baseline.json").write_text(json.dumps(baseline), encoding="utf-8")
 
-            coordinator = hass.data[DOMAIN]["coordinator"]
             await coordinator.async_refresh(ENTRY_A)
             assert coordinator.selected_bridge_id == ENTRY_A
             desired = {entity_id: "include" for entity_id in A_IDS[1:]}
@@ -395,6 +415,7 @@ async def run() -> None:
                     },
                 )
                 assert plan["apply_enabled"] is True, plan
+                (shared / "planned.json").write_text(json.dumps(plan), encoding="utf-8")
                 result = await _ws_call(
                     hass,
                     http_port,
@@ -450,13 +471,41 @@ async def run() -> None:
             await reconnect_b.shutdown()
             await pairing_a.shutdown()
             await pairing_b.shutdown()
+        elif phase == "recover_crash":
+            baseline = json.loads((shared / "baseline.json").read_text(encoding="utf-8"))
+            planned = json.loads((shared / "planned.json").read_text(encoding="utf-8"))
+            pairing_a = IpPairing(Controller(), json.loads((shared / "pairing-a.json").read_text(encoding="utf-8")))
+            pairing_b = IpPairing(Controller(), json.loads((shared / "pairing-b.json").read_text(encoding="utf-8")))
+            current_a = await _accessories(pairing_a)
+            current_b = await _accessories(pairing_b)
+            await coordinator.async_refresh(ENTRY_A)
+            operation_id = planned["operation_id"]
+            recovery = await coordinator.operation_service.reconcile(operation_id)
+            status = await coordinator.operation_service.status(operation_id)
+            assert status["automatic_retry"] is False
+            assert status["journal_integrity"] == "verified"
+            if recovery.get("recovery_result") in {"verified_options", "rollback_not_applied"}:
+                expected_a = {name for name in baseline["a"]["names"] if "Hkm A 00" not in name} | {"Hkm B 00"}
+            else:
+                expected_a = set(baseline["a"]["names"])
+            assert _names(current_a) == expected_a
+            assert _shape(current_b) == baseline["b"]["shape"]
+            assert _signature_by_name(current_b) == baseline["b"]["signatures"]
+            assert homekit_a.driver.state.mac == baseline["a"]["mac"]
+            assert homekit_b.driver.state.mac == baseline["b"]["mac"]
+            (shared / "crash-recovery.json").write_text(
+                json.dumps({"fault": fault_point, "recovery": recovery, "status": status}),
+                encoding="utf-8",
+            )
+            await pairing_a.shutdown()
+            await pairing_b.shutdown()
         elif phase == "reconnect":
             baseline = json.loads((shared / "baseline.json").read_text(encoding="utf-8"))
             expected = json.loads((shared / "after_apply.json").read_text(encoding="utf-8"))
             current_version = json.loads(
                 (config_dir / "custom_components" / DOMAIN / "manifest.json").read_text()
             )["version"]
-            assert current_version == "0.10.32-rc.1"
+            assert current_version == "0.10.32-rc.2"
             pairing_a = IpPairing(Controller(), json.loads((shared / "pairing-a.json").read_text(encoding="utf-8")))
             pairing_b = IpPairing(Controller(), json.loads((shared / "pairing-b.json").read_text(encoding="utf-8")))
             after_a = await _accessories(pairing_a)
@@ -468,6 +517,29 @@ async def run() -> None:
             assert _shape(after_b) == baseline["b"]["shape"]
             assert _signature_by_name(after_b) == baseline["b"]["signatures"]
             assert len([entry for entry in hass.config_entries.async_entries("homekit")]) == 2
+
+            # The second Core process must reconstruct the native rollback
+            # plan from the authenticated journal.  A fresh grant and a fresh
+            # process-local recovery challenge are mandatory after restart.
+            coordinator = hass.data[DOMAIN]["coordinator"]
+            await coordinator.async_refresh(ENTRY_A)
+            operation_id = expected["result"]["operation_id"]
+            recovery_status = await coordinator.operation_service.status(operation_id)
+            assert recovery_status["journal_integrity"] == "verified"
+            assert recovery_status["recovery_required"] is True
+            rollback = await coordinator.operation_service.rollback(
+                operation_id,
+                entry_id=ENTRY_A,
+                confirmed_operation_id=recovery_status["recovery_confirmation"],
+                admin=True,
+            )
+            assert rollback["state"] == "rolled_back"
+            restored_a = await _accessories(pairing_a)
+            restored_b = await _accessories(pairing_b)
+            assert _names(restored_a) == set(baseline["a"]["names"])
+            assert _signature_by_name(restored_a) == baseline["a"]["signatures"]
+            assert sorted(_names(restored_b)) == baseline["b"]["names"]
+            assert _signature_by_name(restored_b) == baseline["b"]["signatures"]
             await pairing_a.shutdown()
             await pairing_b.shutdown()
         else:

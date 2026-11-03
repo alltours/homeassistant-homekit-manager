@@ -24,7 +24,7 @@ def test_stable_version_metadata_is_consistent():
         )
     )
     package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
-    assert manifest["version"] == "0.10.32-rc.1"
+    assert manifest["version"] == "0.10.32-rc.2"
     assert manifest["version"] == INTEGRATION_VERSION == package["version"]
 
 

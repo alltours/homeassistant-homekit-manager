@@ -1,15 +1,19 @@
 """Common operation lifecycle against real isolated Core entries."""
 import asyncio
+
 import pytest
+from file_helpers import secure_private_source
 from homeassistant import config_entries
 from homeassistant.config import async_hass_config_yaml
 from homeassistant.const import __version__
 from homeassistant.setup import async_setup_component
 
-from custom_components.homekit_manager.homekit_writer import HomeKitWriteBlocked, HomeKitWriteDisabled
-from custom_components.homekit_manager.operations import HomeKitOperationService
+from custom_components.homekit_manager.homekit_writer import (
+    HomeKitWriteBlocked,
+    HomeKitWriteDisabled,
+)
 from custom_components.homekit_manager.native_adapter import NativeHomeKitAdapter
-from file_helpers import secure_private_source
+from custom_components.homekit_manager.operations import HomeKitOperationService
 
 
 def desired(entry_id):
@@ -186,11 +190,50 @@ async def test_verified_native_operation_can_be_explicitly_restored(hass, monkey
                                   expected_revision=plan["source_revision"],
                                   confirmed_operation_id=plan["operation_id"], admin=True)
     assert applied["state"] == "verification_incomplete"
-    restored = await service.rollback(plan["operation_id"], entry_id=entry.entry_id,
-                                      confirmed_operation_id=plan["operation_id"], admin=True)
+    restarted = HomeKitOperationService(hass, isolated_write_authority=True)
+    recovery_status = await restarted.status(plan["operation_id"])
+    assert recovery_status["journal_integrity"] == "verified"
+    assert recovery_status["recovery_required"] is True
+    with pytest.raises(HomeKitWriteBlocked, match="Recovery-Bestätigung"):
+        await restarted.rollback(plan["operation_id"], entry_id=entry.entry_id,
+                                 confirmed_operation_id=plan["operation_id"], admin=True)
+    restored = await restarted.rollback(
+        plan["operation_id"], entry_id=entry.entry_id,
+        confirmed_operation_id=recovery_status["recovery_confirmation"], admin=True
+    )
     assert restored["state"] == "rolled_back"
     assert entry.options["filter"]["include_entities"] == ["light.before"]
-    assert (await service.status(plan["operation_id"]))["state"] == "rolled_back"
+    assert (await restarted.status(plan["operation_id"]))["state"] == "rolled_back"
     with pytest.raises(HomeKitWriteBlocked, match="vollständig verifiziert"):
-        await service.rollback(plan["operation_id"], entry_id=entry.entry_id,
+        await restarted.rollback(plan["operation_id"], entry_id=entry.entry_id,
                                confirmed_operation_id=plan["operation_id"], admin=True)
+
+
+async def test_tampered_persisted_operation_is_fail_closed(hass):
+    """A modified journal cannot produce a rollback plan or mutation."""
+    service = HomeKitOperationService(hass, isolated_write_authority=True)
+    operation_id = "tampered-operation"
+    await service._store.async_save({
+        "schema_version": 2,
+        "operations": {
+            operation_id: {
+                "journal_schema": 2,
+                "operation_id": operation_id,
+                "operation_type": "native_filter_apply",
+                "entry_id": "missing-entry",
+                "source": "user",
+                "state": "verified",
+                "before_filter": {"include_entities": ["light.before"]},
+                "target_filter": {"include_entities": ["light.after"]},
+                "before_fingerprint": "tampered",
+                "target_fingerprint": "tampered",
+                "integrity": "tampered",
+            }
+        },
+    })
+    status = await service.status(operation_id)
+    assert status["journal_integrity"] == "invalid"
+    assert status["recovery_blocked"] is True
+    with pytest.raises(HomeKitWriteBlocked, match="nicht vertrauenswürdig"):
+        await service.rollback(operation_id, entry_id="missing-entry",
+                               confirmed_operation_id="anything", admin=True)

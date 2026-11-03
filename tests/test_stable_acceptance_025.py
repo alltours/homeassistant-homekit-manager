@@ -27,8 +27,8 @@ def test_acceptance_version_and_release_manifest_are_consistent():
     release = json.loads(
         (ROOT / "docs/RELEASE_MANIFEST.json").read_text(encoding="utf-8")
     )
-    assert manifest["version"] == package["version"] == INTEGRATION_VERSION == "0.10.32-rc.1"
-    assert release["integration_version"] == "0.10.32-rc.1"
+    assert manifest["version"] == package["version"] == INTEGRATION_VERSION == "0.10.32-rc.2"
+    assert release["integration_version"] == "0.10.32-rc.2"
 
 
 def test_acceptance_native_migration_is_fail_closed():

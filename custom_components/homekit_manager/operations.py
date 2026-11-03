@@ -8,19 +8,30 @@ never retried automatically.
 from __future__ import annotations
 
 import asyncio
+import copy
+import hashlib
+import hmac
+import json
+import secrets
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Callable, Mapping
+from datetime import UTC, datetime
+from typing import Any
 
 from homeassistant.helpers.storage import Store
 
-from .homekit_writer import HomeKitWriteBlocked, HomeKitWriteDisabled, build_options_diff
-from .native_adapter import NativeFilterPlan, NativeHomeKitAdapter
-from .safety import WRITE_LOCK_REASON
-from .yaml_adapter import YamlFilterPlan, YamlHomeKitAdapter
-from .write_grant import GrantBlocked, ProductionWriteGrant, read_production_grant
-from .write_test_mode import TestWriteMode, TestModeBlocked, TestModeAuthority
 from .const import NATIVE_FILTER_WRITE_CORE_VERSIONS
+from .homekit_writer import (
+    HomeKitWriteBlocked,
+    HomeKitWriteDisabled,
+    OptionsDiff,
+    build_options_diff,
+)
+from .native_adapter import NativeFilterPlan, NativeHomeKitAdapter, _context_revision
+from .safety import WRITE_LOCK_REASON
+from .write_grant import GrantBlocked, ProductionWriteGrant, read_production_grant
+from .write_test_mode import TestModeAuthority, TestModeBlocked, TestWriteMode
+from .yaml_adapter import YamlFilterPlan, YamlHomeKitAdapter
 
 
 @dataclass(frozen=True)
@@ -34,6 +45,38 @@ class OperationPlan:
     authority_kind: str = "blocked"
     authority_id: str | None = None
     change_details: tuple[dict[str, Any], ...] = ()
+    recovered_after_restart: bool = False
+
+
+JOURNAL_SCHEMA_VERSION = 2
+_JOURNAL_PRIVATE_KEYS = {"integrity"}
+
+
+def _filter_fingerprint(value: Mapping[str, Any] | None) -> str:
+    """Return a stable, secret-free fingerprint for one native filter."""
+    payload = json.dumps(value or {}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _journal_integrity(record: Mapping[str, Any]) -> str:
+    """Hash all persisted journal fields except the integrity field itself."""
+    payload = {key: value for key, value in record.items() if key not in _JOURNAL_PRIVATE_KEYS}
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _recovery_phase(state: str) -> str:
+    return {
+        "validated": "validated",
+        "applying": "mutation_pending",
+        "verified": "target_verified",
+        "verification_incomplete": "target_options_verified",
+        "unknown_outcome": "manual_reconciliation_required",
+        "not_applied": "reconciled_not_applied",
+        "rolling_back": "rollback_pending",
+        "rolled_back": "rollback_verified",
+        "rollback_unknown": "manual_rollback_reconciliation_required",
+    }.get(state, "unknown")
 
 
 class HomeKitOperationService:
@@ -48,6 +91,11 @@ class HomeKitOperationService:
         self._store = Store(hass, 1, "homekit_manager.operations")
         self._plans: dict[str, OperationPlan] = {}
         self._lock = asyncio.Lock()
+        # Recovery challenges are deliberately process-local and therefore
+        # cannot survive a restart.  A recovered rollback always needs a new
+        # challenge and a newly verified authority.
+        self._recovery_challenges: dict[str, str] = {}
+        self._journal_errors: dict[str, str] = {}
         self.test_write_mode = TestWriteMode()
 
     async def authority_status(self, entry_id: str, source: str) -> dict[str, Any]:
@@ -65,6 +113,14 @@ class HomeKitOperationService:
                 or source not in {"user", "import"}):
             return {"enabled": False, "reason": "Filter-Apply ist für diese Quelle/Core-Version nicht verifiziert", "automatic_retry": False}
         records = await self._records()
+        if self._journal_errors.get("__store__"):
+            return {"enabled": False, "reason": "Operationsjournal ist nicht vertrauenswürdig", "automatic_retry": False}
+        if any(
+            self._journal_errors.get(operation_id)
+            for operation_id, item in records.items()
+            if isinstance(item, dict) and item.get("entry_id") == entry_id
+        ):
+            return {"enabled": False, "reason": "Operationsjournal der Bridge ist nicht vertrauenswürdig", "automatic_retry": False}
         if any(isinstance(item, dict) and item.get("entry_id") == entry_id
                and item.get("state") in {"applying", "prepared", "unknown_outcome", "rolling_back", "rollback_unknown"}
                for item in records.values()):
@@ -110,39 +166,180 @@ class HomeKitOperationService:
 
     async def _records(self) -> dict[str, dict[str, Any]]:
         data = await self._store.async_load() or {}
+        self._journal_errors = {}
+        if not isinstance(data, dict):
+            self._journal_errors["__store__"] = "Journalwurzel ist kein Objekt"
+            return {}
         records = data.get("operations", {}) if isinstance(data, dict) else {}
-        return dict(records) if isinstance(records, dict) else {}
+        if not isinstance(records, dict):
+            self._journal_errors["__store__"] = "Operationsjournal ist kein Objekt"
+            return {}
+        if data.get("schema_version", JOURNAL_SCHEMA_VERSION) not in {JOURNAL_SCHEMA_VERSION}:
+            self._journal_errors["__store__"] = "Unbekannte Journalschema-Version"
+        result: dict[str, dict[str, Any]] = {}
+        for operation_id, record in records.items():
+            if not isinstance(record, dict):
+                self._journal_errors[str(operation_id)] = "Journal-Eintrag ist kein Objekt"
+                continue
+            result[str(operation_id)] = dict(record)
+            if record.get("journal_schema") != JOURNAL_SCHEMA_VERSION:
+                self._journal_errors[str(operation_id)] = "Altes oder unbekanntes Journalschema"
+            elif not isinstance(record.get("integrity"), str) or not hmac.compare_digest(
+                record["integrity"], _journal_integrity(record)
+            ):
+                self._journal_errors[str(operation_id)] = "Journalintegrität konnte nicht bestätigt werden"
+        return result
+
+    async def _save_records(self, records: Mapping[str, Mapping[str, Any]]) -> None:
+        """Persist one bounded, versioned journal through HA's atomic Store."""
+        await self._store.async_save({
+            "schema_version": JOURNAL_SCHEMA_VERSION,
+            "operations": dict(list(records.items())[-100:]),
+        })
+
+    def _journal_error(self, operation_id: str) -> str | None:
+        return self._journal_errors.get(operation_id) or self._journal_errors.get("__store__")
+
+    def _ensure_journal_record(self, record: Mapping[str, Any], operation_id: str) -> None:
+        error = self._journal_error(operation_id)
+        if error:
+            raise HomeKitWriteBlocked(f"Operation-Journal ist nicht vertrauenswürdig: {error}")
+        if record.get("operation_id") != operation_id:
+            raise HomeKitWriteBlocked("Journal-Operation-ID stimmt nicht mit der Anfrage überein")
+        if record.get("operation_type") != "native_filter_apply":
+            raise HomeKitWriteBlocked("Unbekannter Operationstyp im Journal")
+
+    async def _persist_record_state(
+        self,
+        record: Mapping[str, Any],
+        state: str,
+        *,
+        detail: str | None = None,
+    ) -> dict[str, Any]:
+        """Write a state transition with a fresh integrity digest."""
+        updated = dict(record)
+        updated["state"] = state
+        updated["recovery_phase"] = _recovery_phase(state)
+        updated["detail"] = detail
+        updated["updated_at"] = datetime.now(UTC).isoformat()
+        updated["integrity"] = _journal_integrity(updated)
+        records = await self._records()
+        records[updated["operation_id"]] = updated
+        await self._save_records(records)
+        return updated
 
     async def _set_state(self, plan: OperationPlan, state: str, *, detail: str | None = None, grant_id: str | None = None) -> None:
         records = await self._records()
         previous = records.get(plan.operation_id, {})
         if not isinstance(previous, dict):
             raise HomeKitWriteBlocked("Gespeichertes Operation-Journal ist beschädigt")
-        records[plan.operation_id] = {
+        if self._journal_error(plan.operation_id):
+            raise HomeKitWriteBlocked("Gespeichertes Operation-Journal ist nicht vertrauenswürdig")
+        now = datetime.now(UTC).isoformat()
+        record = {
+            "journal_schema": JOURNAL_SCHEMA_VERSION,
             "operation_id": plan.operation_id,
+            "operation_type": "native_filter_apply",
             "entry_id": plan.entry_id,
             "source": plan.source,
             "source_revision": plan.source_revision,
+            "context_revision": (
+                plan.payload.context_revision if isinstance(plan.payload, NativeFilterPlan)
+                else None
+            ),
             "changed_entities": list(plan.changed_entities),
             "change_type": "filter",
+            "authority_kind": plan.authority_kind,
+            "authority_id": plan.authority_id,
             "grant_id": grant_id or previous.get("grant_id"),
-            "target_revision": plan.payload.target_revision if isinstance(plan.payload, YamlFilterPlan) else None,
-            "before_filter": dict(plan.payload.diff.before.get("filter", {})) if isinstance(plan.payload, NativeFilterPlan) else None,
-            "target_filter": (
-                dict(plan.payload.diff.after.get("filter", {}))
-                if isinstance(plan.payload, NativeFilterPlan)
-                else dict(plan.payload.after_filter) if isinstance(plan.payload, YamlFilterPlan) else None
+            "before_filter": (
+                copy.deepcopy(plan.payload.diff.before.get("filter"))
+                if isinstance(plan.payload, NativeFilterPlan) else None
             ),
+            "target_filter": (
+                copy.deepcopy(plan.payload.diff.after.get("filter"))
+                if isinstance(plan.payload, NativeFilterPlan)
+                else copy.deepcopy(plan.payload.after_filter)
+                if isinstance(plan.payload, YamlFilterPlan) else None
+            ),
+            "before_fingerprint": (
+                _filter_fingerprint(plan.payload.diff.before.get("filter"))
+                if isinstance(plan.payload, NativeFilterPlan) else None
+            ),
+            "target_fingerprint": (
+                _filter_fingerprint(plan.payload.diff.after.get("filter"))
+                if isinstance(plan.payload, NativeFilterPlan) else None
+            ),
+            "target_revision": plan.payload.target_revision if isinstance(plan.payload, YamlFilterPlan) else None,
+            "created_at": previous.get("created_at", now),
             "source_file": plan.payload.source_path.name if isinstance(plan.payload, YamlFilterPlan) else None,
             "state": state,
+            "recovery_phase": _recovery_phase(state),
             "detail": detail,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "confirmed_at": previous.get("confirmed_at", now) if state in {"applying", "rolling_back"} else previous.get("confirmed_at"),
+            "integrity": "",
         }
-        await self._store.async_save({"operations": dict(list(records.items())[-100:])})
+        record["integrity"] = _journal_integrity(record)
+        records[plan.operation_id] = record
+        await self._save_records(records)
 
     @staticmethod
     def _public(record: Mapping[str, Any]) -> dict[str, Any]:
-        return {key: value for key, value in record.items() if key not in {"before_filter", "target_filter", "source_file"}} | {"automatic_retry": False}
+        return {
+            key: value for key, value in record.items()
+            if key not in {"before_filter", "target_filter", "source_file", "integrity"}
+        } | {"automatic_retry": False}
+
+    def _reconstruct_native_plan(self, record: Mapping[str, Any]) -> OperationPlan:
+        """Reconstruct only a fully authenticated native plan from the journal."""
+        operation_id = str(record.get("operation_id", ""))
+        self._ensure_journal_record(record, operation_id)
+        if record.get("source") != "user":
+            raise HomeKitWriteBlocked("Nur native SOURCE_USER-Vorgänge dürfen wiederhergestellt werden")
+        before = record.get("before_filter")
+        target = record.get("target_filter")
+        source_revision = record.get("source_revision")
+        context_revision = record.get("context_revision")
+        if not isinstance(before, Mapping) or not isinstance(target, Mapping):
+            raise HomeKitWriteBlocked("Journal enthält keinen vollständigen Native-Filter-Plan")
+        if not isinstance(source_revision, str) or not isinstance(context_revision, str):
+            raise HomeKitWriteBlocked("Journal enthält keine vollständigen Revisionsdaten")
+        if record.get("before_fingerprint") != _filter_fingerprint(before):
+            raise HomeKitWriteBlocked("Ausgangsfilter-Prüfsumme des Journals ist ungültig")
+        if record.get("target_fingerprint") != _filter_fingerprint(target):
+            raise HomeKitWriteBlocked("Zielfilter-Prüfsumme des Journals ist ungültig")
+        entry = self.hass.config_entries.async_get_entry(str(record.get("entry_id", "")))
+        if entry is None or entry.domain != "homekit" or entry.source != "user":
+            raise HomeKitWriteBlocked("Gespeicherter Config Entry ist nicht mehr eindeutig vorhanden")
+        changed_keys = ("filter",)
+        changed_entities = tuple(str(item) for item in record.get("changed_entities", ()) if isinstance(item, str))
+        diff = OptionsDiff(
+            entry.entry_id,
+            {"filter": copy.deepcopy(dict(before))},
+            {"filter": copy.deepcopy(dict(target))},
+            changed_keys,
+            changed_entities,
+            {"changes": []},
+        )
+        payload = NativeFilterPlan(
+            entry.entry_id,
+            source_revision,
+            context_revision,
+            diff,
+            operation_id=operation_id,
+        )
+        return OperationPlan(
+            operation_id,
+            entry.entry_id,
+            "user",
+            source_revision,
+            changed_entities,
+            payload,
+            str(record.get("authority_kind", "blocked")),
+            record.get("grant_id"),
+            (),
+            True,
+        )
 
     async def plan_filter(self, *, entry_id: str, bridge: Mapping[str, Any], document: Mapping[str, Any], inventory: list[Mapping[str, Any]]) -> dict[str, Any]:
         """Validate exact source and produce a server-held plan without writing."""
@@ -198,14 +395,38 @@ class HomeKitOperationService:
 
     async def status(self, operation_id: str) -> dict[str, Any] | None:
         record = (await self._records()).get(operation_id)
+        if record and self._journal_error(operation_id):
+            return self._public(record) | {
+                "journal_integrity": "invalid",
+                "recovery_blocked": True,
+                "recovery_reason": self._journal_error(operation_id),
+            }
         if record and record.get("state") in {"applying", "prepared", "rolling_back"} and operation_id not in self._plans:
             return self._public(record | {"state": "unknown_outcome"})
-        return self._public(record) if record else None
+        if not record:
+            return None
+        result = self._public(record) | {"journal_integrity": "verified"}
+        if operation_id not in self._plans and record.get("state") in {"verified", "verification_incomplete"}:
+            try:
+                self._reconstruct_native_plan(record)
+            except HomeKitWriteBlocked as err:
+                result |= {"recovery_blocked": True, "recovery_reason": str(err)}
+            else:
+                challenge = self._recovery_challenges.setdefault(operation_id, secrets.token_urlsafe(32))
+                result |= {
+                    "recovery_required": True,
+                    "recovery_confirmation": challenge,
+                    "automatic_retry": False,
+                }
+        return result
 
     async def apply(self, operation_id: str, *, entry_id: str, expected_revision: str, confirmed_operation_id: str, admin: bool = False) -> dict[str, Any]:
         """Execute once after admin, confirmation, revision and write-grant gates."""
         if not admin or not operation_id or confirmed_operation_id != operation_id:
             raise HomeKitWriteBlocked("Adminberechtigung und Bestätigung der konkreten Operation erforderlich")
+        if self._fault_injector is not None:
+            self._fault_injector("after_confirmation")
+            self._fault_injector("before_lock")
         async with self._lock:
             plan = self._plans.get(operation_id)
             record = (await self._records()).get(operation_id)
@@ -223,9 +444,12 @@ class HomeKitOperationService:
                 raise HomeKitWriteDisabled("Schreibfreigabe hat sich seit der Vorschau geändert")
             grant = None if self._isolated_write_authority else await self._production_grant(entry_id, plan.source)
             if self._fault_injector is not None:
+                self._fault_injector("after_write_grant_check")
                 self._fault_injector("after_lock")
+                self._fault_injector("before_apply_journal")
             await self._set_state(plan, "applying", grant_id=grant.grant_id if grant else None)
             if self._fault_injector is not None:
+                self._fault_injector("after_apply_journal_checkpoint")
                 self._fault_injector("after_snapshot")
             try:
                 runtime_verification = "verified"
@@ -246,10 +470,12 @@ class HomeKitOperationService:
                 await self._set_state(plan, "unknown_outcome", detail="Apply-Ausgang lesend abgleichen; kein automatischer Retry")
                 raise
             result_state = "verified" if runtime_verification == "verified" else "verification_incomplete"
+            if self._fault_injector is not None:
+                self._fault_injector("before_apply_journal_final")
             await self._set_state(plan, result_state,
                                   detail=None if result_state == "verified" else "Native Optionen verifiziert; laufende HAP-Veröffentlichung nicht vollständig lesbar")
             if self._fault_injector is not None:
-                self._fault_injector("after_operation_journal")
+                self._fault_injector("after_apply_journal")
             return {"operation_id": plan.operation_id, "entry_id": plan.entry_id, "state": result_state,
                     "runtime_verification": runtime_verification, "pairing_verified": False}
 
@@ -262,12 +488,26 @@ class HomeKitOperationService:
         YAML source rollback remains isolated-only because Core reload scope is
         not production-safe on the supported Core versions.
         """
-        if not admin or not operation_id or confirmed_operation_id != operation_id:
+        if not admin or not operation_id:
             raise HomeKitWriteBlocked("Adminberechtigung und Bestätigung der konkreten Operation erforderlich")
+        if operation_id in self._plans and confirmed_operation_id != operation_id:
+            raise HomeKitWriteBlocked("Adminberechtigung und Bestätigung der konkreten Operation erforderlich")
+        if self._fault_injector is not None:
+            self._fault_injector("rollback_before_lock")
         async with self._lock:
-            plan = self._plans.get(operation_id)
             record = (await self._records()).get(operation_id)
-            if plan is None or record is None or record.get("state") not in {"verified", "verification_incomplete"}:
+            self._ensure_journal_record(record or {}, operation_id)
+            recovered = operation_id not in self._plans
+            plan = self._plans.get(operation_id)
+            if record is None or record.get("state") not in {"verified", "verification_incomplete"}:
+                raise HomeKitWriteBlocked("Nur ein vollständig verifiziertes Apply kann wiederhergestellt werden")
+            if plan is None:
+                if self._recovery_challenges.get(operation_id) != confirmed_operation_id:
+                    raise HomeKitWriteBlocked("Nach Neustart ist eine neue Recovery-Bestätigung erforderlich")
+                plan = self._reconstruct_native_plan(record)
+            if self._fault_injector is not None:
+                self._fault_injector("rollback_after_confirmation")
+            if plan is None:
                 raise HomeKitWriteBlocked("Nur ein vollständig verifiziertes Apply kann wiederhergestellt werden")
             if plan.entry_id != entry_id:
                 raise HomeKitWriteBlocked("Bridge weicht vom bestätigten Vorgang ab")
@@ -277,11 +517,22 @@ class HomeKitOperationService:
             if not policy["enabled"]:
                 raise HomeKitWriteDisabled(policy["reason"])
             if plan.authority_kind != policy.get("authority") or plan.authority_id != policy.get("grant_id"):
-                raise HomeKitWriteDisabled("Schreibfreigabe hat sich seit dem Apply geändert")
+                if not recovered or plan.authority_kind == "isolated":
+                    raise HomeKitWriteDisabled("Schreibfreigabe hat sich seit dem Apply geändert")
+                if (
+                    policy.get("authority") != plan.authority_kind
+                    or not policy.get("grant_id")
+                    or policy.get("grant_id") == record.get("grant_id")
+                ):
+                    raise HomeKitWriteDisabled("Nach Neustart ist eine neue, unabhängige Schreibfreigabe erforderlich")
             grant = None if self._isolated_write_authority else await self._production_grant(entry_id, plan.source)
             if self._fault_injector is not None:
+                self._fault_injector("rollback_after_write_grant_check")
                 self._fault_injector("rollback_after_lock")
+                self._fault_injector("rollback_before_journal")
             await self._set_state(plan, "rolling_back", grant_id=grant.grant_id if grant else None)
+            if self._fault_injector is not None:
+                self._fault_injector("rollback_after_journal_checkpoint")
             try:
                 adapter = NativeHomeKitAdapter(
                     self.hass,
@@ -295,6 +546,8 @@ class HomeKitOperationService:
             except Exception:
                 await self._set_state(plan, "rollback_unknown", detail="Wiederherstellung lesend abgleichen; kein automatischer Retry")
                 raise
+            if self._fault_injector is not None:
+                self._fault_injector("rollback_before_journal_final")
             await self._set_state(plan, "rolled_back")
             if self._fault_injector is not None:
                 self._fault_injector("rollback_after_journal")
@@ -309,17 +562,37 @@ class HomeKitOperationService:
         async with self._lock:
             return await self._reconcile_locked(operation_id)
 
+    def _classify_persisted_native_record(self, record: Mapping[str, Any]) -> str:
+        """Classify a persisted native operation without calling a writer."""
+        entry = self.hass.config_entries.async_get_entry(str(record.get("entry_id", "")))
+        if entry is None:
+            return "config_entry_missing"
+        if entry.domain != "homekit" or entry.source != "user":
+            return "external_change"
+        if record.get("context_revision") != _context_revision(entry):
+            return "external_change"
+        current = dict(entry.options).get("filter")
+        if record.get("state") in {"rolling_back", "rollback_unknown", "rolled_back"}:
+            if current == record.get("before_filter") and getattr(entry.state, "value", entry.state) == "loaded":
+                return "rollback_verified"
+            if current == record.get("target_filter"):
+                return "rollback_not_applied" if record.get("state") != "rolled_back" else "rollback_unknown"
+            return "rollback_unknown"
+        if current == record.get("target_filter") and getattr(entry.state, "value", entry.state) == "loaded":
+            return "verified_options"
+        if current == record.get("before_filter"):
+            return "not_applied"
+        return "unknown_outcome"
+
     async def _reconcile_locked(self, operation_id: str) -> dict[str, Any]:
         plan = self._plans.get(operation_id)
         record = (await self._records()).get(operation_id)
         if record is None:
             raise HomeKitWriteBlocked("Operation-ID ist nicht bekannt")
+        self._ensure_journal_record(record, operation_id)
         if plan is None:
             if record.get("source") == "user":
-                try:
-                    actual = await NativeHomeKitAdapter(self.hass).reconcile_operation(operation_id)
-                except HomeKitWriteBlocked:
-                    actual = "unknown_outcome"
+                actual = self._classify_persisted_native_record(record)
             elif record.get("source") == "import" and record.get("source_file"):
                 try:
                     name, current = await self.hass.async_add_executor_job(lambda: YamlHomeKitAdapter(self.hass.config.config_dir).current_revision())
@@ -338,11 +611,20 @@ class HomeKitOperationService:
                     actual = "unknown_outcome"
             else:
                 actual = "unknown_outcome"
-            state = "verified" if actual in {"verified_options", "verified_core"} else "not_applied" if actual == "not_applied" else "unknown_outcome"
-            records = await self._records()
-            records[operation_id] = record | {"state": state, "updated_at": datetime.now(timezone.utc).isoformat()}
-            await self._store.async_save({"operations": dict(list(records.items())[-100:])})
-            return self._public(records[operation_id])
+            if actual in {"verified_options", "verified_core"}:
+                state = "verified"
+            elif actual == "rollback_verified":
+                state = "rolled_back"
+            elif actual == "rollback_not_applied":
+                state = "rollback_unknown"
+            elif actual == "not_applied" and record.get("state") == "rolled_back":
+                state = "rolled_back"
+            elif actual == "not_applied":
+                state = "not_applied"
+            else:
+                state = "unknown_outcome"
+            updated = await self._persist_record_state(record, state, detail=f"read_only_reconcile:{actual}")
+            return self._public(updated) | {"journal_integrity": "verified", "recovery_result": actual}
         if isinstance(plan.payload, NativeFilterPlan):
             actual = NativeHomeKitAdapter(self.hass).reconcile(plan.payload)
         else:

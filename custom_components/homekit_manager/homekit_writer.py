@@ -7,15 +7,16 @@ from __future__ import annotations
 
 import asyncio
 import copy
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Callable, Mapping
+from typing import Any
 
 from .change_planner import plan_changes
 from .const import NATIVE_FILTER_WRITE_CORE_VERSIONS
 from .filtering import evaluate_filter
+from .positive_list import PositiveListEvidence
 from .safety import WRITE_LOCK_REASON
 from .source_model import revision
-from .positive_list import PositiveListEvidence
 
 
 class HomeKitWriteError(Exception):
@@ -171,9 +172,7 @@ def _unlisted_entity_default(config: Mapping[str, Any]) -> bool:
         return False
     if config.get("include_domains") or config.get("include_entity_globs"):
         return False
-    if config.get("exclude_domains") or config.get("exclude_entity_globs"):
-        return True
-    return False
+    return bool(config.get("exclude_domains") or config.get("exclude_entity_globs"))
 
 
 def _verify_scope(before: Mapping[str, Any], after: Mapping[str, Any], inventory: list[Mapping[str, Any]], desired: Mapping[str, str], *, allow_default_change: bool = False) -> None:
@@ -294,8 +293,8 @@ class HomeKitWriter:
                 raise HomeKitWriteBlocked("Produktiver Native-Apply benötigt eine vollständige Entry-Revision")
         if not diff.changed_keys:
             raise HomeKitWriteBlocked("Options-Diff enthält keine Änderung")
-        from homeassistant.const import __version__
         from homeassistant.config_entries import SOURCE_USER
+        from homeassistant.const import __version__
         if __version__ not in NATIVE_FILTER_WRITE_CORE_VERSIONS:
             raise HomeKitWriteBlocked(
                 f"Core-Version {__version__} wird für den isolierten Adapter nicht unterstützt"
@@ -358,12 +357,26 @@ class HomeKitWriter:
                     await asyncio.wait_for(
                         self.hass.async_block_till_done(), ACTIVATION_TIMEOUT
                     )
-                except asyncio.TimeoutError as err:
+                except TimeoutError as err:
                     raise HomeKitActivationUnknown(
                         "Aktivierung wurde nicht innerhalb des Zeitlimits bestätigt"
                     ) from err
                 if self.fault_injector is not None:
                     self.fault_injector("after_reload")
+            # ConfigEntries schedules its Store write with a delay.  A
+            # process crash after this point must not resurrect the preimage
+            # even though the in-memory entry already contains the target.
+            # Flush the Core-owned store before reporting a durable mutation;
+            # do not write .storage directly or create a second persistence
+            # format.  If the supported Core cannot expose the store, fail
+            # closed instead of claiming persistence.
+            config_store = getattr(self.hass.config_entries, "_store", None)
+            data_to_save = getattr(self.hass.config_entries, "_data_to_save", None)
+            if config_store is None or data_to_save is None:
+                raise HomeKitActivationUnknown(
+                    "Config-Entry-Persistenz kann nicht sicher bestätigt werden"
+                )
+            await config_store.async_save(data_to_save())
             # Check Core's persisted entry view after its update listener has
             # run.  A successful call alone does not prove the intended value.
             observed = self.hass.config_entries.async_get_entry(diff.entry_id)

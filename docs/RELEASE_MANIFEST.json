@@ -1,5 +1,5 @@
 {
-  "integration_version": "0.10.32-rc.3",
+  "integration_version": "0.10.32",
   "file_count": 59,
   "files": [
     {
@@ -44,8 +44,8 @@
     },
     {
       "path": "const.py",
-      "sha256": "debfcd46d546eed123c4e74dc5e9cd63b698f06e347e9b4ff8cc76fce8544434",
-      "size": 2878
+      "sha256": "f36ddceb32ffec29de7c012e27839d51c5b4a60dd9e01899da34d2f78aa94df4",
+      "size": 2873
     },
     {
       "path": "conversion.py",
@@ -144,8 +144,8 @@
     },
     {
       "path": "manifest.json",
-      "sha256": "7128431779884fd25b2361d5eebd6147ddc34d7aad42f136edcbf100f6357cc7",
-      "size": 522
+      "sha256": "908d5002939d086ed293f7151ef3e7ba366b22bf99cd57ba9d84dd318a03f694",
+      "size": 517
     },
     {
       "path": "migration.py",

@@ -13,12 +13,30 @@ from pathlib import Path
 def _archive_stable_component(repo: Path, destination: Path) -> None:
     git_executable = shutil.which("git")
     assert git_executable is not None
-    process = subprocess.run(  # noqa: S603
-        [git_executable, "archive", "--format=tar", "v0.10.32", "custom_components/homekit_manager"],
-        cwd=repo,
-        check=True,
-        stdout=subprocess.PIPE,
-    )
+    archive_command = [
+        git_executable, "archive", "--format=tar", "v0.10.32",
+        "custom_components/homekit_manager",
+    ]
+    try:
+        process = subprocess.run(  # noqa: S603
+            archive_command, cwd=repo, check=True, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except subprocess.CalledProcessError:
+        subprocess.run(  # noqa: S603
+            [
+                git_executable, "fetch", "--depth=1", "origin",
+                "refs/tags/v0.10.32:refs/tags/v0.10.32",
+            ],
+            cwd=repo,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        process = subprocess.run(  # noqa: S603
+            archive_command, cwd=repo, check=True, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
     with tarfile.open(fileobj=io.BytesIO(process.stdout), mode="r:") as archive:
         archive.extractall(destination, filter="data")
 

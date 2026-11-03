@@ -73,7 +73,7 @@ jobs:
       - name: Archive reproducible release package
         uses: actions/upload-artifact@v4
         with:
-          name: homekit-manager-0.10.32-release
+          name: homekit-manager-0.10.33-release
           path: /tmp/hkm-release-one/
           if-no-files-found: error
       - name: Install pinned browser dependencies for real backend E2E

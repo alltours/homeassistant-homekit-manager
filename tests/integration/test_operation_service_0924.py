@@ -238,7 +238,7 @@ async def test_tampered_persisted_operation_is_fail_closed(hass):
     status = await service.status(operation_id)
     assert status["journal_integrity"] == "invalid"
     assert status["recovery_blocked"] is True
-    with pytest.raises(HomeKitWriteBlocked, match="nicht vertrauenswürdig"):
+    with pytest.raises(HomeKitWriteBlocked, match="Journalintegritätsprüfung fehlgeschlagen"):
         await service.rollback(operation_id, entry_id="missing-entry",
                                confirmed_operation_id="anything", admin=True)
 

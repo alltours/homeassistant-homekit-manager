@@ -120,13 +120,13 @@ class HomeKitOperationService:
             return {"enabled": False, "reason": "Filter-Apply ist für diese Quelle/Core-Version nicht verifiziert", "automatic_retry": False}
         records = await self._records()
         if self._journal_errors.get("__store__"):
-            return {"enabled": False, "reason": "Operationsjournal ist nicht vertrauenswürdig", "automatic_retry": False}
+            return {"enabled": False, "reason": "Journalintegritätsprüfung fehlgeschlagen", "automatic_retry": False}
         if any(
             self._journal_errors.get(operation_id)
             for operation_id, item in records.items()
             if isinstance(item, dict) and item.get("entry_id") == entry_id
         ):
-            return {"enabled": False, "reason": "Operationsjournal der Bridge ist nicht vertrauenswürdig", "automatic_retry": False}
+            return {"enabled": False, "reason": "Journalintegritätsprüfung der Bridge fehlgeschlagen", "automatic_retry": False}
         if any(isinstance(item, dict) and item.get("entry_id") == entry_id
                and item.get("state") in {"applying", "prepared", "unknown_outcome", "rolling_back", "rollback_unknown"}
                for item in records.values()):
@@ -209,7 +209,7 @@ class HomeKitOperationService:
     def _ensure_journal_record(self, record: Mapping[str, Any], operation_id: str) -> None:
         error = self._journal_error(operation_id)
         if error:
-            raise HomeKitWriteBlocked(f"Operation-Journal ist nicht vertrauenswürdig: {error}")
+            raise HomeKitWriteBlocked(f"Journalintegritätsprüfung fehlgeschlagen: {error}")
         if record.get("operation_id") != operation_id:
             raise HomeKitWriteBlocked("Journal-Operation-ID stimmt nicht mit der Anfrage überein")
         if record.get("operation_type") != "native_filter_apply":
@@ -240,7 +240,7 @@ class HomeKitOperationService:
         if not isinstance(previous, dict):
             raise HomeKitWriteBlocked("Gespeichertes Operation-Journal ist beschädigt")
         if self._journal_error(plan.operation_id):
-            raise HomeKitWriteBlocked("Gespeichertes Operation-Journal ist nicht vertrauenswürdig")
+            raise HomeKitWriteBlocked("Journalintegritätsprüfung des gespeicherten Operation-Journals fehlgeschlagen")
         now = datetime.now(UTC).isoformat()
         record = {
             "journal_schema": JOURNAL_SCHEMA_VERSION,

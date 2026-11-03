@@ -9,7 +9,10 @@
 - Historische Manager-Entscheidungen werden als Tombstones mit expliziten Optionen dargestellt.
 - Veraltete native Include-Referenzen bleiben sichtbar und werden nicht automatisch entfernt oder ersetzt.
 - Entscheidungen werden als bridge-gebundener, versionierter Manager-Entwurf gespeichert.
-- Eine stale Snapshot-Revision oder ein abweichender Fingerprint blockiert die Speicherung.
+- Ein abweichender semantischer Snapshot-Fingerprint blockiert die Speicherung. Eine
+  reine Revisionsfortschreibung ohne relevante Inhaltsänderung wird auf die aktuelle
+  Revision normalisiert; vor jeder späteren Mutation bleibt eine frische vollständige
+  Zustandsprüfung zwingend.
 - Die Vorschau berechnet deterministisch einen hypothetischen Zielzustand und führt keine HomeKit-Änderung aus.
 
 ## Sicherheitsgrenzen

@@ -20,6 +20,14 @@ DECISIONS = frozenset({"KEEP", "REMOVE", "REVIEW"})
 TOMBSTONE_DECISIONS = frozenset({"KEEP_TOMBSTONE", "ARCHIVE_TOMBSTONE", "REMOVE_DECISION", "REVIEW"})
 STALE_INCLUDE_DECISIONS = frozenset({"KEEP_STALE_INCLUDE", "REMOVE_STALE_INCLUDE", "REPLACE_WITH_VERIFIED_SUCCESSOR", "REVIEW"})
 _MAX_HISTORY = 50
+_MAX_DRAFT_ENTRIES = 2000
+
+
+def _reject_unknown_fields(value: Mapping[str, Any], allowed: frozenset[str], context: str) -> None:
+    """Reject fields that are not part of the versioned draft contract."""
+    unknown = sorted(set(value) - allowed)
+    if unknown:
+        raise SelectionDraftError(f"Unbekannte Felder in {context}: {', '.join(unknown)}")
 
 
 class SelectionDraftError(ValueError):
@@ -68,6 +76,14 @@ def _choice(value: Any, allowed: frozenset[str], field: str) -> str:
 def _entry(value: Any, allowed: frozenset[str], *, identity: Mapping[str, Any] | None = None) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise SelectionDraftError("Entscheidungseinträge müssen Objekte sein")
+    _reject_unknown_fields(
+        value,
+        frozenset({
+            "decision", "decision_source", "confirmation_status", "identity",
+            "updated_at", "state", "technical_validation",
+        }),
+        "Entscheidungseintrag",
+    )
     decision = _choice(value.get("decision"), allowed, "Entscheidung")
     entry = {
         "decision": decision,
@@ -104,12 +120,27 @@ def normalize_draft(raw: Any, *, entry_id: str, revision: int, snapshot_fingerpr
         return empty_draft(entry_id, revision, snapshot_fingerprint)
     if not isinstance(raw, dict):
         raise SelectionDraftError("Entscheidungsentwurf muss ein Objekt sein")
+    _reject_unknown_fields(
+        raw,
+        frozenset({
+            "schema_version", "bridge_entry_id", "created_at", "updated_at",
+            "snapshot_revision", "snapshot_fingerprint", "decisions", "tombstones",
+            "stale_includes", "history",
+        }),
+        "Entscheidungsentwurf",
+    )
     if raw.get("schema_version") != DECISION_SCHEMA_VERSION:
         raise SelectionDraftError(f"Unbekannte Entscheidungs-Schema-Version: {raw.get('schema_version')!r}")
     if raw.get("bridge_entry_id") != entry_id:
         raise SelectionDraftConflict("Entwurf gehört zu einer anderen HomeKit-Bridge")
-    if raw.get("snapshot_revision") != revision or raw.get("snapshot_fingerprint") != snapshot_fingerprint:
+    if raw.get("snapshot_fingerprint") != snapshot_fingerprint:
         raise SelectionDraftConflict("Der Entwurf basiert auf einem veralteten Snapshot")
+    # Coordinator revisions also advance for irrelevant runtime state refreshes.
+    # The semantic fingerprint is the security boundary for this non-mutating
+    # draft; the current revision is always written back into the normalized
+    # draft so a later apply-capable workflow still performs a fresh check.
+    if not isinstance(raw.get("snapshot_revision"), int):
+        raise SelectionDraftError("snapshot_revision muss eine Ganzzahl sein")
     identities = identities or {}
     normalized = empty_draft(entry_id, revision, snapshot_fingerprint, raw.get("created_at") if isinstance(raw.get("created_at"), str) else None)
     normalized["updated_at"] = raw.get("updated_at") if isinstance(raw.get("updated_at"), str) else now()
@@ -117,6 +148,8 @@ def normalize_draft(raw: Any, *, entry_id: str, revision: int, snapshot_fingerpr
         values = raw.get(field, {})
         if not isinstance(values, dict):
             raise SelectionDraftError(f"{field} muss ein Objekt sein")
+        if len(values) > _MAX_DRAFT_ENTRIES:
+            raise SelectionDraftError(f"{field} enthält zu viele Einträge")
         for entity_id, value in values.items():
             if not isinstance(entity_id, str) or "." not in entity_id:
                 raise SelectionDraftError(f"Ungültige Entity-ID in {field}")
@@ -124,6 +157,12 @@ def normalize_draft(raw: Any, *, entry_id: str, revision: int, snapshot_fingerpr
     history = raw.get("history", [])
     if not isinstance(history, list):
         raise SelectionDraftError("history muss eine Liste sein")
+    if len(history) > _MAX_HISTORY:
+        raise SelectionDraftError("history enthält zu viele Einträge")
+    for item in history:
+        if not isinstance(item, dict):
+            raise SelectionDraftError("history-Einträge müssen Objekte sein")
+        _reject_unknown_fields(item, frozenset({"timestamp", "event", "bridge_entry_id"}), "history-Eintrag")
     normalized["history"] = [item for item in history[-_MAX_HISTORY:] if isinstance(item, dict)]
     return normalized
 

@@ -112,9 +112,18 @@ def test_bridge_and_snapshot_changes_fail_closed():
     wrong_bridge = dict(draft, bridge_entry_id="bridge-b")
     with pytest.raises(SelectionDraftConflict):
         normalize_draft(wrong_bridge, entry_id="bridge-a", revision=9, snapshot_fingerprint="snapshot-9")
-    wrong_revision = dict(draft, snapshot_revision=10)
+    wrong_fingerprint = dict(draft, snapshot_revision=10, snapshot_fingerprint="changed")
     with pytest.raises(SelectionDraftConflict):
-        build_plan(source, wrong_revision)
+        build_plan(source, wrong_fingerprint)
+
+
+def test_irrelevant_revision_change_is_allowed_only_with_same_semantic_fingerprint():
+    source = snapshot()
+    draft = complete_draft()
+    draft["snapshot_revision"] = 8
+    plan = build_plan(source, draft)
+    assert plan["snapshot_revision"] == source["snapshot_revision"]
+    assert plan["snapshot_fingerprint"] == source["snapshot_fingerprint"]
 
 
 def test_unknown_entity_and_unverified_successor_are_blocked():
@@ -138,3 +147,20 @@ def test_reappeared_entity_identity_does_not_inherit_old_decision():
     draft["decisions"] = {"sensor.old_1": {"decision": "KEEP", "identity": {"entity_id": "sensor.old_1", "unique_id": "old-identity"}}}
     with pytest.raises(SelectionDraftConflict):
         build_plan(source, draft)
+
+
+def test_unexpected_fields_and_oversized_sections_fail_closed():
+    draft = complete_draft()
+    draft["unexpected"] = True
+    with pytest.raises(SelectionDraftError):
+        normalize_draft(draft, entry_id="bridge-a", revision=9, snapshot_fingerprint="snapshot-9")
+
+    draft = complete_draft()
+    draft["history"] = [{"timestamp": "now", "event": "test", "unexpected": True}]
+    with pytest.raises(SelectionDraftError):
+        normalize_draft(draft, entry_id="bridge-a", revision=9, snapshot_fingerprint="snapshot-9")
+
+    draft = empty_draft("bridge-a", 9, "snapshot-9")
+    draft["decisions"] = {f"light.extra_{index}": {"decision": "REVIEW"} for index in range(2001)}
+    with pytest.raises(SelectionDraftError):
+        normalize_draft(draft, entry_id="bridge-a", revision=9, snapshot_fingerprint="snapshot-9")

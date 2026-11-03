@@ -484,7 +484,9 @@ class HomeKitManagerCoordinator:
                 raise ValueError("Keine eindeutig ausgewählte HomeKit-Bridge")
             if expected_fingerprint and expected_fingerprint != snapshot.get("snapshot_fingerprint"):
                 raise SelectionDraftConflict("Live-Snapshot wurde seit der Vorschau verändert")
-            if expected_revision is not None and expected_revision != snapshot.get("snapshot_revision"):
+            if (expected_revision is not None
+                    and expected_revision != snapshot.get("snapshot_revision")
+                    and expected_fingerprint != snapshot.get("snapshot_fingerprint")):
                 raise SelectionDraftConflict("Snapshot-Revision wurde seit der Vorschau verändert")
             normalized = normalize_draft(
                 raw_draft,
@@ -493,6 +495,10 @@ class HomeKitManagerCoordinator:
                 snapshot_fingerprint=snapshot.get("snapshot_fingerprint"),
                 identities={row["entity_id"]: row.get("identity", {}) for row in snapshot.get("current_entities", [])},
             )
+            # Run the same semantic validation as the read-only planner before
+            # persisting.  A syntactically valid draft must not store unknown
+            # entities, stale tombstones, or stale native references.
+            build_selection_plan(snapshot, normalized)
             history = list(normalized.get("history", []))
             history.append({"timestamp": normalized["updated_at"], "event": "decision_draft_saved", "bridge_entry_id": entry_id})
             normalized["history"] = history[-50:]

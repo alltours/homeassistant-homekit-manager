@@ -54,8 +54,8 @@
     },
     {
       "path": "coordinator.py",
-      "sha256": "f4f202fa2b82ec57af9087ed8fe11fbe56b074067238aacd8e49a85457a64b03",
-      "size": 58619
+      "sha256": "6b4e3b2949676e80589e2ed1f71088105325f9fcaddde563f0844559af11d7e5",
+      "size": 59008
     },
     {
       "path": "core_migration.py",
@@ -239,8 +239,8 @@
     },
     {
       "path": "selection_draft.py",
-      "sha256": "0f92f280f1731e251ec4baa459de6c4a5a50a2b058d6731abf087587ab1b26b1",
-      "size": 19160
+      "sha256": "fe05842de6953fd78936e97ee2e3e76f5c47c916cca97d2d4b959f2be9f1a284",
+      "size": 20968
     },
     {
       "path": "selection_reconciliation.py",

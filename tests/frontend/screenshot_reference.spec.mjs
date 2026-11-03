@@ -61,7 +61,7 @@ for (const [name,width,height] of viewports) {
         expect(Math.max(...buttonHeights)-Math.min(...buttonHeights)).toBeLessThanOrEqual(1);
       }
       if (view==='settings') {
-        await expect(panel.locator('.settings-nav button')).toHaveCount(7);
+        await expect(panel.locator('.settings-nav button')).toHaveCount(8);
         await expect(panel.locator('.settings-content')).toContainText('0.10.14');
       }
       const geometry=await panel.evaluate(element=>{const nav=element.shadowRoot.querySelector('.main-nav');return {page:document.documentElement.scrollWidth-innerWidth,nav:nav.scrollWidth-nav.clientWidth};});

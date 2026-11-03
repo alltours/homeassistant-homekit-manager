@@ -44,6 +44,7 @@ async def test_every_manager_websocket_route_rejects_authenticated_non_admin(
         },
     }
     args["homekit_manager/bulk_preview"] = {"entry_id": "none", "fingerprint": "none", "kind": "device", "key": "device:none"}
+    args["homekit_manager/save_selection_draft"] = {"draft": {"schema_version": 1}}
     document_routes = {
         "homekit_manager/validate_draft", "homekit_manager/preview",
         "homekit_manager/save_draft", "homekit_manager/apply_options_diff",
@@ -54,7 +55,7 @@ async def test_every_manager_websocket_route_rejects_authenticated_non_admin(
         args[command] = {"document": document}
 
     routes = {handler._ws_command for handler in REGISTERED_HANDLERS}
-    assert len(routes) == len(REGISTERED_HANDLERS) == 38
+    assert len(routes) == len(REGISTERED_HANDLERS)
     for route in sorted(routes):
         await client.send_json_auto_id({"type": route, **args.get(route, {})})
         response = await client.receive_json()

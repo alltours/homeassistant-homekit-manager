@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
+from file_helpers import secure_private_source
 from homeassistant import config_entries
 from homeassistant.config import async_hass_config_yaml
 from homeassistant.const import __version__
@@ -32,8 +33,10 @@ from custom_components.homekit_manager.write_grant import (
     ProductionWriteGrant,
     read_production_grant,
 )
-from custom_components.homekit_manager.yaml_adapter import YamlAdapterBlocked, YamlHomeKitAdapter
-from file_helpers import secure_private_source
+from custom_components.homekit_manager.yaml_adapter import (
+    YamlAdapterBlocked,
+    YamlHomeKitAdapter,
+)
 
 
 def grant_data(entry_id: str, source: str = "user", core_version: str = "2026.10.4") -> dict:
@@ -270,6 +273,14 @@ async def test_native_grant_is_bound_revocable_and_single_use(hass, tmp_path, mo
     result = await service.apply(plan["operation_id"], **args)
     assert result["state"] == "verification_incomplete"
     assert entry.options["filter"]["include_entities"] == ["light.after", "light.before"]
+    # Apply consumes the grant; an explicit rollback must use a new grant.
+    save_grant(tmp_path, grant_data(entry.entry_id))
+    restored = await service.rollback(
+        plan["operation_id"], entry_id=entry.entry_id,
+        confirmed_operation_id=plan["operation_id"], admin=True,
+    )
+    assert restored["state"] == "rolled_back"
+    assert entry.options["filter"]["include_entities"] == ["light.before"]
     with pytest.raises(HomeKitWriteBlocked, match="bereits begonnen"):
         await service.apply(plan["operation_id"], **args)
 

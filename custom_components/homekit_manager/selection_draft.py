@@ -38,6 +38,18 @@ class SelectionDraftConflict(SelectionDraftError):
     """The snapshot changed since the draft was created."""
 
 
+def _confirmed_user_entry(value: Mapping[str, Any] | None, *, entity_id: str, identity: Mapping[str, Any]) -> dict[str, Any]:
+    """Require a concrete, user-confirmed decision before native Apply."""
+    if not isinstance(value, Mapping) or value.get("decision_source") != "user":
+        raise SelectionDraftError(f"Für {entity_id} fehlt eine ausdrückliche Benutzerentscheidung")
+    if value.get("confirmation_status") != "confirmed":
+        raise SelectionDraftError(f"Die Entscheidung für {entity_id} ist nicht bestätigt")
+    submitted_identity = value.get("identity") or {}
+    if not isinstance(submitted_identity, Mapping) or dict(submitted_identity) != dict(identity):
+        raise SelectionDraftConflict(f"Identitätsmerkmale von {entity_id} haben sich verändert")
+    return dict(value)
+
+
 def _canonical(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
@@ -330,6 +342,105 @@ def build_plan(snapshot: Mapping[str, Any], raw_draft: Any) -> dict[str, Any]:
         "native_mutation_performed": False,
         "message": "Nicht mutierende Vorschau. Die produktive HomeKit-Konfiguration bleibt unverändert.",
     }
+
+
+def build_native_apply_document(snapshot: Mapping[str, Any], raw_draft: Any) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
+    """Convert a complete selection draft into the existing native operation input.
+
+    This is deliberately a narrow adapter between the 0.10.33 decision model
+    and the existing writer. It never calls Home Assistant or mutates a filter.
+    Stale includes are represented by synthetic, read-only inventory rows only
+    so the existing change planner can validate their explicit removal.
+    """
+    plan = build_plan(snapshot, raw_draft)
+    if plan["blockers"]:
+        raise SelectionDraftError("Native Apply ist blockiert: " + "; ".join(plan["blockers"]))
+    entry_id = snapshot.get("bridge_entry_id")
+    if not isinstance(entry_id, str) or not snapshot.get("snapshot_complete"):
+        raise SelectionDraftError("Der vollständige Bridge-Snapshot ist nicht verifiziert")
+    if snapshot.get("runtime_completeness") not in {"complete", "verified"} or snapshot.get("ambiguous_runtime_count", 0):
+        raise SelectionDraftError("HAP-Runtime-Zuordnung ist nicht eindeutig verifiziert")
+
+    native_filter = snapshot.get("native_filter")
+    if not isinstance(native_filter, Mapping) or not native_filter.get("include_entities"):
+        raise SelectionDraftError("Native Apply benötigt eine nichtleere explizite Include-Liste")
+    broad_keys = ("include_domains", "exclude_domains", "include_entity_globs", "exclude_entity_globs")
+    if any(native_filter.get(key) for key in broad_keys):
+        raise SelectionDraftError("Breite Domain- oder Glob-Filter benötigen eine gesonderte Positivlistenmigration")
+
+    current_rows = {row["entity_id"]: row for row in snapshot.get("current_entities", []) if row.get("entity_id")}
+    draft = normalize_draft(
+        raw_draft,
+        entry_id=entry_id,
+        revision=snapshot.get("snapshot_revision"),
+        snapshot_fingerprint=snapshot.get("snapshot_fingerprint"),
+        identities={entity_id: row.get("identity", {}) for entity_id, row in current_rows.items()},
+    )
+    desired: dict[str, str] = {}
+    for entity_id, row in sorted(current_rows.items()):
+        decision = _confirmed_user_entry(
+            draft["decisions"].get(entity_id),
+            entity_id=entity_id,
+            identity=row.get("identity", {}),
+        ).get("decision")
+        if decision not in {"KEEP", "REMOVE"}:
+            raise SelectionDraftError(f"REVIEW ist für {entity_id} vor Native Apply nicht zulässig")
+        desired[entity_id] = "include" if decision == "KEEP" else "exclude"
+
+    synthetic: list[dict[str, Any]] = []
+    for item in snapshot.get("stale_native_includes", []):
+        entity_id = item["entity_id"]
+        decision = _confirmed_user_entry(
+            draft["stale_includes"].get(entity_id),
+            entity_id=entity_id,
+            identity={},
+        ).get("decision")
+        if decision == "KEEP_STALE_INCLUDE":
+            raise SelectionDraftError(f"Stale Include {entity_id} kann ohne aktuelle Runtime-Evidenz nicht angewendet werden")
+        if decision == "REPLACE_WITH_VERIFIED_SUCCESSOR":
+            validation = draft["stale_includes"][entity_id].get("technical_validation") or {}
+            successor = validation.get("successor_entity_id")
+            if validation.get("status") != "verified" or successor not in current_rows:
+                raise SelectionDraftError(f"Nachfolger für {entity_id} ist nicht technisch verifiziert")
+            successor_identity = validation.get("successor_identity") or {}
+            if dict(successor_identity) != dict(current_rows[successor].get("identity", {})):
+                raise SelectionDraftConflict(f"Identität des Nachfolgers für {entity_id} stimmt nicht überein")
+            if draft["decisions"].get(successor, {}).get("decision") != "KEEP":
+                raise SelectionDraftError(f"Nachfolger {successor} benötigt zusätzlich die Entscheidung KEEP")
+            desired[successor] = "include"
+        elif decision == "REMOVE_STALE_INCLUDE":
+            desired[entity_id] = "exclude"
+        else:
+            raise SelectionDraftError(f"Unzulässige Stale-Include-Entscheidung für {entity_id}")
+        synthetic.append({
+            "entity_id": entity_id,
+            "available": True,
+            "homekit": {"configured_by_filter": True, "current_status": "included"},
+            "compatibility": {"status": "supported"},
+            "registry_entry_present": False,
+            "state_present": False,
+        })
+
+    for entity_id in snapshot.get("stale_manager_decisions", []):
+        tombstone_id = entity_id["entity_id"] if isinstance(entity_id, Mapping) else entity_id
+        entry = _confirmed_user_entry(
+            draft["tombstones"].get(tombstone_id),
+            entity_id=tombstone_id,
+            identity={},
+        )
+        if entry.get("decision") == "REVIEW":
+            raise SelectionDraftError(f"Historischer Tombstone {tombstone_id} ist nicht entschieden")
+
+    document = {
+        "schema_version": DECISION_SCHEMA_VERSION,
+        "bridges": {
+            entry_id: {
+                "policy": "explicit_overrides",
+                "entities": desired,
+            }
+        },
+    }
+    return document, plan, synthetic
 
 
 def public_view(snapshot: Mapping[str, Any], raw_draft: Any) -> dict[str, Any]:

@@ -1,4 +1,5 @@
 """Admin WebSocket through manager coordinator to isolated Core writer."""
+from file_helpers import secure_private_source
 from homeassistant import config_entries
 from homeassistant.config import async_hass_config_yaml
 from homeassistant.const import __version__
@@ -6,7 +7,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
 
 from custom_components.homekit_manager.operations import HomeKitOperationService
-from file_helpers import secure_private_source
+from custom_components.homekit_manager.selection_draft import empty_draft
 
 
 async def test_admin_operation_websocket_isolated_apply_and_verify(hass, enable_custom_integrations, hass_ws_client, monkeypatch):
@@ -64,6 +65,98 @@ async def test_admin_operation_websocket_isolated_apply_and_verify(hass, enable_
     assert response["success"], response
     assert response["result"]["state"] == "verification_incomplete"
     assert native.options["filter"]["include_entities"] == ["light.after", "light.before"]
+
+
+async def test_selection_draft_websocket_bridges_into_existing_native_operation_engine(
+    hass, enable_custom_integrations, hass_ws_client, monkeypatch,
+):
+    async def no_network_start(_self):
+        return None
+    monkeypatch.setattr("homeassistant.components.homekit.HomeKit.async_start", no_network_start)
+    monkeypatch.setattr("homeassistant.components.homekit.async_port_is_available", lambda _port: True)
+    native = config_entries.ConfigEntry(
+        version=1, minor_version=1, domain="homekit", title="Selection Apply Bridge",
+        data={"name": "Selection Apply Bridge", "port": 21089},
+        options={"mode": "bridge", "filter": {"include_entities": ["light.before", "light.after"]}},
+        source=config_entries.SOURCE_USER, entry_id="selection-apply-native", unique_id=None,
+        discovery_keys={}, subentries_data=None,
+    )
+    await hass.config_entries.async_add(native)
+    await hass.async_block_till_done()
+    flow = await hass.config_entries.flow.async_init("homekit_manager", context={"source": "user"})
+    await hass.config_entries.flow.async_configure(flow["flow_id"], {})
+    manager = hass.data["homekit_manager"]["coordinator"]
+    manager.operation_service = HomeKitOperationService(hass, isolated_write_authority=True)
+    row = {
+        "entity_id": "light.before",
+        "name": "Before",
+        "identity": {"entity_id": "light.before", "unique_id": "uid-before", "device_id": "device-before"},
+        "homekit": {"configured_by_filter": True},
+        "compatibility": {"status": "supported"},
+        "registry_entry_present": True,
+        "state_present": True,
+        "available": True,
+    }
+    retained = {
+        **row,
+        "entity_id": "light.after",
+        "name": "After",
+        "identity": {"entity_id": "light.after", "unique_id": "uid-after", "device_id": "device-after"},
+    }
+    snapshot = {
+        "bridge_entry_id": native.entry_id,
+        "bridge_title": native.title,
+        "snapshot_revision": 4,
+        "snapshot_fingerprint": "selection-snapshot",
+        "snapshot_complete": True,
+        "selection_conflict": False,
+        "metadata_unresolved": False,
+        "native_filter": {"include_entities": ["light.before", "light.after"]},
+        "current_entity_ids": ["light.before", "light.after"],
+        "runtime_entity_ids": ["light.before", "light.after"],
+        "current_entities": [row, retained],
+        "stale_manager_decisions": [],
+        "stale_native_includes": [],
+        "runtime_completeness": "complete",
+        "ambiguous_runtime_count": 0,
+    }
+    manager._selection_snapshot = lambda: snapshot
+    manager.inventory = [row, retained]
+    manager.fingerprint = "selection-snapshot"
+    draft = empty_draft(native.entry_id, 4, "selection-snapshot")
+    draft["decisions"]["light.before"] = {
+        "decision": "REMOVE", "decision_source": "user", "confirmation_status": "confirmed",
+        "identity": row["identity"],
+    }
+    draft["decisions"]["light.after"] = {
+        "decision": "KEEP", "decision_source": "user", "confirmation_status": "confirmed",
+        "identity": retained["identity"],
+    }
+    client = await hass_ws_client()
+    await client.send_json_auto_id({
+        "type": "homekit_manager/selection_operation_plan",
+        "entry_id": native.entry_id,
+        "expected_fingerprint": "selection-snapshot",
+        "draft": draft,
+    })
+    preview = await client.receive_json()
+    assert preview["success"], preview
+    plan = preview["result"]
+    assert plan["changed_entities"] == ["light.before"]
+    assert plan["apply_enabled"] is True
+    assert native.options["filter"]["include_entities"] == ["light.before", "light.after"]
+    await client.send_json_auto_id({
+        "type": "homekit_manager/operation_apply",
+        "operation_id": plan["operation_id"],
+        "entry_id": native.entry_id,
+        "source_revision": plan["source_revision"],
+        "expected_fingerprint": "selection-snapshot",
+        "confirmed_operation_id": plan["operation_id"],
+    })
+    result = await client.receive_json()
+    assert result["success"], result
+    assert result["result"]["state"] == "verification_incomplete"
+    assert native.options["filter"]["include_entities"] == ["light.after"]
 
 
 async def test_admin_operation_websocket_isolated_yaml_apply_and_verify(hass, tmp_path, enable_custom_integrations, hass_ws_client, monkeypatch):

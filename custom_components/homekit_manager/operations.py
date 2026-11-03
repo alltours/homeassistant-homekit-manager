@@ -152,6 +152,12 @@ class HomeKitOperationService:
             grant = await read_production_grant(self.hass)
             if grant is not None:
                 await grant.verify(self.hass, entry_id, source)
+                if await self._grant_was_used(grant.grant_id, entry_id):
+                    return {
+                        "enabled": False,
+                        "reason": "Diese HomeKit-Schreibfreigabe wurde bereits verwendet; neue Freigabe erforderlich",
+                        "automatic_retry": False,
+                    }
         except GrantBlocked as err:
             return {"enabled": False, "reason": str(err), "automatic_retry": False}
         if grant is not None:
@@ -169,6 +175,22 @@ class HomeKitOperationService:
             raise HomeKitWriteDisabled(WRITE_LOCK_REASON)
         await grant.verify(self.hass, entry_id, source)
         return grant
+
+    async def _grant_was_used(self, grant_id: str, entry_id: str) -> bool:
+        """Treat a production grant as single-use across the operation journal."""
+        if not grant_id:
+            return False
+        records = await self._records()
+        return any(
+            isinstance(item, dict)
+            and item.get("entry_id") == entry_id
+            and item.get("grant_id") == grant_id
+            and item.get("state") in {
+                "applying", "verified", "verification_incomplete", "unknown_outcome",
+                "rolling_back", "rolled_back", "rollback_unknown",
+            }
+            for item in records.values()
+        )
 
     async def _records(self) -> dict[str, dict[str, Any]]:
         data = await self._store.async_load() or {}
@@ -522,16 +544,15 @@ class HomeKitOperationService:
             policy = await self.authority_status(entry_id, plan.source)
             if not policy["enabled"]:
                 raise HomeKitWriteDisabled(policy["reason"])
-            if plan.authority_kind != policy.get("authority") or plan.authority_id != policy.get("grant_id"):
+            grant = None if self._isolated_write_authority else await self._production_grant(entry_id, plan.source)
+            if plan.authority_kind == "local_grant":
+                if grant is None or grant.grant_id == record.get("grant_id"):
+                    raise HomeKitWriteDisabled("Rollback benötigt eine neue, unabhängige Schreibfreigabe")
+            elif plan.authority_kind != policy.get("authority") or plan.authority_id != policy.get("grant_id"):
                 if not recovered or plan.authority_kind == "isolated":
                     raise HomeKitWriteDisabled("Schreibfreigabe hat sich seit dem Apply geändert")
-                if (
-                    policy.get("authority") != plan.authority_kind
-                    or not policy.get("grant_id")
-                    or policy.get("grant_id") == record.get("grant_id")
-                ):
+                if policy.get("authority") != plan.authority_kind:
                     raise HomeKitWriteDisabled("Nach Neustart ist eine neue, unabhängige Schreibfreigabe erforderlich")
-            grant = None if self._isolated_write_authority else await self._production_grant(entry_id, plan.source)
             if self._fault_injector is not None:
                 self._fault_injector("rollback_after_write_grant_check")
                 self._fault_injector("rollback_after_lock")

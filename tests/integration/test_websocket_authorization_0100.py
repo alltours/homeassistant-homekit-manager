@@ -39,6 +39,9 @@ async def test_every_manager_websocket_route_rejects_authenticated_non_admin(
         },
         "homekit_manager/operation_status": {"operation_id": "none"},
         "homekit_manager/operation_reconcile": {"operation_id": "none"},
+        "homekit_manager/selection_operation_plan": {
+            "entry_id": "none", "expected_fingerprint": "none",
+        },
         "homekit_manager/test_write_mode_enable": {
             "entry_id": "none", "expected_fingerprint": "none", "confirmed_entry_id": "none",
         },

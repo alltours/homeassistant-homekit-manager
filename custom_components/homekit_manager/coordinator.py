@@ -56,6 +56,8 @@ from .core_migration import capability as core_migration_capability
 from .selection_draft import (
     SelectionDraftConflict,
     SelectionDraftStore,
+    SelectionDraftError,
+    build_native_apply_document,
     build_plan as build_selection_plan,
     normalize_draft,
     public_view as selection_public_view,
@@ -850,6 +852,34 @@ class HomeKitManagerCoordinator:
                                                           document=validated["document"], inventory=self.inventory)
         self.operation_policy = result["operation_policy"]
         return result
+
+    async def async_plan_selection_operation(self, raw_draft: Any, expected_fingerprint: str | None,
+                                             entry_id: str) -> dict[str, Any]:
+        """Bridge the confirmed selection draft into the existing writer engine."""
+        if not expected_fingerprint or expected_fingerprint != self.fingerprint or self.last_error:
+            raise SelectionDraftConflict("Bridge- oder Inventar-Snapshot ist veraltet oder unbekannt")
+        snapshot = self._selection_snapshot()
+        if snapshot.get("bridge_entry_id") != entry_id:
+            raise SelectionDraftError("Ziel-Bridge stimmt nicht mit dem Auswahlentwurf überein")
+        raw = raw_draft if raw_draft is not None else self.selection_drafts.get(entry_id)
+        document, selection_plan, synthetic = build_native_apply_document(snapshot, raw)
+        bridge = self.selected_bridge()
+        if bridge is None or bridge.get("entry_id") != entry_id:
+            raise SelectionDraftError("Ziel-Bridge ist nicht eindeutig ausgewählt")
+        result = await self.operation_service.plan_filter(
+            entry_id=entry_id,
+            bridge=bridge,
+            document=document,
+            inventory=list(self.inventory) + synthetic,
+        )
+        self.operation_policy = result["operation_policy"]
+        return result | {
+            "selection_plan_fingerprint": selection_plan["plan_fingerprint"],
+            "selection_snapshot_fingerprint": snapshot.get("snapshot_fingerprint"),
+            "selection_counts": selection_plan["counts"],
+            "selection_stale_includes_to_remove": selection_plan["stale_includes_to_remove"],
+            "inventory_fingerprint": self.fingerprint,
+        }
 
     async def async_apply_operation(self, operation_id: str, entry_id: str, source_revision: str,
                                     expected_fingerprint: str, confirmed_operation_id: str) -> dict[str, Any]:

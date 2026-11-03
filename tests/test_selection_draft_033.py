@@ -8,6 +8,7 @@ import pytest
 from custom_components.homekit_manager.selection_draft import (
     SelectionDraftConflict,
     SelectionDraftError,
+    build_native_apply_document,
     build_plan,
     empty_draft,
     normalize_draft,
@@ -154,6 +155,43 @@ def test_unexpected_fields_and_oversized_sections_fail_closed():
     draft["unexpected"] = True
     with pytest.raises(SelectionDraftError):
         normalize_draft(draft, entry_id="bridge-a", revision=9, snapshot_fingerprint="snapshot-9")
+
+
+def test_complete_draft_adapts_to_existing_native_operation_document_without_mutation():
+    document, plan, synthetic = build_native_apply_document(snapshot(), complete_draft())
+    bridge = document["bridges"]["bridge-a"]
+    assert bridge["policy"] == "explicit_overrides"
+    assert sum(status == "include" for status in bridge["entities"].values()) == 23
+    assert bridge["entities"]["binary_sensor.stale_1"] == "exclude"
+    assert bridge["entities"]["binary_sensor.stale_2"] == "exclude"
+    assert len(synthetic) == 2
+    assert plan["native_mutation_performed"] is False
+
+
+def test_native_apply_adapter_requires_explicit_confirmed_identity():
+    source = snapshot()
+    draft = complete_draft()
+    draft["decisions"]["light.room_0"]["confirmation_status"] = "pending"
+    with pytest.raises(SelectionDraftError):
+        build_native_apply_document(source, draft)
+
+    draft = complete_draft()
+    draft["decisions"]["light.room_0"]["identity"]["unique_id"] = "changed"
+    with pytest.raises(SelectionDraftConflict):
+        build_native_apply_document(source, draft)
+
+
+def test_native_apply_adapter_rejects_stale_keep_and_broad_filters():
+    source = snapshot()
+    draft = complete_draft()
+    draft["stale_includes"]["binary_sensor.stale_1"]["decision"] = "KEEP_STALE_INCLUDE"
+    with pytest.raises(SelectionDraftError):
+        build_native_apply_document(source, draft)
+
+    source = snapshot()
+    source["native_filter"]["include_domains"] = ["light"]
+    with pytest.raises(SelectionDraftError):
+        build_native_apply_document(source, complete_draft())
 
     draft = complete_draft()
     draft["history"] = [{"timestamp": "now", "event": "test", "unexpected": True}]

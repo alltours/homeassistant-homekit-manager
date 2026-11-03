@@ -53,6 +53,14 @@ from .inventory_export import (
 )
 from .dual_mode import build_dual_mode_status
 from .core_migration import capability as core_migration_capability
+from .selection_draft import (
+    SelectionDraftConflict,
+    SelectionDraftStore,
+    build_plan as build_selection_plan,
+    normalize_draft,
+    public_view as selection_public_view,
+    snapshot_from_coordinator,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -78,6 +86,8 @@ class HomeKitManagerCoordinator:
         self.migration_store = MigrationStore(hass)
         self.management_store = ManagementStore(hass)
         self.activation_store = ActivationStore(hass)
+        self.selection_draft_store = SelectionDraftStore(hass)
+        self.selection_drafts: dict[str, dict[str, Any]] = {}
         # No writer authority exists by default. The optional native test mode
         # is in memory only; the existing local grant remains a separate path.
         self.operation_service = HomeKitOperationService(hass)
@@ -147,6 +157,7 @@ class HomeKitManagerCoordinator:
             self.migration_status = stored_migration
         self.management_statuses = await self.management_store.async_load()
         self.activation_statuses = await self.activation_store.async_load()
+        self.selection_drafts = await self.selection_draft_store.async_load()
         config_path = getattr(getattr(self.hass, "config", None), "path", None)
         if callable(config_path):
             configuration_file = config_path("configuration.yaml")
@@ -445,6 +456,49 @@ class HomeKitManagerCoordinator:
     def diagnostics(self) -> dict[str, Any]:
         """Return the current diagnostic snapshot without applying corrections."""
         return {"findings": self.diagnostic_findings, "grouped_findings": group_diagnostics(self.diagnostic_findings), "summary": diagnostics_summary(self.diagnostic_findings), "fingerprint": self.fingerprint}
+
+    def _selection_snapshot(self) -> dict[str, Any]:
+        """Return the current atomic read model for the non-mutating takeover flow."""
+        return snapshot_from_coordinator(self)
+
+    def selection_draft_status(self) -> dict[str, Any]:
+        """Return current facts and a manager-only draft for the selected bridge."""
+        snapshot = self._selection_snapshot()
+        entry_id = snapshot.get("bridge_entry_id")
+        raw = self.selection_drafts.get(entry_id) if entry_id else None
+        return selection_public_view(snapshot, raw)
+
+    def selection_plan(self, raw_draft: Any = None) -> dict[str, Any]:
+        """Calculate a read-only plan; this method cannot reach the native writer."""
+        snapshot = self._selection_snapshot()
+        entry_id = snapshot.get("bridge_entry_id")
+        raw = raw_draft if raw_draft is not None else (self.selection_drafts.get(entry_id) if entry_id else None)
+        return build_selection_plan(snapshot, raw)
+
+    async def async_save_selection_draft(self, raw_draft: Any, expected_fingerprint: str | None = None, expected_revision: int | None = None) -> dict[str, Any]:
+        """Persist submitted decisions only; never mutate HomeKit configuration."""
+        async with self._refresh_lock:
+            snapshot = self._selection_snapshot()
+            entry_id = snapshot.get("bridge_entry_id")
+            if not entry_id:
+                raise ValueError("Keine eindeutig ausgewählte HomeKit-Bridge")
+            if expected_fingerprint and expected_fingerprint != snapshot.get("snapshot_fingerprint"):
+                raise SelectionDraftConflict("Live-Snapshot wurde seit der Vorschau verändert")
+            if expected_revision is not None and expected_revision != snapshot.get("snapshot_revision"):
+                raise SelectionDraftConflict("Snapshot-Revision wurde seit der Vorschau verändert")
+            normalized = normalize_draft(
+                raw_draft,
+                entry_id=entry_id,
+                revision=snapshot.get("snapshot_revision"),
+                snapshot_fingerprint=snapshot.get("snapshot_fingerprint"),
+                identities={row["entity_id"]: row.get("identity", {}) for row in snapshot.get("current_entities", [])},
+            )
+            history = list(normalized.get("history", []))
+            history.append({"timestamp": normalized["updated_at"], "event": "decision_draft_saved", "bridge_entry_id": entry_id})
+            normalized["history"] = history[-50:]
+            await self.selection_draft_store.async_save(entry_id, normalized)
+            self.selection_drafts[entry_id] = normalized
+            return self.selection_draft_status()
 
     def inventory_export(self, format_name: str = "json") -> dict[str, Any]:
         """Export the current atomic snapshot without state values or secrets."""

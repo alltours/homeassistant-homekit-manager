@@ -19,6 +19,7 @@ from .const import (
     MIGRATION_PLAN_COMMAND, MIGRATION_START_COMMAND, MIGRATION_STATUS_COMMAND,
     MANAGEMENT_STATUS_COMMAND, MANAGEMENT_ENABLE_COMMAND, MANAGEMENT_DISABLE_COMMAND,
     BULK_PREVIEW_COMMAND,
+    SELECTION_DRAFT_COMMAND, SAVE_SELECTION_DRAFT_COMMAND, SELECTION_PLAN_COMMAND,
 )
 from .bulk import preview_bulk
 from .homekit_writer import HomeKitWriteError
@@ -26,6 +27,7 @@ from .yaml_store import YamlStoreError, YamlValidationError, YamlVersionConflict
 from .device_config import build_preview
 from .rules import evaluate_rules
 from .performance import summarize_inventory
+from .selection_draft import SelectionDraftConflict, SelectionDraftError
 
 @websocket_api.require_admin
 @websocket_api.websocket_command({probatio.Required("type"): INVENTORY_COMMAND, probatio.Optional("query"): str, probatio.Optional("refresh", default=False): bool, probatio.Optional("include_context", default=False): bool, probatio.Optional("offset", default=0): int, probatio.Optional("limit", default=500): int})
@@ -99,6 +101,50 @@ async def websocket_reconciliation_export(hass, connection, msg):
         connection.send_result(msg["id"], coordinator.reconciliation_export(format_name))
     except ValueError as err:
         connection.send_error(msg["id"], "invalid_format", str(err))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required("type"): SELECTION_DRAFT_COMMAND})
+@websocket_api.async_response
+async def websocket_selection_draft(hass, connection, msg):
+    """Return the manager-only takeover draft and current read snapshot."""
+    connection.send_result(msg["id"], hass.data["homekit_manager"]["coordinator"].selection_draft_status())
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({
+    probatio.Required("type"): SAVE_SELECTION_DRAFT_COMMAND,
+    probatio.Required("draft"): dict,
+    probatio.Optional("expected_fingerprint"): str,
+    probatio.Optional("expected_revision"): int,
+})
+@websocket_api.async_response
+async def websocket_save_selection_draft(hass, connection, msg):
+    """Save manager decisions only; this endpoint has no native write capability."""
+    try:
+        result = await hass.data["homekit_manager"]["coordinator"].async_save_selection_draft(
+            msg["draft"], msg.get("expected_fingerprint"), msg.get("expected_revision")
+        )
+    except SelectionDraftConflict as err:
+        connection.send_error(msg["id"], "conflict", str(err))
+        return
+    except (SelectionDraftError, ValueError, OSError) as err:
+        connection.send_error(msg["id"], "invalid_decision_draft", str(err))
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required("type"): SELECTION_PLAN_COMMAND, probatio.Optional("draft"): dict})
+@websocket_api.async_response
+async def websocket_selection_plan(hass, connection, msg):
+    """Return a deterministic non-mutating plan for explicit decisions."""
+    try:
+        result = hass.data["homekit_manager"]["coordinator"].selection_plan(msg.get("draft"))
+    except (SelectionDraftError, ValueError) as err:
+        connection.send_error(msg["id"], "plan_blocked", str(err))
+        return
+    connection.send_result(msg["id"], result)
 
 @websocket_api.require_admin
 @websocket_api.websocket_command({
@@ -571,7 +617,7 @@ async def websocket_export(hass, connection, msg):
     except (YamlValidationError, ValueError) as err:
         connection.send_error(msg["id"], "invalid_format", str(err))
 
-REGISTERED_HANDLERS = (websocket_inventory, websocket_inventory_export, websocket_reconciliation_export, websocket_bulk_preview, websocket_bridges, websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_activation_status, websocket_mode_status, websocket_set_mode, websocket_migration_plan, websocket_migration_status, websocket_migration_start, websocket_management_status, websocket_management_enable, websocket_management_disable, websocket_test_write_mode_enable, websocket_test_write_mode_disable, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_apply_options_diff, websocket_operation_plan, websocket_operation_apply, websocket_operation_rollback, websocket_operation_status, websocket_operation_reconcile, websocket_prepare_options_diff, websocket_reconcile, websocket_export)
+REGISTERED_HANDLERS = (websocket_inventory, websocket_inventory_export, websocket_reconciliation_export, websocket_selection_draft, websocket_save_selection_draft, websocket_selection_plan, websocket_bulk_preview, websocket_bridges, websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_activation_status, websocket_mode_status, websocket_set_mode, websocket_migration_plan, websocket_migration_status, websocket_migration_start, websocket_management_status, websocket_management_enable, websocket_management_disable, websocket_test_write_mode_enable, websocket_test_write_mode_disable, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_apply_options_diff, websocket_operation_plan, websocket_operation_apply, websocket_operation_rollback, websocket_operation_status, websocket_operation_reconcile, websocket_prepare_options_diff, websocket_reconcile, websocket_export)
 
 
 def async_register_websocket_commands(hass, coordinator) -> None:

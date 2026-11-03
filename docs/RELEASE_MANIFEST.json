@@ -1,6 +1,6 @@
 {
-  "integration_version": "0.10.32",
-  "file_count": 59,
+  "integration_version": "0.10.33",
+  "file_count": 60,
   "files": [
     {
       "path": "__init__.py",
@@ -44,8 +44,8 @@
     },
     {
       "path": "const.py",
-      "sha256": "f36ddceb32ffec29de7c012e27839d51c5b4a60dd9e01899da34d2f78aa94df4",
-      "size": 2873
+      "sha256": "492a5cb3bb961ee3e3ab59a55feabe18336a565edca11cc9344302777118929e",
+      "size": 3043
     },
     {
       "path": "conversion.py",
@@ -54,8 +54,8 @@
     },
     {
       "path": "coordinator.py",
-      "sha256": "d32a3dcdd9c44a389d2c6ef0b21419b21f5138ee8222f1199da5ebf161cc50ca",
-      "size": 55526
+      "sha256": "f4f202fa2b82ec57af9087ed8fe11fbe56b074067238aacd8e49a85457a64b03",
+      "size": 58619
     },
     {
       "path": "core_migration.py",
@@ -144,7 +144,7 @@
     },
     {
       "path": "manifest.json",
-      "sha256": "908d5002939d086ed293f7151ef3e7ba366b22bf99cd57ba9d84dd318a03f694",
+      "sha256": "21b3897f4c118a70f378101344e8689e2ff2eecd203cbb6f54c9dcbe3ffd17ce",
       "size": 517
     },
     {
@@ -238,6 +238,11 @@
       "size": 1581
     },
     {
+      "path": "selection_draft.py",
+      "sha256": "0f92f280f1731e251ec4baa459de6c4a5a50a2b058d6731abf087587ab1b26b1",
+      "size": 19160
+    },
+    {
       "path": "selection_reconciliation.py",
       "sha256": "593f5d4b5a511bc1fa032206c4a41903b1106a0cac7a4ec84f523f698f508b49",
       "size": 17003
@@ -269,8 +274,8 @@
     },
     {
       "path": "websocket.py",
-      "sha256": "a3926ef79329b31569bfbcfcc436e07decf49c6865f83c101e146ef01df9170f",
-      "size": 30569
+      "sha256": "37b49d491dea194a40da41a08c3696f6bc3885678468c4f3b90ada912a6b1f15",
+      "size": 32772
     },
     {
       "path": "write_grant.py",
@@ -284,8 +289,8 @@
     },
     {
       "path": "www/homekit-manager.js",
-      "sha256": "0e5737b572e73d81e4f36d44521b0db31fa78e3c25cc8d281b73c835cc98f02e",
-      "size": 123966
+      "sha256": "26b7e26f5111d91b62b6a5d02aebe63147becf6a857d720388d31760bacf9678",
+      "size": 134770
     },
     {
       "path": "yaml_adapter.py",

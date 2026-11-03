@@ -93,6 +93,14 @@ let writes = 0; panel._hass = { callWS: async () => { writes++; } };
 await panel.applyDraft(); assert.equal(writes, 0); assert.equal(panel.activationStatus.state, 'unknown');
 for (const view of ['home', 'devices', 'changes', 'settings']) { panel.view = view; panel.render(); assert.match(panel.shadowRoot.innerHTML, /Hauptbereiche/); }
 for (const section of ['general', 'configuration', 'diagnostics', 'rules', 'history', 'performance']) { panel.settingsView = section; panel.view = 'settings'; panel.render(); assert.match(panel.shadowRoot.innerHTML, /Einstellungsbereiche/); }
+panel.selectionModel = { snapshot: { bridge_title: 'Test Bridge', bridge_entry_id: 'bridge-a', current_entity_ids: ['light.kitchen'], snapshot_complete: true, snapshot_revision: 4, reconciliation_state: 'metadata_unresolved', stale_manager_decisions: [{ entity_id: 'sensor.old' }], stale_native_includes: [{ entity_id: 'binary_sensor.stale' }] }, entities: [{ entity_id: 'light.kitchen', name: 'Kitchen', domain: 'light', runtime_publication: 'published_verified', native_selected: true, availability: 'available' }], tombstones: [{ entity_id: 'sensor.old', decision: 'exclude' }], stale_includes: [{ entity_id: 'binary_sensor.stale' }], draft: { schema_version: 1, bridge_entry_id: 'bridge-a', snapshot_revision: 4, snapshot_fingerprint: 'f', decisions: {}, tombstones: {}, stale_includes: {} }, plan: { counts: { keep: 0, remove: 0, review: 1 }, new_publications: [], accessory_removals: [], blockers: ['Offene Entscheidungen'] } };
+panel.selectionWorking = JSON.parse(JSON.stringify(panel.selectionModel.draft)); panel.settingsView = 'selection'; panel.view = 'settings'; panel.render();
+assert.match(panel.shadowRoot.innerHTML, /Bestehende HomeKit-Auswahl übernehmen/);
+assert.match(panel.shadowRoot.innerHTML, /Noch nicht für Anwendung freigegeben/);
+assert.match(panel.shadowRoot.innerHTML, /Keine automatische KEEP-Übernahme/);
+assert.match(panel.shadowRoot.innerHTML, /light\.kitchen/);
+assert.match(panel.shadowRoot.innerHTML, /REMOVE_STALE_INCLUDE/);
+assert.doesNotMatch(panel.shadowRoot.innerHTML, /Änderung anwenden/);
 const before = panel.renderCount; panel.hass = { callWS: async () => ({}) }; assert.equal(panel.renderCount, before, 'unrelated hass setters do not rebuild the UI');
 assert.equal(panel.escape('<script>'), '&lt;script&gt;');
 let resolveFirst, updateReads = 0;

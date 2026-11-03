@@ -1,4 +1,4 @@
-"""Official-Core two-bridge HAP Apply acceptance worker for 0.10.31.
+"""Official-Core two-bridge HAP Apply acceptance worker for 0.11.0.
 
 The worker deliberately uses the regular HomeKit Manager operation service,
 including its persisted grant/revision checks. HAP verification is performed
@@ -29,6 +29,7 @@ from homeassistant.runner import RuntimeConfig
 from port_allocator import reserve_hap_port, reserve_http_port
 
 from custom_components.homekit_manager.operations import HomeKitOperationService
+from custom_components.homekit_manager.selection_draft import empty_draft
 
 ENTRY_A = "acceptance-bridge-a-028"
 ENTRY_B = "acceptance-bridge-b-028"
@@ -396,24 +397,111 @@ async def run() -> None:
 
             await coordinator.async_refresh(ENTRY_A)
             assert coordinator.selected_bridge_id == ENTRY_A
-            desired = {entity_id: "include" for entity_id in A_IDS[1:]}
-            desired[B_IDS[0]] = "include"
-            desired[A_IDS[0]] = "exclude"
-            document = {"schema_version": 1, "bridges": {ENTRY_A: {"policy": "explicit_overrides", "entities": desired}}}
-            upgrade_baseline = os.environ.get("HKM_ACCEPTANCE_SKIP_APPLY") == "1"
-            if upgrade_baseline:
-                result = {"state": "upgrade_baseline", "runtime_verification": "not_run"}
-            else:
+            if os.environ.get("HKM_ACCEPTANCE_SELECTION") == "1":
+                # Exercise the real selection-draft adapter, the real admin
+                # WebSocket, and the existing operation service in one HAP
+                # process.  The snapshot is deliberately limited to the
+                # synthetic entities on Bridge A; no production data is used.
+                identities = {
+                    entity_id: {
+                        "entity_id": entity_id,
+                        "unique_id": f"uid-{entity_id}",
+                        "device_id": "device-acceptance-a",
+                        "integration_domain": "input_boolean",
+                        "config_entry_id": None,
+                    }
+                    for entity_id in A_IDS
+                }
+                rows = [
+                    {
+                        "entity_id": entity_id,
+                        "name": entity_id.split(".", 1)[1].replace("_", " ").title(),
+                        "domain": "input_boolean",
+                        "device_name": "Acceptance A",
+                        "area_name": "Test Area",
+                        "integration_domain": "input_boolean",
+                        "native_selected": True,
+                        "runtime_publication": "published_verified",
+                        "availability": "available",
+                        "identity": identity,
+                    }
+                    for entity_id, identity in identities.items()
+                ]
+                coordinator._selection_snapshot = lambda: {
+                    "bridge_entry_id": ENTRY_A,
+                    "bridge_title": "HKM Acceptance A",
+                    "snapshot_revision": 1,
+                    "snapshot_fingerprint": "selection-hap-e2e",
+                    "snapshot_timestamp": datetime.now(UTC).isoformat(),
+                    "snapshot_complete": True,
+                    "reconciliation_state": "aligned",
+                    "selection_conflict": False,
+                    "metadata_unresolved": False,
+                    "migration_blocked": False,
+                    "write_enabled": False,
+                    "native_filter": _filter(A_IDS),
+                    "current_entity_ids": list(A_IDS),
+                    "runtime_entity_ids": list(A_IDS),
+                    "current_entities": rows,
+                    "stale_manager_decisions": [],
+                    "stale_native_includes": [],
+                    "runtime_completeness": "complete",
+                    "ambiguous_runtime_count": 0,
+                }
+                coordinator.fingerprint = "selection-hap-e2e"
+                draft = empty_draft(ENTRY_A, 1, "selection-hap-e2e")
+                for entity_id in A_IDS:
+                    draft["decisions"][entity_id] = {
+                        "decision": "REMOVE" if entity_id == A_IDS[0] else "KEEP",
+                        "decision_source": "user",
+                        "confirmation_status": "confirmed",
+                        "identity": identities[entity_id],
+                    }
+                saved = await _ws_call(
+                    hass,
+                    http_port,
+                    {
+                        "type": "homekit_manager/save_selection_draft",
+                        "draft": draft,
+                        "expected_fingerprint": "selection-hap-e2e",
+                        "expected_revision": 1,
+                    },
+                )
+                loaded = await _ws_call(
+                    hass, http_port, {"type": "homekit_manager/selection_draft"}
+                )
+                assert loaded["draft"]["bridge_entry_id"] == ENTRY_A
+                assert loaded["draft"]["decisions"] == saved["draft"]["decisions"]
                 plan = await _ws_call(
                     hass,
                     http_port,
                     {
-                        "type": "homekit_manager/operation_plan",
-                        "document": document,
+                        "type": "homekit_manager/selection_operation_plan",
                         "entry_id": ENTRY_A,
-                        "expected_fingerprint": coordinator.fingerprint,
+                        "expected_fingerprint": "selection-hap-e2e",
+                        "draft": loaded["draft"],
                     },
                 )
+            else:
+                desired = {entity_id: "include" for entity_id in A_IDS[1:]}
+                desired[B_IDS[0]] = "include"
+                desired[A_IDS[0]] = "exclude"
+                document = {"schema_version": 1, "bridges": {ENTRY_A: {"policy": "explicit_overrides", "entities": desired}}}
+            upgrade_baseline = os.environ.get("HKM_ACCEPTANCE_SKIP_APPLY") == "1"
+            if upgrade_baseline:
+                result = {"state": "upgrade_baseline", "runtime_verification": "not_run"}
+            else:
+                if os.environ.get("HKM_ACCEPTANCE_SELECTION") != "1":
+                    plan = await _ws_call(
+                        hass,
+                        http_port,
+                        {
+                            "type": "homekit_manager/operation_plan",
+                            "document": document,
+                            "entry_id": ENTRY_A,
+                            "expected_fingerprint": coordinator.fingerprint,
+                        },
+                    )
                 assert plan["apply_enabled"] is True, plan
                 (shared / "planned.json").write_text(json.dumps(plan), encoding="utf-8")
                 result = await _ws_call(
@@ -446,7 +534,10 @@ async def run() -> None:
                 assert _names(after_a) != _names(before_a)
             assert _names(after_b) == _names(before_b)
             if not upgrade_baseline:
-                assert _names(after_a) == {_name for _name in _names(before_a) if "Hkm A 00" not in _name} | {"Hkm B 00"}
+                expected_a_names = {_name for _name in _names(before_a) if "Hkm A 00" not in _name}
+                if os.environ.get("HKM_ACCEPTANCE_SELECTION") != "1":
+                    expected_a_names.add("Hkm B 00")
+                assert _names(after_a) == expected_a_names
             assert _shape(after_b) == baseline["b"]["shape"]
             before_signatures_a = baseline["a"]["signatures"]
             after_signatures_a = _signature_by_name(after_a)

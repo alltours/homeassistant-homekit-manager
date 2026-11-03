@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import shutil
+import subprocess
 import sys
 
 
@@ -33,15 +35,25 @@ os.environ["PYTEST_ADDOPTS"] = (
     "-p pytest_asyncio.plugin -p pytest_socket "
     "-p pytest_homeassistant_custom_component.plugins"
 )
+os.environ["HKM_BETA_PYTEST_ADAPTER"] = str(ADAPTER)
 
 import pytest  # noqa: E402
+
+
+git_executable = shutil.which("git")
+if git_executable is None:
+    raise RuntimeError("git is required to select tracked integration tests")
 
 
 raise SystemExit(
     pytest.main(
         [
             "-q",
-            "tests/integration",
+            *subprocess.check_output(  # noqa: S603 - executable resolved via shutil.which
+                [git_executable, "ls-files", "tests/integration/test_*.py"],
+                cwd=ROOT,
+                text=True,
+            ).splitlines(),
             "-m",
             "not experimental_core",
             "--disable-warnings",

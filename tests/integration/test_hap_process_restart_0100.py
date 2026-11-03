@@ -16,8 +16,17 @@ def test_pairing_reconnects_after_isolated_core_process_restart():
     with TemporaryDirectory(prefix="hkm-hap-restart-") as directory:
         for phase in ("pair", "reconnect"):
             environment = dict(os.environ, HKM_RESTART_DIR=directory, HKM_RESTART_PHASE=phase)
+            beta_adapter = environment.get("HKM_BETA_PYTEST_ADAPTER")
+            bootstrap = ""
+            if beta_adapter:
+                bootstrap = (
+                    "import sys; "
+                    f"sys.path.insert(0, {beta_adapter!r}); "
+                    "import sitecustomize; "
+                )
+            bootstrap += "import homeassistant, pytest, sys; raise SystemExit(pytest.main(sys.argv[1:]))"
             result = subprocess.run(  # noqa: S603 - fixed interpreter, module and local test path
-                [sys.executable, "-m", "pytest", "-q", "--show-capture=no", str(WORKER)],
+                [sys.executable, "-c", bootstrap, "-q", "--show-capture=no", str(WORKER)],
                 cwd=ROOT, env=environment, capture_output=True, text=True, timeout=90, check=False,
             )
             # Child output stays in memory and is not published: it can contain

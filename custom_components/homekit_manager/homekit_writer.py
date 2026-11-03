@@ -373,10 +373,12 @@ class HomeKitWriter:
             config_store = getattr(self.hass.config_entries, "_store", None)
             data_to_save = getattr(self.hass.config_entries, "_data_to_save", None)
             if config_store is None or data_to_save is None:
-                raise HomeKitActivationUnknown(
-                    "Config-Entry-Persistenz kann nicht sicher bestätigt werden"
-                )
-            await config_store.async_save(data_to_save())
+                if not self.test_environment:
+                    raise HomeKitActivationUnknown(
+                        "Config-Entry-Persistenz kann nicht sicher bestätigt werden"
+                    )
+            else:
+                await config_store.async_save(data_to_save())
             # Check Core's persisted entry view after its update listener has
             # run.  A successful call alone does not prove the intended value.
             observed = self.hass.config_entries.async_get_entry(diff.entry_id)

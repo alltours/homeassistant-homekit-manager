@@ -7,6 +7,7 @@ from pathlib import Path
 from aiohomekit.controller.controller import Controller
 from aiohomekit.controller.ip.discovery import IpDiscovery
 from aiohomekit.controller.ip.pairing import IpPairing
+from aiohomekit.exceptions import AuthenticationError
 from aiohomekit.zeroconf import HomeKitService
 from homeassistant import config_entries
 import pytest
@@ -32,6 +33,43 @@ class LocalAdvertiser:
 
     async def async_close(self):
         return None
+
+
+async def _pair_loopback(driver, port: int, pairing_name: str):
+    """Pair after the listener is ready, retrying one transient handshake race."""
+    for attempt in range(2):
+        try:
+            _, writer = await asyncio.wait_for(
+                asyncio.open_connection("127.0.0.1", port), 3
+            )
+            writer.close()
+            await writer.wait_closed()
+        except OSError as err:
+            if attempt:
+                raise AssertionError(
+                    f"HAP listener did not accept connections on {port}"
+                ) from err
+        else:
+            controller = Controller()
+            discovery = IpDiscovery(
+                controller, HomeKitService.from_service_info(driver.mdns_service_info)
+            )
+            try:
+                finish_pairing = await asyncio.wait_for(
+                    discovery.async_start_pairing(pairing_name), 10
+                )
+                pairing = await asyncio.wait_for(
+                    finish_pairing(driver.state.pincode.decode()), 10
+                )
+            except AuthenticationError:
+                if attempt:
+                    raise
+            else:
+                return controller, pairing
+            finally:
+                await discovery.close()
+        await asyncio.sleep(0.1)
+    raise AssertionError("HAP pairing did not complete")
 
 
 @pytest.fixture
@@ -91,13 +129,7 @@ async def test_loopback_hap_server_survives_native_filter_reload(hass, monkeypat
     writer.close()
     await writer.wait_closed()
     assert response.startswith(b"HTTP/1.1")
-    controller = Controller()
-    discovery = IpDiscovery(controller, HomeKitService.from_service_info(first.driver.mdns_service_info))
-    try:
-        finish_pairing = await asyncio.wait_for(discovery.async_start_pairing("isolated"), 10)
-        pairing = await asyncio.wait_for(finish_pairing(first.driver.state.pincode.decode()), 10)
-    finally:
-        await discovery.close()
+    controller, pairing = await _pair_loopback(first.driver, port, "isolated")
     await hass.async_add_executor_job(first.driver.persist)
     before_accessories = await asyncio.wait_for(pairing.list_accessories_and_characteristics(), 10)
     assert any(item["aid"] == before_aid for item in before_accessories)
@@ -180,13 +212,7 @@ async def test_broad_filter_migration_needs_live_hap_evidence_and_keeps_identity
     mac = before.driver.state.mac
     keep_aid = before.aid_storage.get_allocated_aid_for_entity_id("light.keep")
     assert keep_aid in before.bridge.accessories
-    controller = Controller()
-    discovery = IpDiscovery(controller, HomeKitService.from_service_info(before.driver.mdns_service_info))
-    try:
-        finish_pairing = await asyncio.wait_for(discovery.async_start_pairing("migration"), 10)
-        pairing = await asyncio.wait_for(finish_pairing(before.driver.state.pincode.decode()), 10)
-    finally:
-        await discovery.close()
+    controller, pairing = await _pair_loopback(before.driver, port, "migration")
     await hass.async_add_executor_job(before.driver.persist)
     pairing_data = dict(pairing.pairing_data)
     await pairing.shutdown()

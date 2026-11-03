@@ -1,5 +1,5 @@
 {
-  "integration_version": "0.10.32-rc.2",
+  "integration_version": "0.10.32-rc.3",
   "file_count": 59,
   "files": [
     {
@@ -44,7 +44,7 @@
     },
     {
       "path": "const.py",
-      "sha256": "17dd57ba49b50c1c32398c19fccb7fc8bea2b39c81870af1acb30197df610148",
+      "sha256": "debfcd46d546eed123c4e74dc5e9cd63b698f06e347e9b4ff8cc76fce8544434",
       "size": 2878
     },
     {
@@ -144,7 +144,7 @@
     },
     {
       "path": "manifest.json",
-      "sha256": "15a1e215c457e3e197a0a96fb821f1309f25e7293c04400b65b38a2721ed24f2",
+      "sha256": "7128431779884fd25b2361d5eebd6147ddc34d7aad42f136edcbf100f6357cc7",
       "size": 522
     },
     {
@@ -194,8 +194,8 @@
     },
     {
       "path": "operations.py",
-      "sha256": "9fb726992e44a1ecd1d90fdcfd901968e888bd97e64d747101f76ac679f7678d",
-      "size": 36910
+      "sha256": "2b93298fcee2f6b6cddc75fca4d02c861b513b40f45a06bc7ce3d52ce061259b",
+      "size": 37146
     },
     {
       "path": "panel.py",

@@ -13,7 +13,11 @@ from custom_components.homekit_manager.homekit_writer import (
     HomeKitWriteDisabled,
 )
 from custom_components.homekit_manager.native_adapter import NativeHomeKitAdapter
-from custom_components.homekit_manager.operations import HomeKitOperationService
+from custom_components.homekit_manager.operations import (
+    HomeKitOperationService,
+    _filter_fingerprint,
+    _journal_integrity,
+)
 
 
 def desired(entry_id):
@@ -237,3 +241,57 @@ async def test_tampered_persisted_operation_is_fail_closed(hass):
     with pytest.raises(HomeKitWriteBlocked, match="nicht vertrauenswürdig"):
         await service.rollback(operation_id, entry_id="missing-entry",
                                confirmed_operation_id="anything", admin=True)
+
+
+async def test_recomputed_unkeyed_digest_does_not_replace_independent_authority(
+    hass, monkeypatch
+):
+    """A recomputed digest is consistency evidence, not write authorization."""
+    async def no_network_start(_self):
+        return None
+
+    monkeypatch.setattr("homeassistant.components.homekit.HomeKit.async_start", no_network_start)
+    monkeypatch.setattr("homeassistant.components.homekit.async_port_is_available", lambda _port: True)
+    entry = config_entries.ConfigEntry(
+        version=1, minor_version=1, domain="homekit", title="Digest Boundary",
+        data={"name": "Digest Boundary", "port": 21089},
+        options={"mode": "bridge", "filter": {"include_entities": ["light.before"]}},
+        source=config_entries.SOURCE_USER, entry_id="digest-boundary", unique_id=None,
+        discovery_keys={}, subentries_data=None,
+    )
+    await hass.config_entries.async_add(entry)
+    await hass.async_block_till_done()
+    bridge = {"entry_id": entry.entry_id, "source": "user", "filter": dict(entry.options["filter"])}
+    isolated = HomeKitOperationService(hass, isolated_write_authority=True)
+    plan = await isolated.plan_filter(
+        entry_id=entry.entry_id, bridge=bridge, document=desired(entry.entry_id), inventory=inventory()
+    )
+    await isolated.apply(
+        plan["operation_id"], entry_id=entry.entry_id,
+        expected_revision=plan["source_revision"],
+        confirmed_operation_id=plan["operation_id"], admin=True,
+    )
+    target_filter = {
+        key: list(value) if isinstance(value, list) else value
+        for key, value in entry.options["filter"].items()
+    }
+
+    records = await isolated._records()
+    record = records[plan["operation_id"]]
+    record["before_filter"] = {"include_entities": ["light.attacker_selected"]}
+    record["before_fingerprint"] = _filter_fingerprint(record["before_filter"])
+    record["integrity"] = _journal_integrity(record)
+    await isolated._store.async_save({"schema_version": 2, "operations": records})
+
+    restarted = HomeKitOperationService(hass)
+    status = await restarted.status(plan["operation_id"])
+    assert status["journal_integrity"] == "verified"
+    assert status["recovery_required"] is True
+    with pytest.raises(HomeKitWriteDisabled, match="Schreibfreigabe"):
+        await restarted.rollback(
+            plan["operation_id"],
+            entry_id=entry.entry_id,
+            confirmed_operation_id=status["recovery_confirmation"],
+            admin=True,
+        )
+    assert entry.options["filter"] == target_filter

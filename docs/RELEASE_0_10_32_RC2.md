@@ -9,12 +9,18 @@ are not part of this release candidate.
 ## Recovery and safety changes
 
 - Persisted native operations use a versioned, integrity-checked operations
-  journal containing the authenticated preimage, target filter, fingerprints,
+  journal containing a corruption-detecting SHA-256 digest over the preimage,
+  target filter, fingerprints,
   revisions, authority metadata, and recovery phase.
 - Startup recovery is read-only. It never retries an unknown mutation or
   performs an automatic rollback.
 - A rollback reconstructed after a process restart requires a new
   process-local recovery confirmation and a newly validated write grant.
+- The journal digest is unkeyed and therefore detects corruption and
+  inconsistent records; it does not provide cryptographic authenticity against
+  an attacker who can modify the journal and recompute the digest. Native
+  writes remain independently authorized by administrator state, confirmation,
+  current revisions, live filter state, locking, and a fresh write grant.
 - Corrupt, unknown-version, incomplete, stale, or contradictory journal
   records remain blocked and require manual reconciliation.
 - The existing Write-Grant, snapshot, confirmation, locking, fail-closed

@@ -505,7 +505,7 @@ async def run() -> None:
             current_version = json.loads(
                 (config_dir / "custom_components" / DOMAIN / "manifest.json").read_text()
             )["version"]
-            assert current_version == "0.10.32-rc.2"
+            assert current_version == "0.10.32-rc.3"
             pairing_a = IpPairing(Controller(), json.loads((shared / "pairing-a.json").read_text(encoding="utf-8")))
             pairing_b = IpPairing(Controller(), json.loads((shared / "pairing-b.json").read_text(encoding="utf-8")))
             after_a = await _accessories(pairing_a)
@@ -519,7 +519,7 @@ async def run() -> None:
             assert len([entry for entry in hass.config_entries.async_entries("homekit")]) == 2
 
             # The second Core process must reconstruct the native rollback
-            # plan from the authenticated journal.  A fresh grant and a fresh
+            # plan from the integrity-checked journal.  A fresh grant and a fresh
             # process-local recovery challenge are mandatory after restart.
             coordinator = hass.data[DOMAIN]["coordinator"]
             await coordinator.async_refresh(ENTRY_A)

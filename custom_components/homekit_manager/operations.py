@@ -59,7 +59,13 @@ def _filter_fingerprint(value: Mapping[str, Any] | None) -> str:
 
 
 def _journal_integrity(record: Mapping[str, Any]) -> str:
-    """Hash all persisted journal fields except the integrity field itself."""
+    """Hash persisted fields for corruption and consistency detection.
+
+    This is intentionally an unkeyed digest.  It is not an authenticity or
+    authorization mechanism; every native mutation still requires independent
+    administrator, confirmation, revision, state, lock, and write-grant
+    checks.
+    """
     payload = {key: value for key, value in record.items() if key not in _JOURNAL_PRIVATE_KEYS}
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
@@ -291,7 +297,7 @@ class HomeKitOperationService:
         } | {"automatic_retry": False}
 
     def _reconstruct_native_plan(self, record: Mapping[str, Any]) -> OperationPlan:
-        """Reconstruct only a fully authenticated native plan from the journal."""
+        """Reconstruct a structurally validated native plan from the journal."""
         operation_id = str(record.get("operation_id", ""))
         self._ensure_journal_record(record, operation_id)
         if record.get("source") != "user":

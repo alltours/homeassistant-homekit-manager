@@ -109,32 +109,15 @@
           if (message.type === "homekit_manager/mode_status") {
             const source = selectedBridgeId === "yaml-fixture-bridge" ? "import" : "user";
             const yamlSelected = source === "import";
-            return { active_mode: yamlSelected ? "yaml" : "homekit_bridge", desired_mode: yamlSelected ? "yaml" : "homekit_bridge", transition: "stable", matrix: {}, dual_mode: {
-              administration_mode: yamlSelected ? "yaml" : "ui_bridge", administration_mode_label: yamlSelected ? "YAML" : "UI / Bridge", available_modes: ["ui_bridge", "yaml"],
-              native_configuration_source: { key: source, label: yamlSelected ? "Home Assistant YAML (SOURCE_IMPORT)" : "Home Assistant UI / Config Entry", short_label: yamlSelected ? "YAML" : "UI / Bridge" },
-              mode_options: [
-                { key: "ui_bridge", label: "UI / Bridge", selected: !yamlSelected, description: "Native Home-Assistant-Bridge verwalten." },
-                { key: "yaml", label: "YAML", selected: yamlSelected, description: "YAML-Projektion als Entwurf prüfen und exportieren." },
-              ],
-              plans: {
-                ui_bridge: { status: yamlSelected ? "read_only_projection" : "same_native_source", title: yamlSelected ? "UI-Modus nur als Lesesicht verfügbar" : "Verwaltungsmodus kann sicher verwendet werden", message: yamlSelected ? "Die aktive YAML-Quelle bleibt maßgeblich." : "Die gewählte Oberfläche entspricht der nativen Quelle.", safe_action: yamlSelected ? "read_existing_source" : "manage_existing_source", source_migration_supported: false, pairing_preservation_proven: false },
-                yaml: { status: yamlSelected ? "same_native_source" : "draft_only", title: yamlSelected ? "Verwaltungsmodus kann sicher verwendet werden" : "YAML nur als sicherer Entwurf verfügbar", message: yamlSelected ? "Die gewählte Oberfläche entspricht der nativen Quelle." : "Eine YAML-Projektion kann geprüft und exportiert werden.", safe_action: yamlSelected ? "manage_existing_source" : "preview_export_validate", source_migration_supported: false, pairing_preservation_proven: false },
-              },
-              source_migration: { supported: false, status: "blocked" },
-            } };
-          }
-          if (message.type === "homekit_manager/set_mode") {
-            throw new Error("Quellenmigration ist nicht vorgesehen");
+            return { active_mode: yamlSelected ? "yaml" : "homekit_bridge", bridge_entry_id: selectedBridgeId,
+              native_configuration_source: { key: source, label: yamlSelected ? "Home Assistant YAML (SOURCE_IMPORT)" : "Home Assistant UI / Config Entry", short_label: yamlSelected ? "YAML" : "UI / Bridge", kind: "native" },
+              native_source_is_authoritative: true, bridge_count: 1, bridge_selection_required: false,
+              yaml_path: "/config/homekit_manager.yaml", yaml_valid: true, yaml_exists: false,
+              source_detection: { active_mode: yamlSelected ? "yaml" : "homekit_bridge", ambiguous: false },
+              message: "Die native Home-Assistant-Konfigurationsquelle bleibt autoritativ. Ein Wechsel zwischen UI und YAML wird nicht angeboten." };
           }
           if (message.type === "homekit_manager/activation_status") {
             return { state: "unknown", entry_id: "fixture-bridge", has_operation: new URLSearchParams(window.location.search).has("activation-error"), message: "Kein bestätigter Aktivierungsnachweis", observations: { bridge_state: "loaded" } };
-          }
-          if (message.type === "homekit_manager/migration_plan") {
-            const target = message.target || "homekit_bridge";
-            return { source: "homekit_bridge", target, supported: false, status: target === "homekit_bridge" ? "not_applicable" : "blocked", reason: "Quellenmigration ist nicht vorgesehen", steps: [] };
-          }
-          if (message.type === "homekit_manager/migration_status") {
-            return { state: "unknown", stale: true };
           }
           if (message.type === "homekit_manager/management_status") {
             return { state: managementActive ? "active" : "not_enabled", configuration_source: "home_assistant", configuration_source_label: "Home Assistant", management_surface: managementActive ? "homekit_manager" : "home_assistant", management_surface_label: managementActive ? "HomeKit Manager" : "Home Assistant", supported: true, active: managementActive, write_status: "locked", write_status_label: "Gesperrt", bridge_title: "Fixture Bridge", message: managementActive ? "HomeKit Manager verwaltet diese Bridge jetzt." : "HomeKit Manager kann diese bestehende Bridge nach Bestätigung verwalten." };

@@ -10,13 +10,12 @@ from .const import (
     BRIDGES_COMMAND, SELECT_BRIDGE_COMMAND, INVENTORY_COMMAND, INVENTORY_EXPORT_COMMAND, RECONCILIATION_EXPORT_COMMAND, PREVIEW_COMMAND, SAVE_DRAFT_COMMAND, APPLY_OPTIONS_DIFF_COMMAND,
     VALIDATE_DRAFT_COMMAND, YAML_STATUS_COMMAND, PREPARE_OPTIONS_DIFF_COMMAND,
     RECONCILE_COMMAND, EXPORT_COMMAND,
-    MODE_STATUS_COMMAND, SET_MODE_COMMAND,
+    MODE_STATUS_COMMAND,
     DEVICES_COMMAND, AREAS_COMMAND, DIAGNOSTICS_COMMAND, DEVICE_PREVIEW_COMMAND, RULES_PREVIEW_COMMAND, HISTORY_COMMAND, HISTORY_RESTORE_COMMAND, PERFORMANCE_COMMAND,
     ACTIVATION_STATUS_COMMAND,
     OPERATION_PLAN_COMMAND, OPERATION_APPLY_COMMAND, OPERATION_STATUS_COMMAND, OPERATION_RECONCILE_COMMAND,
     OPERATION_ROLLBACK_COMMAND,
     TEST_WRITE_MODE_ENABLE_COMMAND, TEST_WRITE_MODE_DISABLE_COMMAND,
-    MIGRATION_PLAN_COMMAND, MIGRATION_START_COMMAND, MIGRATION_STATUS_COMMAND,
     MANAGEMENT_STATUS_COMMAND, MANAGEMENT_ENABLE_COMMAND, MANAGEMENT_DISABLE_COMMAND,
     BULK_PREVIEW_COMMAND,
     SELECTION_DRAFT_COMMAND, SAVE_SELECTION_DRAFT_COMMAND, SELECTION_PLAN_COMMAND,
@@ -60,7 +59,6 @@ async def websocket_inventory(hass, connection, msg):
             coordinator.diagnostics(), coordinator.history(),
             coordinator._yaml_status_payload(coordinator.yaml_snapshot),
             coordinator.mode_status(), coordinator.activation_status(),
-            coordinator.migration_plan(), coordinator.migration_status_snapshot(),
             coordinator.management_status(),
         ]
     connection.send_result(msg["id"], result)
@@ -316,51 +314,6 @@ async def websocket_mode_status(hass, connection, msg):
     """Return active and desired mode without changing HomeKit."""
     coordinator = hass.data["homekit_manager"]["coordinator"]
     connection.send_result(msg["id"], coordinator.mode_status())
-
-
-@websocket_api.require_admin
-@websocket_api.websocket_command({probatio.Required("type"): SET_MODE_COMMAND, probatio.Required("mode"): str})
-@websocket_api.async_response
-async def websocket_set_mode(hass, connection, msg):
-    """Persist a desired mode while keeping risky transitions blocked."""
-    coordinator = hass.data["homekit_manager"]["coordinator"]
-    try:
-        connection.send_result(msg["id"], await coordinator.async_set_mode(msg["mode"]))
-    except ValueError as err:
-        connection.send_error(msg["id"], "invalid_mode", str(err))
-
-
-@websocket_api.require_admin
-@websocket_api.websocket_command({probatio.Required("type"): MIGRATION_PLAN_COMMAND, probatio.Optional("target"): str})
-@websocket_api.async_response
-async def websocket_migration_plan(hass, connection, msg):
-    """Return the storage assistant plan without changing any HA state."""
-    coordinator = hass.data["homekit_manager"]["coordinator"]
-    try:
-        connection.send_result(msg["id"], coordinator.migration_plan(msg.get("target")))
-    except ValueError as err:
-        connection.send_error(msg["id"], "invalid_mode", str(err))
-
-
-@websocket_api.require_admin
-@websocket_api.websocket_command({probatio.Required("type"): MIGRATION_STATUS_COMMAND})
-@websocket_api.async_response
-async def websocket_migration_status(hass, connection, msg):
-    coordinator = hass.data["homekit_manager"]["coordinator"]
-    connection.send_result(msg["id"], coordinator.migration_status_snapshot())
-
-
-@websocket_api.require_admin
-@websocket_api.websocket_command({probatio.Required("type"): MIGRATION_START_COMMAND, probatio.Required("target"): str, probatio.Optional("confirmed"): bool, probatio.Optional("expected_entry_id"): str})
-@websocket_api.async_response
-async def websocket_migration_start(hass, connection, msg):
-    """Verify a same-source mode or return a durable cross-source blocker."""
-    coordinator = hass.data["homekit_manager"]["coordinator"]
-    try:
-        result = await coordinator.async_start_migration(msg["target"], bool(msg.get("confirmed", False)))
-        connection.send_result(msg["id"], result)
-    except ValueError as err:
-        connection.send_error(msg["id"], "migration_blocked", str(err))
 
 
 @websocket_api.require_admin
@@ -639,7 +592,7 @@ async def websocket_export(hass, connection, msg):
     except (YamlValidationError, ValueError) as err:
         connection.send_error(msg["id"], "invalid_format", str(err))
 
-REGISTERED_HANDLERS = (websocket_inventory, websocket_inventory_export, websocket_reconciliation_export, websocket_selection_draft, websocket_save_selection_draft, websocket_selection_plan, websocket_selection_operation_plan, websocket_bulk_preview, websocket_bridges, websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_activation_status, websocket_mode_status, websocket_set_mode, websocket_migration_plan, websocket_migration_status, websocket_migration_start, websocket_management_status, websocket_management_enable, websocket_management_disable, websocket_test_write_mode_enable, websocket_test_write_mode_disable, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_apply_options_diff, websocket_operation_plan, websocket_operation_apply, websocket_operation_rollback, websocket_operation_status, websocket_operation_reconcile, websocket_prepare_options_diff, websocket_reconcile, websocket_export)
+REGISTERED_HANDLERS = (websocket_inventory, websocket_inventory_export, websocket_reconciliation_export, websocket_selection_draft, websocket_save_selection_draft, websocket_selection_plan, websocket_selection_operation_plan, websocket_bulk_preview, websocket_bridges, websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_activation_status, websocket_mode_status, websocket_management_status, websocket_management_enable, websocket_management_disable, websocket_test_write_mode_enable, websocket_test_write_mode_disable, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_apply_options_diff, websocket_operation_plan, websocket_operation_apply, websocket_operation_rollback, websocket_operation_status, websocket_operation_reconcile, websocket_prepare_options_diff, websocket_reconcile, websocket_export)
 
 
 def async_register_websocket_commands(hass, coordinator) -> None:

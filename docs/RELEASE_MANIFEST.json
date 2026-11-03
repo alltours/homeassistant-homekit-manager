@@ -1,11 +1,11 @@
 {
-  "integration_version": "0.11.0",
-  "file_count": 60,
+  "integration_version": "0.12.0",
+  "file_count": 49,
   "files": [
     {
       "path": "__init__.py",
-      "sha256": "9f82b6d96f7b1e1fa31f30a0ec5a6827660a82ef13f201ad6230cec3c068e3b9",
-      "size": 2978
+      "sha256": "c37c8994e1f67e848273723c07064631874f2e3a197bcda781b126bf8ea91cee",
+      "size": 2528
     },
     {
       "path": "activation_store.py",
@@ -44,8 +44,8 @@
     },
     {
       "path": "const.py",
-      "sha256": "ef5d2865f9aed4f267e758728dcbd256b775483b28aab8a35d9c3da4931bbf66",
-      "size": 3114
+      "sha256": "f53bdbb1501c6e4688f3c1e1e7c86b6d828b27ffcbbc7c607ad08b9aceea5d00",
+      "size": 2715
     },
     {
       "path": "conversion.py",
@@ -54,13 +54,8 @@
     },
     {
       "path": "coordinator.py",
-      "sha256": "c47ee62137077a0577057410fcd17a1020c39c6a43472476e692b5a2773c3430",
-      "size": 60781
-    },
-    {
-      "path": "core_migration.py",
-      "sha256": "cce5e820cdd2ad3a2f1f15c408315eded070cff8fd562b43f8c00fea152e374d",
-      "size": 4902
+      "sha256": "cd93f761abf820b7aaf25e6c044acc88da1a3e342a93261eb65b605ab5a67121",
+      "size": 57951
     },
     {
       "path": "device_config.py",
@@ -81,11 +76,6 @@
       "path": "draft.py",
       "sha256": "5c28f0a25b70f082ee471bcf3975121537dae69d0d3a50d6b4375a2898287783",
       "size": 606
-    },
-    {
-      "path": "dual_mode.py",
-      "sha256": "f13298f5860d82249958d27ebd0327cd2c2c83d81e291dbbc1d60598b5cff3a3",
-      "size": 9092
     },
     {
       "path": "exporter.py",
@@ -144,48 +134,8 @@
     },
     {
       "path": "manifest.json",
-      "sha256": "d056909af619317310d5cea6b557078e9a9648a89a9d66b2a2074102df580215",
+      "sha256": "94f1a3c6dcb0e5cc2f350dd90c0cc12537b461de5fd20f98bf67e29e06a7527c",
       "size": 516
-    },
-    {
-      "path": "migration.py",
-      "sha256": "a58d67d79099b5caf6cd12210de0afe7697a155de7e91f27fd7846f83557fd1e",
-      "size": 3199
-    },
-    {
-      "path": "migration_engine.py",
-      "sha256": "c0954708e854aa73528fdea0a83227597e61526340501edbe8ff51ccc50491aa",
-      "size": 17380
-    },
-    {
-      "path": "migration_journal.py",
-      "sha256": "aa4310fa6ce33b941ac9b20b3e52dd35eb46e1e8a0adad437d5193e31ce55502",
-      "size": 11899
-    },
-    {
-      "path": "migration_lock.py",
-      "sha256": "036f4940b938432471345e5915b1eaa30ac9b617751320a1816f2cfc49b3b739",
-      "size": 3164
-    },
-    {
-      "path": "migration_recovery.py",
-      "sha256": "186c91acb6265c76e4fd2a91bf14e4b575f85555e280c0b3f4db34f4f575173c",
-      "size": 2770
-    },
-    {
-      "path": "migration_snapshot.py",
-      "sha256": "8f8b8024b22cac258e0f62b263cd0e9b8f2cf66ef80b817386e0299f37d675fd",
-      "size": 8337
-    },
-    {
-      "path": "migration_store.py",
-      "sha256": "69167f434f7f0acdbf2c092e1c3412093e0d63b95d0ee16715420cd256259db0",
-      "size": 1796
-    },
-    {
-      "path": "mode_store.py",
-      "sha256": "4777b2e5ce81a8b2611e393b2e5ea128da08da9520f3bcdb446620d4591a0a31",
-      "size": 1448
     },
     {
       "path": "native_adapter.py",
@@ -253,11 +203,6 @@
       "size": 3873
     },
     {
-      "path": "startup_recovery.py",
-      "sha256": "cf2e5d41322bfc9d27f1729da57d4b357905bbb0418a6de82360c738623141fb",
-      "size": 4177
-    },
-    {
       "path": "strings.json",
       "sha256": "9d0b96eb535d446b5630f6f9215b8fc08d950726924e096e6e104f7abe9c8f6e",
       "size": 259
@@ -274,8 +219,8 @@
     },
     {
       "path": "websocket.py",
-      "sha256": "0cea8b5c3c2152369724e84f306d7e0a170f82ceebf9b870a967bd7ea3ca76f7",
-      "size": 33740
+      "sha256": "3a78e4eb42cb51459a62bbe47bb000c05904db46484de359efa84346112d0d11",
+      "size": 31246
     },
     {
       "path": "write_grant.py",
@@ -289,8 +234,8 @@
     },
     {
       "path": "www/homekit-manager.js",
-      "sha256": "ea89892edfacc2ed897a7cb5b756b0e288459bb8852e80a3499b115ab944fa25",
-      "size": 140534
+      "sha256": "05a460cb0bfdaa27c7402854dec6b8c4324b82d8c06037e330d97ae89690e9e2",
+      "size": 138444
     },
     {
       "path": "yaml_adapter.py",

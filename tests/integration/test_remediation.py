@@ -151,7 +151,7 @@ async def test_all_api_commands_reject_non_administrators(hass, enable_custom_in
     client = await hass_ws_client(access_token=hass.auth.async_create_access_token(refresh))
     from custom_components.homekit_manager.websocket import REGISTERED_HANDLERS
     document = {"schema_version": 1, "bridges": {}}
-    arguments = {"select_bridge": {"entry_id": "b"}, "device_preview": {"entity_id": "light.one"}, "rules_preview": {"rules": []}, "history_restore": {"index": 0}, "set_mode": {"mode": "homekit_bridge"}, "migration_start": {"target": "homekit_bridge"}, "management_enable": {}, "management_disable": {}, "test_write_mode_enable": {"entry_id": "b", "expected_fingerprint": "x", "confirmed_entry_id": "b"}, "operation_plan": {"document": document, "entry_id": "b", "expected_fingerprint": "x"}, "selection_operation_plan": {"entry_id": "b", "expected_fingerprint": "x"}, "operation_apply": {"operation_id": "x", "entry_id": "b", "source_revision": "x", "expected_fingerprint": "x", "confirmed_operation_id": "x"}, "operation_rollback": {"operation_id": "x", "entry_id": "b", "expected_fingerprint": "x", "confirmed_operation_id": "x"}, "operation_status": {"operation_id": "x"}, "operation_reconcile": {"operation_id": "x"}}
+    arguments = {"select_bridge": {"entry_id": "b"}, "device_preview": {"entity_id": "light.one"}, "rules_preview": {"rules": []}, "history_restore": {"index": 0}, "management_enable": {}, "management_disable": {}, "test_write_mode_enable": {"entry_id": "b", "expected_fingerprint": "x", "confirmed_entry_id": "b"}, "operation_plan": {"document": document, "entry_id": "b", "expected_fingerprint": "x"}, "selection_operation_plan": {"entry_id": "b", "expected_fingerprint": "x"}, "operation_apply": {"operation_id": "x", "entry_id": "b", "source_revision": "x", "expected_fingerprint": "x", "confirmed_operation_id": "x"}, "operation_rollback": {"operation_id": "x", "entry_id": "b", "expected_fingerprint": "x", "confirmed_operation_id": "x"}, "operation_status": {"operation_id": "x"}, "operation_reconcile": {"operation_id": "x"}}
     arguments["bulk_preview"] = {"entry_id": "b", "fingerprint": "x", "kind": "device", "key": "device:b"}
     arguments["save_selection_draft"] = {"draft": {"schema_version": 1}}
     for handler in REGISTERED_HANDLERS:
@@ -221,7 +221,7 @@ async def test_frontend_snapshot_has_one_bridge_and_fingerprint(hass, enable_cus
     response = await client.receive_json()
     assert response["success"]
     data = response["result"]
-    assert len(data["context"]) == 9
+    assert len(data["context"]) == 7
     assert data["context"][0]["bridges"][0]["entry_id"] == data["overview"]["selected_bridge_id"]
     assert data["context"][3]["fingerprint"] == data["overview"]["fingerprint"]
 
@@ -268,13 +268,5 @@ async def test_native_yaml_include_cannot_be_overwritten_by_draft_save(hass, ena
     manager.configuration_sources["manager_include"] = True
     with pytest.raises(YamlWriteError, match="nicht überschrieben"):
         await manager.async_save_draft({"schema_version": 1, "bridges": {"one": {"policy": "explicit_overrides", "entities": {}}}}, None, manager.fingerprint)
-    assert not manager.yaml_store.path.exists()
-
-
-@pytest.mark.parametrize("timestamp", [None, "invalid", "2026-10-27T08:00:00", "2099-01-01T00:00:00+00:00"])
-async def test_corrupt_migration_timestamps_recover_as_unknown(hass, timestamp):
-    from custom_components.homekit_manager.migration_store import MigrationStore
-    store = MigrationStore(hass)
-    await store._store.async_save({"status": {"state": "completed", "updated_at": timestamp}})
-    result = await store.async_load()
-    assert result["state"] == "unknown" and result["stale"]
+    assert not manager.yaml_store.path.exists()  # no native YAML overwrite
+    # End of regression coverage.

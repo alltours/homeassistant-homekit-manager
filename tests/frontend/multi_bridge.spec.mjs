@@ -13,9 +13,9 @@ test('multi-bridge selection keeps the selected native source explicit', async (
 
   await panel.getByRole('tab', { name: 'Einstellungen', exact: true }).click();
   await panel.getByRole('button', { name: 'Konfiguration', exact: true }).click();
-  await expect(panel.locator('.dual-mode-card')).toContainText('YAML');
-  await expect(panel.locator('.dual-mode-card')).toContainText('Home Assistant YAML (SOURCE_IMPORT)');
-  await expect(panel.locator('.lock-note').filter({ hasText: 'Eine Auswahl des YAML-Modus' })).toContainText('ändert keine produktive HomeKit-Quelle');
+  await expect(panel.locator('.source-card')).toContainText('YAML');
+  await expect(panel.locator('.source-card')).toContainText('Home Assistant YAML (SOURCE_IMPORT)');
+  await expect(panel.locator('.settings-content')).toContainText('Ein Wechsel zwischen UI und YAML wird nicht angeboten.');
 });
 
 test('unknown bridge selection is rejected without changing the browser selection', async ({ page }) => {

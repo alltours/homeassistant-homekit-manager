@@ -26,15 +26,11 @@ from .yaml_store import (
     YamlWriteError,
     empty_document,
 )
-from .const import DOMAIN, MANAGEMENT_MODES, MODE_HOMEKIT_BRIDGE, MODE_HOMEKIT_MANAGER, MODE_YAML
-from .mode_store import ModeStore
 from .grouping import build_area_views, build_device_views
 from .diagnostics import build_diagnostics, diagnostics_summary, group_diagnostics
 from .history import make_history_entry, restore_as_draft
 from .history_store import HistoryStore
 from .config_source import inspect_configuration_sources
-from .migration import build_migration_plan, build_migration_matrix
-from .migration_store import MigrationStore
 from .management_store import ManagementStore
 from .activation_store import ActivationStore
 from .safety import WRITE_LOCK_REASON, write_policy
@@ -51,8 +47,6 @@ from .inventory_export import (
     build_reconciliation_export,
     export_reconciliation_snapshot,
 )
-from .dual_mode import build_dual_mode_status
-from .core_migration import capability as core_migration_capability
 from .selection_draft import (
     SelectionDraftConflict,
     SelectionDraftStore,
@@ -84,8 +78,6 @@ class HomeKitManagerCoordinator:
         config_path = getattr(getattr(hass, "config", None), "path", None)
         yaml_path = config_path("homekit_manager.yaml") if callable(config_path) else "/config/homekit_manager.yaml"
         self.yaml_store = YamlStore(yaml_path)
-        self.mode_store = ModeStore(hass)
-        self.migration_store = MigrationStore(hass)
         self.management_store = ManagementStore(hass)
         self.activation_store = ActivationStore(hass)
         self.selection_draft_store = SelectionDraftStore(hass)
@@ -101,12 +93,6 @@ class HomeKitManagerCoordinator:
             "differences": {"count": 0, "desired_not_native": [], "native_not_desired": [], "unknown_entities": []},
         }
         self.management_statuses: dict[str, dict[str, Any]] = {}
-        self.migration_status: dict[str, Any] = {
-            "state": "unknown",
-            "message": "Noch kein verifizierter Speicherwechselstatus vorhanden.",
-            "stale": True,
-        }
-        self.desired_modes: dict[str, str] = {}
         self.configuration_sources: dict[str, Any] = {
             "sources": [], "active_mode": "unknown", "mixed": False,
             "ambiguous": True, "message": "Konfigurationsquelle wird gelesen.",
@@ -151,12 +137,8 @@ class HomeKitManagerCoordinator:
 
     async def async_initialize(self) -> None:
         """Load the desired-state snapshot without blocking the event loop."""
-        self.desired_modes = await self.mode_store.async_load()
         self.yaml_snapshot = await self.hass.async_add_executor_job(self.yaml_store.load)
         self.history_entries = await self.history_store.async_load()
-        stored_migration = await self.migration_store.async_load()
-        if stored_migration:
-            self.migration_status = stored_migration
         self.management_statuses = await self.management_store.async_load()
         self.activation_statuses = await self.activation_store.async_load()
         self.selection_drafts = await self.selection_draft_store.async_load()
@@ -585,62 +567,40 @@ class HomeKitManagerCoordinator:
     def _active_mode(self, bridge: dict[str, Any] | None) -> str:
         """Native entry source is authoritative; a draft file is not a source."""
         if bridge and not self.last_error:
-            return MODE_HOMEKIT_BRIDGE if bridge.get("source") == "user" else MODE_YAML if bridge.get("source") == "import" else "unknown"
+            return "homekit_bridge" if bridge.get("source") == "user" else "yaml" if bridge.get("source") == "import" else "unknown"
         return "unknown"
 
     def mode_status(self) -> dict[str, Any]:
-        """Return conservative mode status and the six-direction matrix."""
+        """Return read-only native source information.
+
+        Source selection is deliberately not a product capability.  This
+        endpoint remains as a compact compatibility surface for the frontend
+        and reports only the authoritative source detected by Home Assistant.
+        """
         bridge = self.selected_bridge()
         entry_id = bridge.get("entry_id") if bridge else None
         active = self._active_mode(bridge)
-        desired = self.desired_modes.get(entry_id, active) if entry_id else active
-        matrix = build_migration_matrix()
+        source = bridge.get("source") if bridge else None
+        source_details = {
+            "key": source if source in {"user", "import"} else "unknown",
+            "label": "Home Assistant UI / Config Entry" if source == "user" else "Home Assistant YAML (SOURCE_IMPORT)" if source == "import" else "Unbekannte native Konfigurationsquelle",
+            "short_label": "UI / Bridge" if source == "user" else "YAML" if source == "import" else "Unbekannt",
+            "kind": "native" if source in {"user", "import"} else "unknown",
+        }
         return {
             "active_mode": active,
-            "desired_mode": desired,
-            "prepared_mode": desired if desired != active else None,
-            "transition": "blocked" if desired != active else "stable",
             "bridge_entry_id": entry_id,
             "bridge_title": bridge.get("title") if bridge else None,
             "yaml_path": str(self.yaml_store.path),
             "yaml_valid": self.yaml_snapshot.valid,
             "yaml_exists": self.yaml_snapshot.exists,
-            "matrix": matrix,
-            "supported_modes": list(MANAGEMENT_MODES),
             "bridge_count": len(self.bridges),
             "bridge_selection_required": len(self.bridges) > 1,
-            "message": "Der Verwaltungsmodus ist von der nativen Konfigurationsquelle getrennt; eine SOURCE_USER/SOURCE_IMPORT-Migration bleibt gesperrt.",
+            "native_configuration_source": source_details,
+            "native_source_is_authoritative": True,
+            "message": "Die native Home-Assistant-Konfigurationsquelle bleibt autoritativ. Ein Wechsel zwischen UI und YAML wird nicht angeboten.",
             "source_detection": self.configuration_sources,
-            "native_migration_core": core_migration_capability(self.hass),
-            "dual_mode": build_dual_mode_status(
-                bridge,
-                core_version=CORE_VERSION,
-                yaml_valid=self.yaml_snapshot.valid,
-                yaml_exists=self.yaml_snapshot.exists,
-                snapshot_stale=bool(self.last_error),
-            ),
         }
-
-    def migration_plan(self, target: str | None = None) -> dict[str, Any]:
-        """Return a non-executable legacy description without changing Home Assistant."""
-        bridge = self.selected_bridge()
-        source = self._active_mode(bridge)
-        if source not in MANAGEMENT_MODES:
-            source = MODE_HOMEKIT_BRIDGE if bridge else MODE_HOMEKIT_MANAGER
-        target = target or self.desired_modes.get(bridge.get("entry_id") if bridge else "", source)
-        return build_migration_plan(source, target, bridge.get("entry_id") if bridge else None) | {
-            "active_mode": self._active_mode(bridge),
-            "desired_mode": target,
-            "status": self.migration_status,
-        }
-
-    def migration_status_snapshot(self) -> dict[str, Any]:
-        """Return persisted status; stale status is never treated as active."""
-        status = dict(self.migration_status)
-        startup_recovery = self.hass.data.get(DOMAIN, {}).get("startup_recovery")
-        if startup_recovery is not None:
-            status["startup_recovery"] = startup_recovery
-        return status
 
     def management_status(self) -> dict[str, Any]:
         """Describe native source and explicit Manager ownership separately."""
@@ -718,19 +678,6 @@ class HomeKitManagerCoordinator:
                 self.management_statuses[entry_id] = status | {"state": "unknown", "message": "Verwaltungszuordnung konnte nicht dauerhaft bestätigt werden."}
                 raise
             return self.management_status()
-
-    async def async_start_migration(self, target: str, confirmed: bool = False) -> dict[str, Any]:
-        """Legacy endpoint: no migration action is offered in 0.9.24."""
-        plan = self.migration_plan(target)
-        return plan | {"status": {"state": "blocked", "progress": None, "step": None,
-                                  "message": "Quellenmigration ist weder für 0.9.24 noch 0.10.0 vorgesehen.",
-                                  "bridge_entry_id": plan.get("bridge_entry_id"), "source": plan["source"],
-                                  "target": plan["target"], "changed": False,
-                                  "migration_performed": False, "automatic_retry": False}}
-
-    async def async_set_mode(self, mode: str) -> dict[str, Any]:
-        """Deprecated write endpoint; never persist a different source."""
-        raise ValueError("Quellenmigration ist weder für 0.9.24 noch 0.10.0 vorgesehen")
 
     def _yaml_status_payload(self, snapshot, backup_exists=False):
         return {"document": snapshot.document, "schema_version": snapshot.document.get("schema_version"), "file_version": snapshot.file_version, "last_modified": snapshot.last_modified, "exists": snapshot.exists, "valid": snapshot.valid, "error": snapshot.error, "backup_exists": backup_exists, "included": self.configuration_sources.get("manager_include", False), "active_mode": self._active_mode(self.selected_bridge()), "fingerprint": self.fingerprint, "is_applied": False, "configuration_alignment": self.selection_reconciliation}

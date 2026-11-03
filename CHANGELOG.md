@@ -1,5 +1,21 @@
 # Changelog
 
+# 0.12.0 (release candidate)
+
+## Source-migration removal and cleanup
+
+- Remove the experimental UI→YAML and YAML→UI source-migration engine,
+  experimental Core patches, migration-only journals, recovery workers and
+  migration-specific WebSocket/UI workflows.
+- Keep YAML bridge detection, read-only configuration display, supported YAML
+  management, Selection Drafts, Reconciliation and the guarded Native Apply
+  writer unchanged in scope.
+- Ignore old experimental migration metadata safely; no persistent cleanup,
+  Config Entry update, filter change or HAP operation is performed by the
+  upgrade.
+- Add regression coverage proving removed source-migration commands are not
+  registered and that the remaining source display is read-only.
+
 # 0.10.31 (development)
 
 ## Reconciliation finalization and positive-list planning

@@ -1,4 +1,17 @@
-# HomeKit Manager 0.10.31
+# HomeKit Manager 0.12.0
+
+Version 0.12.0 removes the experimental bidirectional UI↔YAML source-migration
+path. HomeKit Manager continues to detect and display UI- and YAML-configured
+HomeKit bridges and retains the supported YAML read/write projection, native
+filter management, Selection Drafts, Reconciliation and the guarded Native
+Apply path. It does not change a Config Entry source or move a bridge between
+UI and YAML.
+
+Old experimental migration stores are intentionally ignored rather than
+deleted during startup. Existing HomeKit Config Entries, filters, HAP
+persistence and pairings are outside this cleanup and remain untouched.
+
+## Historical release notes
 
 Version 0.10.31 is a development release for reconciliation finalization. It
 separates genuine native/desired selection conflicts from unresolved legacy
@@ -43,11 +56,10 @@ source-switching experiment. The safe production boundary remains unchanged.
 Version 0.10.11 added a dual-mode administration surface for `UI / Bridge` and
 `YAML`. The native Home Assistant configuration source remains authoritative;
 YAML is available for deterministic preview, validation, draft import and
-export. A source migration between `SOURCE_USER` and `SOURCE_IMPORT` remains
-blocked because Core does not provide a stable identity- and pairing-preserving
-API. See [the 0.10.12 native migration report](docs/HOMEKIT_MANAGER_0_10_12_NATIVE_MIGRATION.md),
-[the 0.10.11 technical report](docs/HOMEKIT_MANAGER_0_10_11.md) and
-[release notes](docs/RELEASE_0_10_11.md).
+export. A source migration between `SOURCE_USER` and `SOURCE_IMPORT` remained
+blocked because Core did not provide a stable identity- and pairing-preserving
+API. The 0.12.0 release removes that experimental path; the historical
+implementation is not part of the product tree.
 
 Version 0.10.10 makes reconciliation explainable at entity level and supports
 explicit selection of enabled, compatible hidden entities. Hidden entities are

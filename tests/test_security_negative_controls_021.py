@@ -1,26 +1,12 @@
-"""Independent security-oracle negative controls for experimental Core CI.
+"""Independent security-oracle negative controls for HomeKit state changes.
 
 These tests intentionally mutate synthetic observations, never the product or a
-real pairing.  They verify that the independent assertions reject the eight
-security-critical conditions required by the CI gate.
+real pairing. They verify that the independent assertions reject the
+security-critical identity, allow-list, bridge-isolation and fault conditions.
 """
 from __future__ import annotations
 
-import hashlib
-import json
-import subprocess
-import sys
-from pathlib import Path
-
 import pytest
-
-
-ROOT = Path(__file__).parents[1]
-MANIFEST = ROOT / ".ci/experimental-core/manifest.json"
-PATCH = ROOT / ".ci/experimental-core" / json.loads(
-    MANIFEST.read_text(encoding="utf-8")
-)["patch_file"]
-VERIFY = ROOT / "scripts/verify_experimental_core_patch.py"
 
 
 def _baseline() -> dict[str, object]:
@@ -85,58 +71,3 @@ def test_negative_controls_reject_security_mutations(mutation, oracle) -> None:
     mutation(observed)
     with pytest.raises(AssertionError):
         oracle(baseline, observed) if oracle in {_assert_identity, _assert_allowlist} else oracle(observed)
-
-
-def test_negative_control_wrong_core_fails_before_pytest(tmp_path: Path) -> None:
-    core = tmp_path / "core"
-    core.mkdir()
-    subprocess.run(["git", "init", "-q", str(core)], check=True)  # noqa: S603, S607 - isolated temp Git repo
-    subprocess.run(["git", "-C", str(core), "config", "user.email", "ci@example.invalid"], check=True)  # noqa: S603, S607
-    subprocess.run(["git", "-C", str(core), "config", "user.name", "CI"], check=True)  # noqa: S603, S607
-    (core / "README").write_text("wrong core\n", encoding="utf-8")
-    subprocess.run(["git", "-C", str(core), "add", "README"], check=True)  # noqa: S603, S607
-    subprocess.run(["git", "-C", str(core), "commit", "-qm", "wrong core"], check=True)  # noqa: S603, S607
-    result = subprocess.run(  # noqa: S603 - fixed Python entry point and reviewed arguments
-        [
-            sys.executable,
-            str(ROOT / "scripts/run_experimental_core_tests.py"),
-            "--core-root",
-            str(core),
-            "--core-commit",
-            "0" * 40,
-            "--core-version",
-            "2026.10.4",
-            "tests",
-            "-m",
-            "experimental_core",
-        ],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode != 0
-    assert "commit mismatch" in result.stderr + result.stdout
-
-
-def test_negative_control_tampered_patch_fails_digest(tmp_path: Path) -> None:
-    tampered = tmp_path / PATCH.name
-    tampered.write_bytes(PATCH.read_bytes() + b"\n# tampered\n")
-    result = subprocess.run(  # noqa: S603 - fixed Python entry point and reviewed arguments
-        [
-            sys.executable,
-            str(VERIFY),
-            "--verify-only",
-            "--manifest",
-            str(MANIFEST),
-            "--patch",
-            str(tampered),
-            "--evidence",
-            str(tmp_path / "evidence.json"),
-        ],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode != 0
-    assert "SHA-256 mismatch" in result.stderr + result.stdout
-    assert hashlib.sha256(tampered.read_bytes()).hexdigest() != json.loads(MANIFEST.read_text())["patch_sha256"]

@@ -24,8 +24,6 @@ async def test_every_manager_websocket_route_rejects_authenticated_non_admin(
         "homekit_manager/device_preview": {"entity_id": "light.test"},
         "homekit_manager/rules_preview": {"rules": []},
         "homekit_manager/history_restore": {"index": 0},
-        "homekit_manager/set_mode": {"mode": "homekit_bridge"},
-        "homekit_manager/migration_start": {"target": "homekit_bridge"},
         "homekit_manager/operation_plan": {
             "document": document, "entry_id": "none", "expected_fingerprint": "none",
         },

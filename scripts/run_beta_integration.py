@@ -3,10 +3,6 @@
 The pinned pytest helper currently imports a logger hook removed by the beta
 Core. The adapter is deliberately limited to that import compatibility and
 does not modify Home Assistant source or bypass any test assertion.
-
-Native migration tests are explicitly marked ``experimental_core`` and require
-the separately pinned Core prototype. Running them against the official beta
-would turn an intentional capability guard into a misleading CI failure.
 """
 
 from __future__ import annotations
@@ -44,18 +40,22 @@ git_executable = shutil.which("git")
 if git_executable is None:
     raise RuntimeError("git is required to select tracked integration tests")
 
+tracked_integration_tests = [
+    path
+    for path in subprocess.check_output(  # noqa: S603 - executable resolved via shutil.which
+        [git_executable, "ls-files", "tests/integration/test_*.py"],
+        cwd=ROOT,
+        text=True,
+    ).splitlines()
+    if (ROOT / path).is_file()
+]
+
 
 raise SystemExit(
     pytest.main(
         [
             "-q",
-            *subprocess.check_output(  # noqa: S603 - executable resolved via shutil.which
-                [git_executable, "ls-files", "tests/integration/test_*.py"],
-                cwd=ROOT,
-                text=True,
-            ).splitlines(),
-            "-m",
-            "not experimental_core",
+            *tracked_integration_tests,
             "--disable-warnings",
             "--maxfail=1",
             "-p",

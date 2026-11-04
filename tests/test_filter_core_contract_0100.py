@@ -9,7 +9,7 @@ from custom_components.homekit_manager.filtering import evaluate_filter
 
 
 def test_all_six_filter_dimensions_against_core_and_homekit_registry_gate():
-    assert CORE_VERSION in {"2026.10.4", "2026.11.0b0"}
+    assert CORE_VERSION in {"2026.10.4", "2026.11.0b0", "2026.11.0"}
     keys = (
         "include_entities", "exclude_entities", "include_domains",
         "exclude_domains", "include_entity_globs", "exclude_entity_globs",

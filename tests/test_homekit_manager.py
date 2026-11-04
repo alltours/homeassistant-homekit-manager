@@ -184,7 +184,7 @@ class HomeKitManagerTests(unittest.TestCase):
 
     def test_compatibility_reference_is_versioned_and_conservative(self):
         reference = compatibility_reference()
-        self.assertEqual(reference["core_version"], "2026.10.4")
+        self.assertEqual(reference["core_version"], "2026.11.0")
         self.assertIn("light", reference["supported_domains"])
         self.assertEqual(reference["policy"], "unknown_when_no_core_accessory_mapping_is_proven")
 

@@ -233,7 +233,14 @@ def build_options_diff(
             raise HomeKitWriteBlocked("Positivliste würde deaktivierte, kategorisierte oder nicht verifizierte Entitäten neu veröffentlichen: " + ", ".join(sorted(unsafe_includes)))
     plan = plan_changes(dict(bridge) | {"filter": dict(current_filter)}, desired_document, inventory, entry_id)
     if plan["summary"]["blocked"]:
-        raise HomeKitWriteBlocked("Änderungsplan ist blockiert")
+        blocked = [
+            f"{item['entity_id']}: {item.get('reason', 'nicht verifiziert')}"
+            for item in plan["changes"]
+            if item.get("blocked")
+        ]
+        detail = "; ".join(blocked[:8])
+        suffix = " …" if len(blocked) > 8 else ""
+        raise HomeKitWriteBlocked(f"Änderungsplan ist blockiert: {detail}{suffix}")
     after = copy.deepcopy(options)
     after["filter"] = (_positive_list_filter(current_filter, desired, migration_evidence) if positive_list
                        else _candidate_filter(current_filter, desired))

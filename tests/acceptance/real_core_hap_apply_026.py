@@ -25,6 +25,7 @@ from aiohomekit.zeroconf import HomeKitService
 from homeassistant import config_entries
 from homeassistant.bootstrap import async_setup_hass
 from homeassistant.components.homekit import HomeKit
+from homeassistant.const import __version__ as CORE_VERSION
 from homeassistant.runner import RuntimeConfig
 from port_allocator import reserve_hap_port, reserve_http_port
 
@@ -109,7 +110,7 @@ def _write_grant(config_dir: Path, entry_id: str, grant_id: str = "0280280280280
         "grant_id": grant_id,
         "entry_id": entry_id,
         "source": "user",
-        "core_version": "2026.10.4",
+        "core_version": CORE_VERSION,
         "allowed_fields": ["filter"],
         "issued_at": now.isoformat(),
         "expires_at": (now + timedelta(hours=1)).isoformat(),
@@ -596,7 +597,7 @@ async def run() -> None:
             current_version = json.loads(
                 (config_dir / "custom_components" / DOMAIN / "manifest.json").read_text()
             )["version"]
-            assert current_version == "1.0.0"
+            assert current_version == "1.0.1"
             pairing_a = IpPairing(Controller(), json.loads((shared / "pairing-a.json").read_text(encoding="utf-8")))
             pairing_b = IpPairing(Controller(), json.loads((shared / "pairing-b.json").read_text(encoding="utf-8")))
             after_a = await _accessories(pairing_a)

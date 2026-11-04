@@ -11,7 +11,7 @@ const WS = {
   testModeEnable: "homekit_manager/test_write_mode_enable", testModeDisable: "homekit_manager/test_write_mode_disable",
   devicePreview: "homekit_manager/device_preview", performance: "homekit_manager/performance",
   managementStatus: "homekit_manager/management_status",
-  selectionDraft: "homekit_manager/selection_draft", saveSelectionDraft: "homekit_manager/save_selection_draft", selectionPlan: "homekit_manager/selection_plan", selectionOperationPlan: "homekit_manager/selection_operation_plan",
+  selectionDraft: "homekit_manager/selection_draft", saveSelectionDraft: "homekit_manager/save_selection_draft", discardSelectionDraft: "homekit_manager/discard_selection_draft", selectionAlignment: "homekit_manager/selection_alignment", selectionPlan: "homekit_manager/selection_plan", selectionOperationPlan: "homekit_manager/selection_operation_plan",
 };
 
 class HomeKitManagerPanel extends HTMLElement {
@@ -22,7 +22,7 @@ class HomeKitManagerPanel extends HTMLElement {
       performance: null, devicePreview: null, yamlStatus: {}, modeStatus: {}, activationStatus: { state: "unknown" }, managementStatus: { state: "unknown" },
       view: "home", settingsView: "configuration", groupMode: "areas", selectionMode: false, expanded: new Set(), query: "", page: 0,
       filters: { status: "", compatibility: "", domain: "", integration: "", area: "", floor: "", availability: "", published: "", changed: "" },
-      selected: new Set(), draft: new Map(), fingerprint: null, serverPreview: null, selectionModel: null, selectionWorking: null, selectionPlan: null, error: null, loading: false, statusMessage: "Keine Änderungen", expandedBridges: new Set(), activationMessage: "", actionMenuOpen: false, diagnosticFilter: "", filtersOpen: false,
+      selected: new Set(), draft: new Map(), fingerprint: null, serverPreview: null, selectionModel: null, selectionAlignment: null, selectionWorking: null, selectionPlan: null, error: null, loading: false, statusMessage: "Keine Änderungen", expandedBridges: new Set(), activationMessage: "", actionMenuOpen: false, diagnosticFilter: "", filtersOpen: false,
       reconciliationQuery: "", reconciliationFilter: "", display: { disabled: false, hidden: false, technical: false, unsupported: false }, unassignedPage: 0, areaEntityPages: new Map() });
     this.operationPlan = null; this.selectionOperationPlan = null; this.operationStatus = null; this.positiveListMigration = false;
     Object.assign(this, { action: "", statusTone: "neutral", expandedAreas: new Set(), areaPages: new Map(), draftFingerprint: null, conflict: false, dialog: null, _dialogReturnLabel: null, _lastTriggerLabel: null, lastFetchAt: null, _subscription: null, _pendingRevision: 0, _seenRevision: 0, _refreshQueued: false, _passiveRenderPending: false, _passiveRenderControl: null });
@@ -93,7 +93,12 @@ class HomeKitManagerPanel extends HTMLElement {
   async loadSettingsData() {
     if (this.settingsView === "selection") {
       await this.runAction("Übernahme-Entwurf laden", async () => {
-        this.selectionModel = await this._hass.callWS({ type: WS.selectionDraft });
+        const [model, alignment] = await Promise.all([
+          this._hass.callWS({ type: WS.selectionDraft }),
+          this._hass.callWS({ type: WS.selectionAlignment }),
+        ]);
+        this.selectionModel = model;
+        this.selectionAlignment = alignment;
         this.selectionWorking = JSON.parse(JSON.stringify(this.selectionModel.draft));
         this.selectionPlan = this.selectionModel.plan;
         this.statusMessage = "Übernahme-Entwurf lesend geladen · HomeKit unverändert";
@@ -732,6 +737,25 @@ class HomeKitManagerPanel extends HTMLElement {
       this.statusMessage = "Entscheidungsentwurf gespeichert · HomeKit unverändert";
     });
   }
+  async discardSavedSelection() {
+    const model = this.selectionModel;
+    const entryId = model?.snapshot?.bridge_entry_id;
+    if (!entryId || !model?.draft_fingerprint) return;
+    if (!await this.requestConfirmation("Gespeicherten Entwurf verwerfen", "Nur der Manager-interne Entwurf dieser Bridge wird entfernt. Native HomeKit-Filter, Pairings und veröffentlichte Accessories bleiben unverändert.", "Gespeicherten Entwurf verwerfen")) return;
+    await this.runAction("Gespeicherten Entwurf verwerfen", async () => {
+      this.selectionModel = await this._hass.callWS({ type: WS.discardSelectionDraft, entry_id: entryId, expected_draft_fingerprint: model.draft_fingerprint });
+      this.selectionWorking = JSON.parse(JSON.stringify(this.selectionModel.draft));
+      this.selectionPlan = this.selectionModel.plan;
+      this.selectionOperationPlan = null; this.operationPlan = null; this.operationStatus = null;
+      this.statusMessage = "Gespeicherter Entwurf verworfen · HomeKit unverändert";
+    });
+  }
+  async refreshSelectionAlignment() {
+    await this.runAction("Native Auswahl lesend abgleichen", async () => {
+      this.selectionAlignment = await this._hass.callWS({ type: WS.selectionAlignment });
+      this.statusMessage = "Lesender Abgleich aktualisiert · keine Konfiguration geändert";
+    });
+  }
   async previewSelectionPlan() {
     if (!this.selectionWorking) return;
     await this.runAction("Nicht mutierende Vorschau berechnen", async () => {
@@ -791,7 +815,10 @@ class HomeKitManagerPanel extends HTMLElement {
     const planBlock = plan ? `<section class="surface"><h3>Nicht mutierende Vorschau</h3><dl class="definition-list"><div><dt>KEEP</dt><dd>${plan.counts?.keep ?? 0}</dd></div><div><dt>REMOVE</dt><dd>${plan.counts?.remove ?? 0}</dd></div><div><dt>REVIEW</dt><dd>${plan.counts?.review ?? 0}</dd></div><div><dt>Neue Veröffentlichungen</dt><dd>${plan.new_publications?.length ?? 0}</dd></div><div><dt>Aktuelle Accessory-Entfernungen</dt><dd>${plan.accessory_removals?.length ?? 0}</dd></div><div><dt>Stale Includes zur späteren Entfernung</dt><dd>${plan.stale_includes_to_remove?.length ?? 0}</dd></div><div><dt>Plan-Fingerprint</dt><dd><code>${this.escape(plan.plan_fingerprint || "NOT_VERIFIED")}</code></dd></div></dl><p class="notice warning">${this.escape(plan.message || "Nicht mutierende Vorschau")}</p>${plan.blockers?.length ? `<p class="text-warning">Blocker: ${this.escape(plan.blockers.join(" · "))}</p>` : `<p class="state state-confirmed">Alle fachlichen Entscheidungen vollständig; Native Apply benötigt weiterhin einen separaten validierten Plan und eine ausdrückliche Bestätigung.</p>`}</section>` : "";
     const nativePlan = this.selectionOperationPlan;
     const nativePlanBlock = nativePlan ? `<section class="surface"><h3>Native Apply-Plan</h3><p class="muted">Dieser Plan bindet Bridge, Snapshot, Revision, Identitäten und den serverseitig berechneten Diff. Das Anwenden ist eine separate, bestätigungspflichtige Mutation.</p><dl class="definition-list"><div><dt>Operation-ID</dt><dd><code>${this.escape(nativePlan.operation_id || "NOT_VERIFIED")}</code></dd></div><div><dt>Betroffene Entitäten</dt><dd>${nativePlan.changed_entities?.length || 0}</dd></div><div><dt>Schreibfreigabe</dt><dd>${nativePlan.apply_enabled ? "bereit" : "gesperrt"}</dd></div><div><dt>Status</dt><dd>${this.escape(nativePlan.state || "unbekannt")}</dd></div></dl>${nativePlan.change_details?.length ? `<ul>${nativePlan.change_details.map(item => `<li><code>${this.escape(item.entity_id)}</code>: ${this.escape(item.current)} → ${this.escape(item.desired)}</li>`).join("")}</ul>` : ""}<p class="notice warning">Native Apply ist nicht automatisch und nicht durch Entwurfsspeicherung freigeschaltet.</p><button class="primary" data-selection-apply${this.supportsSelectionApply() ? "" : " disabled"}>${this.supportsSelectionApply() ? "Genau diesen Plan anwenden" : "Apply gesperrt"}</button></section>` : "";
-    return `<h3>Bestehende HomeKit-Auswahl übernehmen</h3><p class="muted">Dieser Workflow speichert fachliche Entscheidungen und berechnet zunächst eine hypothetische Vorschau. Ein Native Apply wird nur über einen getrennten, serverseitig validierten Plan und eine neue ausdrückliche Bestätigung angeboten.</p><aside class="notice warning"><strong>Noch nicht automatisch angewendet</strong><p>Keine automatische KEEP-Übernahme, Tombstone-Bereinigung, Nachfolgerzuordnung oder Mutation durch Navigation und Vorschau.</p></aside>${model.stale_draft ? `<aside class="notice error" role="alert"><strong>Entwurf ist veraltet</strong><p>${this.escape(model.plan_error || "Der Entwurf gehört zu einem älteren Snapshot.")} Bitte aktuelle Daten laden und Entscheidungen erneut bestätigen.</p></aside>` : ""}<section class="status-grid"><div class="status-tile"><small>Bridge</small><strong>${this.escape(snapshot.bridge_title || snapshot.bridge_entry_id || "Nicht ausgewählt")}</strong></div><div class="status-tile"><small>Aktuelle Veröffentlichungen</small><strong>${snapshot.current_entity_ids?.length ?? 0}</strong></div><div class="status-tile"><small>Offene Entscheidungen</small><strong>${plan?.counts?.review ?? "–"}</strong></div><div class="status-tile"><small>Tombstones / stale Includes</small><strong>${snapshot.stale_manager_decisions?.length ?? 0} / ${snapshot.stale_native_includes?.length ?? 0}</strong></div></section><dl class="definition-list"><div><dt>Snapshot</dt><dd>${this.escape(snapshot.snapshot_timestamp || "Nicht verifiziert")} · Revision ${this.escape(snapshot.snapshot_revision ?? "-")}</dd></div><div><dt>Vollständigkeit</dt><dd>${snapshot.snapshot_complete ? "Vollständig" : "NOT_VERIFIED"}</dd></div><div><dt>Reconciliation</dt><dd>${this.escape(snapshot.reconciliation_state || "unknown")}</dd></div><div><dt>Write-Status</dt><dd>${nativePlan?.apply_enabled ? "Planbezogen freigeschaltet" : "Gesperrt"}</dd></div></dl><section class="surface"><h3>Aktuelle HomeKit-Entities</h3>${entityRows || `<p class="muted">Keine aktuelle Runtime-Auswahl sicher nachgewiesen.</p>`}</section><section class="surface"><h3>Historische Tombstones</h3>${tombstoneRows || `<p class="muted">Keine verwaisten Entscheidungen im Snapshot.</p>`}</section><section class="surface"><h3>Veraltete native Includes</h3>${staleRows || `<p class="muted">Keine stale Includes im Snapshot.</p>`}</section><div class="sticky-actions"><span class="footer-count">Entwurf · HomeKit unverändert</span><button class="primary" data-selection-save${model.stale_draft ? " disabled" : ""}>Entscheidung speichern</button><button data-selection-plan${model.stale_draft ? " disabled" : ""}>Vorschau berechnen</button><button data-selection-operation-plan${model.stale_draft || plan?.blockers?.length ? " disabled" : ""}>Native Apply vorbereiten</button></div>${planBlock}${nativePlanBlock}`;
+    const alignment = this.selectionAlignment;
+    const alignmentBlock = alignment ? `<section class="surface"><div class="section-heading"><h3>Lesender Abgleich</h3><button data-selection-alignment>Aktualisieren</button></div><p class="muted">Dieser Vergleich bereitet keine Übernahme vor und verändert weder Manager-Metadaten noch native HomeKit-Konfiguration.</p><dl class="definition-list"><div><dt>Native Includes</dt><dd>${alignment.native_include_entities?.length ?? 0}</dd></div><div><dt>Manager-Entscheidungen</dt><dd>${alignment.manager_decision_entities?.length ?? 0}</dd></div><div><dt>Native ohne Manager-Metadaten</dt><dd>${alignment.native_without_manager_metadata?.length ?? 0}</dd></div><div><dt>Veraltete Manager-Entscheidungen</dt><dd>${alignment.stale_manager_entities?.length ?? 0}</dd></div></dl></section>` : "";
+    const savedDraftAction = model.draft_fingerprint ? `<button data-selection-discard>Gespeicherten Entwurf verwerfen</button>` : "";
+    return `<h3>Bestehende HomeKit-Auswahl übernehmen</h3><p class="muted">Dieser Workflow speichert fachliche Entscheidungen und berechnet zunächst eine hypothetische Vorschau. Ein Native Apply wird nur über einen getrennten, serverseitig validierten Plan und eine neue ausdrückliche Bestätigung angeboten.</p><aside class="notice warning"><strong>Noch nicht automatisch angewendet</strong><p>Keine automatische KEEP-Übernahme, Tombstone-Bereinigung, Nachfolgerzuordnung oder Mutation durch Navigation und Vorschau.</p></aside>${model.stale_draft ? `<aside class="notice error" role="alert"><strong>Entwurf ist veraltet</strong><p>${this.escape(model.plan_error || "Der Entwurf gehört zu einem älteren Snapshot.")} Bitte aktuelle Daten laden und Entscheidungen erneut bestätigen.</p></aside>` : ""}<section class="status-grid"><div class="status-tile"><small>Bridge</small><strong>${this.escape(snapshot.bridge_title || snapshot.bridge_entry_id || "Nicht ausgewählt")}</strong></div><div class="status-tile"><small>Aktuelle Veröffentlichungen</small><strong>${snapshot.current_entity_ids?.length ?? 0}</strong></div><div class="status-tile"><small>Offene Entscheidungen</small><strong>${plan?.counts?.review ?? "–"}</strong></div><div class="status-tile"><small>Tombstones / stale Includes</small><strong>${snapshot.stale_manager_decisions?.length ?? 0} / ${snapshot.stale_native_includes?.length ?? 0}</strong></div></section><dl class="definition-list"><div><dt>Snapshot</dt><dd>${this.escape(snapshot.snapshot_timestamp || "Nicht verifiziert")} · Revision ${this.escape(snapshot.snapshot_revision ?? "-")}</dd></div><div><dt>Vollständigkeit</dt><dd>${snapshot.snapshot_complete ? "Vollständig" : "NOT_VERIFIED"}</dd></div><div><dt>Reconciliation</dt><dd>${this.escape(snapshot.reconciliation_state || "unknown")}</dd></div><div><dt>Write-Status</dt><dd>${nativePlan?.apply_enabled ? "Planbezogen freigeschaltet" : "Gesperrt"}</dd></div></dl>${alignmentBlock}<section class="surface"><h3>Aktuelle HomeKit-Entities</h3>${entityRows || `<p class="muted">Keine aktuelle Runtime-Auswahl sicher nachgewiesen.</p>`}</section><section class="surface"><h3>Historische Tombstones</h3>${tombstoneRows || `<p class="muted">Keine verwaisten Entscheidungen im Snapshot.</p>`}</section><section class="surface"><h3>Veraltete native Includes</h3>${staleRows || `<p class="muted">Keine stale Includes im Snapshot.</p>`}</section><div class="sticky-actions"><span class="footer-count">Entwurf · HomeKit unverändert</span><button class="primary" data-selection-save${model.stale_draft ? " disabled" : ""}>Entscheidung speichern</button><button data-selection-plan${model.stale_draft ? " disabled" : ""}>Vorschau berechnen</button><button data-selection-operation-plan${model.stale_draft || plan?.blockers?.length ? " disabled" : ""}>Native Apply vorbereiten</button>${savedDraftAction}</div>${planBlock}${nativePlanBlock}`;
   }
   settingsTemplate() {
     const tabs = [["general", "Allgemein"], ["configuration", "Konfiguration"], ["selection", "Übernahme vorbereiten"], ["reconciliation", "Reconciliation"], ["diagnostics", "Diagnose"], ["rules", "Regeln"], ["history", "Historie"], ["performance", "Performance"]];
@@ -911,6 +938,8 @@ class HomeKitManagerPanel extends HTMLElement {
     one("[data-selection-save]", "click", () => this.saveSelectionDecisions());
     one("[data-selection-plan]", "click", () => this.previewSelectionPlan());
     one("[data-selection-operation-plan]", "click", () => this.planSelectionOperation());
+    one("[data-selection-discard]", "click", () => this.discardSavedSelection());
+    one("[data-selection-alignment]", "click", () => this.refreshSelectionAlignment());
     one("[data-selection-apply]", "click", () => this.applySelectionOperation());
     one("[data-reconciliation-search]", "input", event => { this.reconciliationQuery = event.target.value; this.render(); });
     one("[data-reconciliation-filter]", "change", event => { this.reconciliationFilter = event.target.value; this.render(); });

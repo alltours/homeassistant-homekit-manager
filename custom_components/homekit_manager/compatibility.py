@@ -9,7 +9,7 @@ from typing import Any, Mapping
 from .const import SUPPORTED_DOMAINS, SUPPORTED_CORE_VERSION
 
 CORE_REFERENCE_VERSION = SUPPORTED_CORE_VERSION
-VERIFIED_COMPATIBILITY_VERSIONS = frozenset({"2026.10.4", "2026.11.0b0"})
+VERIFIED_COMPATIBILITY_VERSIONS = frozenset({"2026.10.4", "2026.11.0b0", "2026.11.0"})
 _KNOWN_UNCERTAIN_DOMAINS = {"number", "text", "time", "calendar", "image", "update", "notify", "zone", "counter", "input_number", "input_text", "event"}
 
 @dataclass(frozen=True)

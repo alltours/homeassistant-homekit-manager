@@ -50,6 +50,7 @@ from .selection_draft import (
     SelectionDraftError,
     SelectionDraftStore,
     build_native_apply_document,
+    fingerprint,
     normalize_draft,
     snapshot_from_coordinator,
 )
@@ -508,6 +509,55 @@ class HomeKitManagerCoordinator:
             normalized["history"] = history[-50:]
             await self.selection_draft_store.async_save(entry_id, normalized)
             self.selection_drafts[entry_id] = normalized
+            return self.selection_draft_status()
+
+    def selection_alignment_preview(self) -> dict[str, Any]:
+        """Return a read-only baseline comparison; never persist or apply it."""
+        snapshot = self._selection_snapshot()
+        entry_id = snapshot.get("bridge_entry_id")
+        raw = self.selection_drafts.get(entry_id) if entry_id else None
+        stored_ids = sorted(
+            set((raw or {}).get("decisions", {}))
+            | set((raw or {}).get("tombstones", {}))
+            | set((raw or {}).get("stale_includes", {}))
+        )
+        native_ids = sorted(snapshot.get("native_filter", {}).get("include_entities", []) or [])
+        current_ids = set(snapshot.get("current_entity_ids", []))
+        return {
+            "bridge_entry_id": entry_id,
+            "bridge_title": snapshot.get("bridge_title"),
+            "snapshot_revision": snapshot.get("snapshot_revision"),
+            "snapshot_fingerprint": snapshot.get("snapshot_fingerprint"),
+            "native_include_entities": native_ids,
+            "current_entity_ids": sorted(current_ids),
+            "manager_decision_entities": stored_ids,
+            "native_without_manager_metadata": sorted(set(native_ids) - set(stored_ids)),
+            "stale_manager_entities": sorted(snapshot.get("stale_manager_decisions", []), key=lambda item: item.get("entity_id", "")),
+            "stale_native_includes": list(snapshot.get("stale_native_includes", [])),
+            "proposed_metadata_changes": {
+                "would_add_review_metadata": sorted(set(native_ids) - set(stored_ids)),
+                "would_archive_stale_metadata": sorted(item.get("entity_id") for item in snapshot.get("stale_manager_decisions", []) if item.get("entity_id")),
+            },
+            "native_mutation_performed": False,
+            "manager_metadata_mutation_performed": False,
+            "message": "Lesender Abgleich vorbereitet. Keine Manager-Metadaten und keine native HomeKit-Konfiguration wurden geändert.",
+        }
+
+    async def async_discard_selection_draft(self, entry_id: str, expected_draft_fingerprint: str | None = None) -> dict[str, Any]:
+        """Discard one selected bridge's manager draft, never native HomeKit state."""
+        if not isinstance(entry_id, str) or not entry_id:
+            raise ValueError("Ungültige Bridge-ID")
+        async with self._refresh_lock:
+            snapshot = self._selection_snapshot()
+            if snapshot.get("bridge_entry_id") != entry_id:
+                raise SelectionDraftConflict("Die ausgewählte Bridge wurde geändert. Bitte erneut laden.")
+            existing = self.selection_drafts.get(entry_id)
+            if existing is None:
+                return self.selection_draft_status()
+            if expected_draft_fingerprint and fingerprint(existing) != expected_draft_fingerprint:
+                raise SelectionDraftConflict("Der gespeicherte Entwurf wurde zwischenzeitlich verändert")
+            await self.selection_draft_store.async_delete(entry_id, expected_draft_fingerprint)
+            self.selection_drafts.pop(entry_id, None)
             return self.selection_draft_status()
 
     def inventory_export(self, format_name: str = "json") -> dict[str, Any]:

@@ -136,3 +136,54 @@ async def test_selection_websocket_rejects_unknown_and_unexpected_data(
     assert rejected_foreign["success"] is False
     assert rejected_foreign["error"]["code"] == "plan_blocked"
     assert dict(native.options) == {"homekit_mode": "bridge", "filter": {"include_entities": ["light.keep"]}}
+
+
+async def test_saved_selection_draft_can_be_discarded_and_alignment_is_read_only(
+    hass, enable_custom_integrations, hass_ws_client,
+):
+    native, coordinator = await _setup_selection_context(hass, enable_custom_integrations)
+    before_options = deepcopy(dict(native.options))
+    client = await hass_ws_client()
+
+    await client.send_json_auto_id({"type": "homekit_manager/selection_draft"})
+    model = (await client.receive_json())["result"]
+    draft = deepcopy(model["draft"])
+    draft["decisions"]["light.keep"] = {"decision": "KEEP", "identity": model["entities"][0]["identity"]}
+    await client.send_json_auto_id({
+        "type": "homekit_manager/save_selection_draft",
+        "draft": draft,
+        "expected_fingerprint": model["snapshot"]["snapshot_fingerprint"],
+        "expected_revision": model["snapshot"]["snapshot_revision"],
+    })
+    saved = (await client.receive_json())["result"]
+    assert saved["draft_fingerprint"]
+
+    await client.send_json_auto_id({"type": "homekit_manager/selection_alignment"})
+    alignment = (await client.receive_json())["result"]
+    assert alignment["native_mutation_performed"] is False
+    assert alignment["manager_metadata_mutation_performed"] is False
+    assert alignment["native_include_entities"] == ["light.keep"]
+
+    await client.send_json_auto_id({
+        "type": "homekit_manager/discard_selection_draft",
+        "entry_id": native.entry_id,
+        "expected_draft_fingerprint": saved["draft_fingerprint"],
+    })
+    discarded = (await client.receive_json())["result"]
+    assert discarded["draft_fingerprint"] is None
+    assert native.entry_id not in await coordinator.selection_draft_store.async_load()
+    assert dict(native.options) == before_options
+
+
+async def test_discard_selection_draft_is_bridge_bound(
+    hass, enable_custom_integrations, hass_ws_client,
+):
+    _native, _coordinator = await _setup_selection_context(hass, enable_custom_integrations)
+    client = await hass_ws_client()
+    await client.send_json_auto_id({
+        "type": "homekit_manager/discard_selection_draft",
+        "entry_id": "foreign-bridge",
+    })
+    response = await client.receive_json()
+    assert response["success"] is False
+    assert response["error"]["code"] == "conflict"

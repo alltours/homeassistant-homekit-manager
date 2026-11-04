@@ -46,6 +46,7 @@ async def test_every_manager_websocket_route_rejects_authenticated_non_admin(
     }
     args["homekit_manager/bulk_preview"] = {"entry_id": "none", "fingerprint": "none", "kind": "device", "key": "device:none"}
     args["homekit_manager/save_selection_draft"] = {"draft": {"schema_version": 1}}
+    args["homekit_manager/discard_selection_draft"] = {"entry_id": "none"}
     document_routes = {
         "homekit_manager/validate_draft", "homekit_manager/preview",
         "homekit_manager/save_draft", "homekit_manager/apply_options_diff",

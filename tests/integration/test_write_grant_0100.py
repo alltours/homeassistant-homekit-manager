@@ -68,7 +68,7 @@ def inventory() -> list[dict]:
     lambda data: data.update(allowed_fields=["filter", "mode"]),
     lambda data: data.update(entry_id=""),
     lambda data: data.update(source="system"),
-    lambda data: data.update(core_version="2026.11.0"),
+        lambda data: data.update(core_version="2026.11.1"),
     lambda data: data.update(expires_at=(datetime.now(UTC) - timedelta(seconds=1)).isoformat()),
     lambda data: data.update(expires_at=(datetime.now(UTC) + timedelta(days=2)).isoformat()),
     lambda data: data.update(unrecognized=True),

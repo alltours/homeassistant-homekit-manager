@@ -18,7 +18,8 @@ from .const import (
     TEST_WRITE_MODE_ENABLE_COMMAND, TEST_WRITE_MODE_DISABLE_COMMAND,
     MANAGEMENT_STATUS_COMMAND, MANAGEMENT_ENABLE_COMMAND, MANAGEMENT_DISABLE_COMMAND,
     BULK_PREVIEW_COMMAND,
-    SELECTION_DRAFT_COMMAND, SAVE_SELECTION_DRAFT_COMMAND, SELECTION_PLAN_COMMAND,
+    SELECTION_DRAFT_COMMAND, SAVE_SELECTION_DRAFT_COMMAND, DISCARD_SELECTION_DRAFT_COMMAND,
+    SELECTION_ALIGNMENT_COMMAND, SELECTION_PLAN_COMMAND,
     SELECTION_OPERATION_PLAN_COMMAND,
 )
 from .bulk import preview_bulk
@@ -131,6 +132,36 @@ async def websocket_save_selection_draft(hass, connection, msg):
         connection.send_error(msg["id"], "invalid_decision_draft", str(err))
         return
     connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({
+    probatio.Required("type"): DISCARD_SELECTION_DRAFT_COMMAND,
+    probatio.Required("entry_id"): str,
+    probatio.Optional("expected_draft_fingerprint"): str,
+})
+@websocket_api.async_response
+async def websocket_discard_selection_draft(hass, connection, msg):
+    """Discard one manager-only draft; this endpoint cannot mutate HomeKit."""
+    try:
+        result = await hass.data["homekit_manager"]["coordinator"].async_discard_selection_draft(
+            msg["entry_id"], msg.get("expected_draft_fingerprint")
+        )
+    except SelectionDraftConflict as err:
+        connection.send_error(msg["id"], "conflict", str(err))
+        return
+    except (SelectionDraftError, ValueError, OSError) as err:
+        connection.send_error(msg["id"], "invalid_decision_draft", str(err))
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({probatio.Required("type"): SELECTION_ALIGNMENT_COMMAND})
+@websocket_api.async_response
+async def websocket_selection_alignment(hass, connection, msg):
+    """Return a read-only comparison of native selection and Manager metadata."""
+    connection.send_result(msg["id"], hass.data["homekit_manager"]["coordinator"].selection_alignment_preview())
 
 
 @websocket_api.require_admin
@@ -592,7 +623,7 @@ async def websocket_export(hass, connection, msg):
     except (YamlValidationError, ValueError) as err:
         connection.send_error(msg["id"], "invalid_format", str(err))
 
-REGISTERED_HANDLERS = (websocket_inventory, websocket_inventory_export, websocket_reconciliation_export, websocket_selection_draft, websocket_save_selection_draft, websocket_selection_plan, websocket_selection_operation_plan, websocket_bulk_preview, websocket_bridges, websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_activation_status, websocket_mode_status, websocket_management_status, websocket_management_enable, websocket_management_disable, websocket_test_write_mode_enable, websocket_test_write_mode_disable, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_apply_options_diff, websocket_operation_plan, websocket_operation_apply, websocket_operation_rollback, websocket_operation_status, websocket_operation_reconcile, websocket_prepare_options_diff, websocket_reconcile, websocket_export)
+REGISTERED_HANDLERS = (websocket_inventory, websocket_inventory_export, websocket_reconciliation_export, websocket_selection_draft, websocket_save_selection_draft, websocket_discard_selection_draft, websocket_selection_alignment, websocket_selection_plan, websocket_selection_operation_plan, websocket_bulk_preview, websocket_bridges, websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_activation_status, websocket_mode_status, websocket_management_status, websocket_management_enable, websocket_management_disable, websocket_test_write_mode_enable, websocket_test_write_mode_disable, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_apply_options_diff, websocket_operation_plan, websocket_operation_apply, websocket_operation_rollback, websocket_operation_status, websocket_operation_reconcile, websocket_prepare_options_diff, websocket_reconcile, websocket_export)
 
 
 def async_register_websocket_commands(hass, coordinator) -> None:

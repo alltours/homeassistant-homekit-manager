@@ -480,7 +480,18 @@ def public_view(snapshot: Mapping[str, Any], raw_draft: Any) -> dict[str, Any]:
     for item in snapshot.get("stale_native_includes", []):
         decision = draft["stale_includes"].get(item["entity_id"], {}).get("decision", "REVIEW")
         stale_includes.append(dict(item, user_decision=decision))
-    return {"schema_version": DECISION_SCHEMA_VERSION, "snapshot": dict(snapshot), "draft": draft, "entities": entities, "tombstones": tombstones, "stale_includes": stale_includes, "plan": plan, "plan_error": plan_error, "stale_draft": stale_error is not None}
+    return {
+        "schema_version": DECISION_SCHEMA_VERSION,
+        "snapshot": dict(snapshot),
+        "draft": draft,
+        "draft_fingerprint": fingerprint(raw_draft) if isinstance(raw_draft, dict) else None,
+        "entities": entities,
+        "tombstones": tombstones,
+        "stale_includes": stale_includes,
+        "plan": plan,
+        "plan_error": plan_error,
+        "stale_draft": stale_error is not None,
+    }
 
 
 class SelectionDraftStore:
@@ -498,3 +509,15 @@ class SelectionDraftStore:
         current = await self.async_load()
         current[bridge_id] = deepcopy(dict(draft))
         await self._store.async_save({"schema_version": DECISION_SCHEMA_VERSION, "bridges": current})
+
+    async def async_delete(self, bridge_id: str, expected_fingerprint: str | None = None) -> bool:
+        """Delete one manager-only draft, never native HomeKit state."""
+        current = await self.async_load()
+        existing = current.get(bridge_id)
+        if existing is None:
+            return False
+        if expected_fingerprint is not None and fingerprint(existing) != expected_fingerprint:
+            raise SelectionDraftConflict("Der gespeicherte Entwurf wurde zwischenzeitlich verändert")
+        del current[bridge_id]
+        await self._store.async_save({"schema_version": DECISION_SCHEMA_VERSION, "bridges": current})
+        return True

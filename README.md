@@ -1,4 +1,15 @@
-# HomeKit Manager 0.12.0
+# HomeKit Manager 1.0.0
+
+HomeKit Manager manages existing Home Assistant HomeKit bridges with a
+bridge-bound inventory, explicit Selection Drafts, conservative bulk actions,
+readable reconciliation and a guarded Native Apply workflow. It keeps native
+HomeKit identity and pairing data outside its own persistence boundary and
+never changes a bridge implicitly.
+
+Version 1.0.0 supports optional Home Assistant floor assignments in addition to
+areas, devices and entities. The selected bridge is shown consistently across
+all views, and bulk operations are always previewed and validated by the
+server before they can become draft changes.
 
 Version 0.12.0 removes the experimental bidirectional UI↔YAML source-migration
 path. HomeKit Manager continues to detect and display UI- and YAML-configured

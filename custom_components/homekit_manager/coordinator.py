@@ -1,23 +1,65 @@
 """Event-driven read-only coordinator."""
 from __future__ import annotations
+
 import asyncio
-from collections import Counter
 import logging
 import time
+from collections import Counter
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
-from uuid import uuid4
 from typing import Any
+from uuid import uuid4
+
+from homeassistant.const import __version__ as CORE_VERSION
 from homeassistant.core import callback
-from .compatibility import classify_entity
-from .homekit_reader import read_homekit_entries
-from .inventory import build_inventory
-from .device_reconciliation import reconcile_devices
+
+from .activation_store import ActivationStore
 from .change_planner import plan_changes
-from .fingerprint import build_fingerprint
-from .homekit_writer import build_options_diff, HomeKitWriteBlocked, HomeKitWriter as HomeKitWriter
-from .reconcile import reconcile_desired_state
+from .compatibility import classify_entity
+from .config_source import inspect_configuration_sources
+from .const import INTEGRATION_VERSION, NATIVE_FILTER_WRITE_CORE_VERSIONS
+from .device_reconciliation import reconcile_devices
+from .diagnostics import build_diagnostics, diagnostics_summary, group_diagnostics
 from .exporter import export_desired_state
+from .fingerprint import build_fingerprint
+from .grouping import build_area_views, build_device_views, build_floor_views
+from .history import make_history_entry, restore_as_draft
+from .history_store import HistoryStore
+from .homekit_reader import read_homekit_entries
+from .homekit_writer import (
+    HomeKitWriteBlocked,
+    HomeKitWriteDisabled,
+    HomeKitWriter,  # noqa: F401 - retained as a test/extension seam
+    build_options_diff,
+)
+from .inventory import build_inventory
+from .inventory_export import (
+    build_inventory_export,
+    build_reconciliation_export,
+    export_inventory_snapshot,
+    export_reconciliation_snapshot,
+)
+from .management_store import ManagementStore
+from .operations import HomeKitOperationService
+from .positive_list import read_runtime_publication
+from .reconcile import reconcile_desired_state
+from .runtime_diagnostics import diagnose_runtime, runtime_publication_summary
+from .safety import WRITE_LOCK_REASON, write_policy
+from .selection_draft import (
+    SelectionDraftConflict,
+    SelectionDraftError,
+    SelectionDraftStore,
+    build_native_apply_document,
+    normalize_draft,
+    snapshot_from_coordinator,
+)
+from .selection_draft import (
+    build_plan as build_selection_plan,
+)
+from .selection_draft import (
+    public_view as selection_public_view,
+)
+from .selection_reconciliation import reconcile_selection
 from .yaml_store import (
     YamlSnapshot,
     YamlStore,
@@ -25,37 +67,6 @@ from .yaml_store import (
     YamlVersionConflict,
     YamlWriteError,
     empty_document,
-)
-from .grouping import build_area_views, build_device_views
-from .diagnostics import build_diagnostics, diagnostics_summary, group_diagnostics
-from .history import make_history_entry, restore_as_draft
-from .history_store import HistoryStore
-from .config_source import inspect_configuration_sources
-from .management_store import ManagementStore
-from .activation_store import ActivationStore
-from .safety import WRITE_LOCK_REASON, write_policy
-from .homekit_writer import HomeKitWriteDisabled
-from .operations import HomeKitOperationService
-from .const import INTEGRATION_VERSION, NATIVE_FILTER_WRITE_CORE_VERSIONS
-from homeassistant.const import __version__ as CORE_VERSION
-from .selection_reconciliation import reconcile_selection
-from .positive_list import read_runtime_publication
-from .runtime_diagnostics import diagnose_runtime, runtime_publication_summary
-from .inventory_export import (
-    build_inventory_export,
-    export_inventory_snapshot,
-    build_reconciliation_export,
-    export_reconciliation_snapshot,
-)
-from .selection_draft import (
-    SelectionDraftConflict,
-    SelectionDraftStore,
-    SelectionDraftError,
-    build_native_apply_document,
-    build_plan as build_selection_plan,
-    normalize_draft,
-    public_view as selection_public_view,
-    snapshot_from_coordinator,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -69,6 +80,7 @@ class HomeKitManagerCoordinator:
         self.devices: list[dict[str, Any]] = []
         self.device_reconciliation: dict[str, Any] = {}
         self.areas: list[dict[str, Any]] = []
+        self.floors: list[dict[str, Any]] = []
         self.diagnostic_findings: list[dict[str, Any]] = []
         self.history_entries: list[dict[str, Any]] = []
         self.history_store = HistoryStore(hass)
@@ -220,12 +232,18 @@ class HomeKitManagerCoordinator:
                 phases[name] = round((now - phase_started) * 1000, 2)
                 phase_started = now
             try:
-                from homeassistant.helpers import area_registry, device_registry, entity_registry
+                from homeassistant.helpers import (
+                    area_registry,
+                    device_registry,
+                    entity_registry,
+                    floor_registry,
+                )
                 devices_registry = device_registry.async_get(self.hass)
                 entity_registry_obj = entity_registry.async_get(self.hass)
                 area_registry_obj = area_registry.async_get(self.hass)
+                floor_registry_obj = floor_registry.async_get(self.hass)
                 states = {state.entity_id: state for state in self.hass.states.async_all()}
-                records = build_inventory(entity_registry_obj, devices_registry, area_registry_obj, states)
+                records = build_inventory(entity_registry_obj, devices_registry, area_registry_obj, states, floor_registry=floor_registry_obj)
                 registry_ids = {
                     entity_id for entity_id in getattr(entity_registry_obj, "entities", {})
                     if isinstance(entity_id, str) and "." in entity_id
@@ -259,7 +277,7 @@ class HomeKitManagerCoordinator:
                     selected_id = next(iter(bridge_ids), None) if len(bridges) == 1 else None
                 selected = next((entry for entry in bridges if entry.entry_id == selected_id), None)
                 bridge_filter = selected.filter if selected else None
-                from .filtering import evaluate_filter, build_core_filter
+                from .filtering import build_core_filter, evaluate_filter
                 core_filter = build_core_filter(bridge_filter)
                 inventory = []
                 for record in records:
@@ -275,6 +293,7 @@ class HomeKitManagerCoordinator:
                 bridge_data = [entry.as_dict() | {"selected": entry.entry_id == selected_id} for entry in bridges]
                 devices = build_device_views(inventory)
                 areas = build_area_views(inventory)
+                floors = build_floor_views(inventory)
                 mark_phase("grouping")
                 snapshot = await self.hass.async_add_executor_job(self.yaml_store.load)
                 def read_sources():
@@ -348,7 +367,7 @@ class HomeKitManagerCoordinator:
                 mark_phase("diagnostics_fingerprint")
                 # No await beyond this point: readers see one consistent snapshot.
                 self.inventory, self.bridges = inventory, bridge_data
-                self.devices, self.areas = devices, areas
+                self.devices, self.areas, self.floors = devices, areas, floors
                 self.device_reconciliation = device_reconciliation
                 self.accessories = [entry.as_dict() for entry in entries if entry.mode == "accessory"]
                 self.other_homekit_entries = [entry.as_dict() for entry in entries if entry.mode not in {"accessory", "bridge"}]
@@ -358,7 +377,7 @@ class HomeKitManagerCoordinator:
                 self.runtime_diagnosis = runtime_diagnosis
                 self.operation_policy = operation_policy
                 self.last_error = None
-                self.last_updated = datetime.now(timezone.utc).isoformat()
+                self.last_updated = datetime.now(UTC).isoformat()
                 self.refresh_count += 1
                 self.snapshot_revision = self.refresh_count
                 self.snapshot_timestamp = self.last_updated
@@ -386,6 +405,7 @@ class HomeKitManagerCoordinator:
             "device_reconciliation": self.device_reconciliation,
             "availability_counts": {status: sum(item.get("availability_status") == status for item in self.inventory) for status in ("available", "unavailable", "unknown", "no_state", "disabled")},
             "area_count": len({item["area_id"] for item in self.inventory if item["area_id"]}),
+            "floor_count": len({item["floor_id"] for item in self.inventory if item.get("floor_id")}),
             "compatible_entities": compatible,
             "configured_entities": configured if filter_known else None,
             "excluded_entities": excluded if filter_known else None,
@@ -544,7 +564,7 @@ class HomeKitManagerCoordinator:
         """Durably record Manager evidence; never change HomeKit or retry it."""
         if state not in {"validated", "prepared", "activating", "saved", "active", "failed", "unknown"}:
             raise ValueError("Unbekannter Aktivierungszustand")
-        status = {"entry_id": entry_id, "request_id": request_id, "state": state, "updated_at": datetime.now(timezone.utc).isoformat(), **details}
+        status = {"entry_id": entry_id, "request_id": request_id, "state": state, "updated_at": datetime.now(UTC).isoformat(), **details}
         statuses = self.activation_statuses | {entry_id: status}
         await self.activation_store.async_save(statuses)
         self.activation_statuses = statuses
@@ -661,7 +681,7 @@ class HomeKitManagerCoordinator:
             if not confirmed:
                 return status | {"state": "awaiting_confirmation", "message": "Bestätigung erforderlich: Nur die Verwaltungszuordnung wird gespeichert; HomeKit bleibt unverändert."}
             entry_id = bridge["entry_id"]
-            status.update(source=status["configuration_source"], updated_at=datetime.now(timezone.utc).isoformat(), state="verifying", step="validate", request_id=uuid4().hex, message="Verwaltungszuordnung wird unabhängig von der HomeKit-Konfiguration geprüft.")
+            status.update(source=status["configuration_source"], updated_at=datetime.now(UTC).isoformat(), state="verifying", step="validate", request_id=uuid4().hex, message="Verwaltungszuordnung wird unabhängig von der HomeKit-Konfiguration geprüft.")
             self.management_statuses[entry_id] = status.copy()
             try:
                 await self.management_store.async_save(self.management_statuses)

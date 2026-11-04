@@ -1,4 +1,4 @@
-"""Official-Core two-bridge HAP Apply acceptance worker for 0.13.0.
+"""Official-Core two-bridge HAP Apply acceptance worker for 1.0.0.
 
 The worker deliberately uses the regular HomeKit Manager operation service,
 including its persisted grant/revision checks. HAP verification is performed
@@ -596,7 +596,7 @@ async def run() -> None:
             current_version = json.loads(
                 (config_dir / "custom_components" / DOMAIN / "manifest.json").read_text()
             )["version"]
-            assert current_version == "0.13.0"
+            assert current_version == "1.0.0"
             pairing_a = IpPairing(Controller(), json.loads((shared / "pairing-a.json").read_text(encoding="utf-8")))
             pairing_b = IpPairing(Controller(), json.loads((shared / "pairing-b.json").read_text(encoding="utf-8")))
             after_a = await _accessories(pairing_a)

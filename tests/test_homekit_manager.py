@@ -1,32 +1,66 @@
 import ast
+import asyncio
 import sys
-import unittest
 import tempfile
 import threading
-import asyncio
+import unittest
 from pathlib import Path
-from unittest.mock import patch
 from types import SimpleNamespace
+from unittest.mock import patch
+
 sys.path.insert(0, ".")
 
-from custom_components.homekit_manager.compatibility import classify_entity, compatibility_reference
-from custom_components.homekit_manager.filtering import build_core_filter, evaluate_filter
-from custom_components.homekit_manager.inventory import build_inventory
-from custom_components.homekit_manager.draft import serialize_draft
-from custom_components.homekit_manager.yaml_store import YamlStore, YamlValidationError, YamlVersionConflict, YamlWriteError
 from custom_components.homekit_manager.change_planner import plan_changes
-from custom_components.homekit_manager.homekit_writer import OptionsDiff, HomeKitWriter, HomeKitWriteBlocked, HomeKitWriteDisabled, HomeKitActivationUnknown, build_options_diff
-from custom_components.homekit_manager.reconcile import reconcile_desired_state
-from custom_components.homekit_manager.selection_reconciliation import reconcile_selection
-from custom_components.homekit_manager.exporter import export_desired_state
-from custom_components.homekit_manager.homekit_reader import read_homekit_entries
-from custom_components.homekit_manager.grouping import build_area_views, build_device_views
-from custom_components.homekit_manager.diagnostics import build_diagnostics, diagnostics_summary, group_diagnostics
+from custom_components.homekit_manager.compatibility import (
+    classify_entity,
+    compatibility_reference,
+)
 from custom_components.homekit_manager.device_config import build_preview
-from custom_components.homekit_manager.rules import evaluate_rules
-from custom_components.homekit_manager.history import compare_history, make_history_entry, restore_as_draft
-from custom_components.homekit_manager.performance import summarize_inventory
+from custom_components.homekit_manager.diagnostics import (
+    build_diagnostics,
+    diagnostics_summary,
+    group_diagnostics,
+)
+from custom_components.homekit_manager.draft import serialize_draft
+from custom_components.homekit_manager.exporter import export_desired_state
+from custom_components.homekit_manager.filtering import (
+    build_core_filter,
+    evaluate_filter,
+)
+from custom_components.homekit_manager.grouping import (
+    build_area_views,
+    build_device_views,
+    build_floor_views,
+)
+from custom_components.homekit_manager.history import (
+    compare_history,
+    make_history_entry,
+    restore_as_draft,
+)
 from custom_components.homekit_manager.history_store import HistoryStore
+from custom_components.homekit_manager.homekit_reader import read_homekit_entries
+from custom_components.homekit_manager.homekit_writer import (
+    HomeKitActivationUnknown,
+    HomeKitWriteBlocked,
+    HomeKitWriteDisabled,
+    HomeKitWriter,
+    OptionsDiff,
+    build_options_diff,
+)
+from custom_components.homekit_manager.inventory import build_inventory
+from custom_components.homekit_manager.performance import summarize_inventory
+from custom_components.homekit_manager.reconcile import reconcile_desired_state
+from custom_components.homekit_manager.rules import evaluate_rules
+from custom_components.homekit_manager.selection_reconciliation import (
+    reconcile_selection,
+)
+from custom_components.homekit_manager.yaml_store import (
+    YamlStore,
+    YamlValidationError,
+    YamlVersionConflict,
+    YamlWriteError,
+)
+
 
 class HomeKitManagerTests(unittest.TestCase):
     def setUp(self):
@@ -45,6 +79,28 @@ class HomeKitManagerTests(unittest.TestCase):
         self.assertEqual(result[0].area_name, "Flur")
         self.assertIsNone(result[1].state)
         self.assertFalse(result[1].available)
+
+    def test_inventory_resolves_optional_floor_from_area_registry(self):
+        devices = {"d1": SimpleNamespace(name="Flur Gerät", area_id="area1")}
+        areas = {"area1": SimpleNamespace(name="Flur", floor_id="floor1")}
+        floors = {"floor1": SimpleNamespace(name="Erdgeschoss")}
+        result = build_inventory(
+            {"entities": {self.entities[0].entity_id: self.entities[0]}},
+            {"devices": devices}, {"areas": areas},
+            {"light.flur_decke": SimpleNamespace(state="off", attributes={})},
+            floor_registry={"floors": floors},
+        )
+        self.assertEqual(result[0].floor_id, "floor1")
+        self.assertEqual(result[0].floor_name, "Erdgeschoss")
+
+    def test_floor_views_group_entities_without_mutating_inventory(self):
+        entities = [
+            {"entity_id": "light.a", "device_id": "d1", "floor_id": "f1", "floor_name": "Erdgeschoss"},
+            {"entity_id": "sensor.b", "device_id": None, "floor_id": None, "floor_name": None},
+        ]
+        views = build_floor_views(entities)
+        self.assertEqual([view["name"] for view in views], ["Erdgeschoss", "Keine Etage"])
+        self.assertEqual(entities[0]["entity_id"], "light.a")
 
     def test_device_and_area_views_are_deterministic_aggregates(self):
         entities = [
@@ -295,9 +351,11 @@ class HomeKitManagerTests(unittest.TestCase):
     def test_yaml_store_atomic_replace_write_error(self):
         with tempfile.TemporaryDirectory() as directory:
             store = YamlStore(Path(directory) / "homekit_manager.yaml")
-            with patch("custom_components.homekit_manager.yaml_store.os.replace", side_effect=OSError("disk full")):
-                with self.assertRaises(YamlWriteError):
-                    store.save({"schema_version": 1, "bridges": {}}, None)
+            with (
+                patch("custom_components.homekit_manager.yaml_store.os.replace", side_effect=OSError("disk full")),
+                self.assertRaises(YamlWriteError),
+            ):
+                store.save({"schema_version": 1, "bridges": {}}, None)
             self.assertFalse(store.path.exists())
 
     def _planner_item(self, entity_id, configured, compatibility="supported", available=True):
@@ -546,9 +604,11 @@ class HomeKitManagerTests(unittest.TestCase):
         diff = OptionsDiff("b", {"filter": {"include_entities": ["light.a"]}},
                            {"filter": {"include_entities": ["light.a", "light.b"]}},
                            ("filter",), ("light.b",), {"summary": {"blocked": False}})
-        with patch("custom_components.homekit_manager.homekit_writer.ACTIVATION_TIMEOUT", 0.001):
-            with self.assertRaises(HomeKitActivationUnknown):
-                asyncio.run(HomeKitWriter(hass, test_environment=True, apply_enabled=True).async_apply(diff))
+        with (
+            patch("custom_components.homekit_manager.homekit_writer.ACTIVATION_TIMEOUT", 0.001),
+            self.assertRaises(HomeKitActivationUnknown),
+        ):
+            asyncio.run(HomeKitWriter(hass, test_environment=True, apply_enabled=True).async_apply(diff))
 
     def test_reader_is_read_only_and_redacts_sensitive_values(self):
         entry = SimpleNamespace(

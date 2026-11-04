@@ -6,7 +6,6 @@ from pathlib import Path
 from custom_components.homekit_manager.config_source import detect_configuration_sources
 from custom_components.homekit_manager.const import INTEGRATION_VERSION
 
-
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENT = ROOT / "custom_components" / "homekit_manager"
 
@@ -49,5 +48,5 @@ def test_yaml_bridge_detection_remains_available_without_source_migration():
     assert result["direct_yaml"] is True
 
 
-def test_release_version_is_0130():
-    assert INTEGRATION_VERSION == "0.13.0"
+def test_release_version_is_100():
+    assert INTEGRATION_VERSION == "1.0.0"

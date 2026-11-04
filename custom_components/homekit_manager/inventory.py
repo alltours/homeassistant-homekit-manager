@@ -1,8 +1,11 @@
 """Pure inventory assembly from Home Assistant registries and states."""
 from __future__ import annotations
-from dataclasses import dataclass
+
+from collections.abc import Mapping
 from copy import deepcopy
-from typing import Any, Mapping
+from dataclasses import dataclass
+from typing import Any
+
 
 def _value(obj: Any, key: str, default=None):
     if isinstance(obj, Mapping):
@@ -85,6 +88,10 @@ class InventoryEntity:
     device_disabled_by: str | None
     device_area_id: str | None = None
     device_area_name: str | None = None
+    floor_id: str | None = None
+    floor_name: str | None = None
+    device_floor_id: str | None = None
+    device_floor_name: str | None = None
     def as_dict(self) -> dict[str, Any]:
         # Only the attributes container may hold nested mutable values. Deep
         # copying every scalar through dataclasses.asdict dominated the measured
@@ -95,10 +102,12 @@ class InventoryEntity:
 
 def build_inventory(entity_registry: Any, device_registry: Any = None,
                     area_registry: Any = None,
-                    states: Mapping[str, Any] | None = None) -> list[InventoryEntity]:
+                    states: Mapping[str, Any] | None = None,
+                    *, floor_registry: Any = None) -> list[InventoryEntity]:
     """Build one record per registry entity, including entries without state."""
     state_map = states or {}
     areas = _value(area_registry, "areas", area_registry) or {}
+    floors = _value(floor_registry, "floors", floor_registry) or {}
     result: list[InventoryEntity] = []
     seen_entity_ids: set[str] = set()
     device_cache: dict[str, Any] = {}
@@ -118,6 +127,10 @@ def build_inventory(entity_registry: Any, device_registry: Any = None,
         area_source = "entity" if _value(entry, "area_id") else "device" if _value(device, "area_id") else "none"
         area = areas.get(area_id) if isinstance(areas, Mapping) else None
         device_area = areas.get(device_area_id) if isinstance(areas, Mapping) else None
+        floor_id = _value(area, "floor_id")
+        device_floor_id = _value(device_area, "floor_id")
+        floor = floors.get(floor_id) if isinstance(floors, Mapping) else None
+        device_floor = floors.get(device_floor_id) if isinstance(floors, Mapping) else None
         state_obj = state_map.get(entity_id)
         state = _value(state_obj, "state")
         attributes = dict(_value(state_obj, "attributes", {}) or {})
@@ -138,6 +151,8 @@ def build_inventory(entity_registry: Any, device_registry: Any = None,
             registry_entry_present=True, state_present=state_obj is not None,
             area_source=area_source, device_disabled_by=_value(device, "disabled_by"),
             device_area_id=device_area_id, device_area_name=_value(device_area, "name"),
+            floor_id=floor_id, floor_name=_value(floor, "name"),
+            device_floor_id=device_floor_id, device_floor_name=_value(device_floor, "name"),
         ))
     for entity_id, state_obj in state_map.items():
         if entity_id in seen_entity_ids or "." not in entity_id:
@@ -166,6 +181,7 @@ def build_inventory(entity_registry: Any, device_registry: Any = None,
             config_entry_id=None,
             registry_entry_present=False, state_present=True, area_source="none",
             device_disabled_by=None,
+            floor_id=None, floor_name=None, device_floor_id=None, device_floor_name=None,
         ))
     return sorted(result, key=lambda item: item.entity_id)
 

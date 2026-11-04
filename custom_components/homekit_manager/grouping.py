@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 
 def _device_key(item: dict[str, Any]) -> str | None:
@@ -86,5 +87,24 @@ def build_area_views(entities: Iterable[dict[str, Any]]) -> list[dict[str, Any]]
             "unknown_count": sum(item.get("homekit", {}).get("configured_by_filter") is None for item in without_area),
             "excluded_count": sum(item.get("homekit", {}).get("configured_by_filter") is False for item in without_area),
             "unassigned_entity_count": sum(not item.get("device_id") for item in without_area),
+        })
+    return sorted(result, key=lambda item: str(item.get("name", "")).casefold())
+
+
+def build_floor_views(entities: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Aggregate entities by the optional Home Assistant floor assignment."""
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for entity in entities:
+        grouped[entity.get("floor_id") or "__none__"].append(entity)
+    result = []
+    for floor_id, members in grouped.items():
+        members = sorted(members, key=lambda item: item.get("entity_id", ""))
+        result.append({
+            "floor_id": None if floor_id == "__none__" else floor_id,
+            "name": next((item.get("floor_name") for item in members if item.get("floor_name")), "Keine Etage"),
+            "device_ids": sorted({item["device_id"] for item in members if item.get("device_id")}),
+            "entity_ids": [item["entity_id"] for item in members],
+            "device_count": len({item["device_id"] for item in members if item.get("device_id")}),
+            "entity_count": len(members),
         })
     return sorted(result, key=lambda item: str(item.get("name", "")).casefold())

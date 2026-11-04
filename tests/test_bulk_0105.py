@@ -3,8 +3,8 @@
 import pytest
 
 from custom_components.homekit_manager.bulk import exclusion_reason, preview_bulk
-from custom_components.homekit_manager.filtering import evaluate_filter
 from custom_components.homekit_manager.change_planner import plan_changes
+from custom_components.homekit_manager.filtering import evaluate_filter
 
 
 def entity(entity_id, **fields):
@@ -52,6 +52,13 @@ def test_bulk_scope_is_bounded_even_for_a_whole_area():
     inventory = [entity(f"light.large_{index}") for index in range(10001)]
     with pytest.raises(ValueError, match="Vorschaugrenze"):
         preview_bulk(inventory, "area", "area:hall")
+
+
+def test_floor_scope_uses_server_owned_floor_membership():
+    inventory = [entity("light.first", floor_id="floor1"), entity("light.second", floor_id="floor2")]
+    preview = preview_bulk(inventory, "floor", "floor:floor1")
+    assert preview["total"] == 1
+    assert preview["eligible_entity_ids"] == ["light.first"]
 
 
 def test_filter_reason_has_one_value_in_both_wire_fields():

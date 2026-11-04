@@ -25,7 +25,7 @@ class HomeKitManagerPanel extends HTMLElement {
       selected: new Set(), draft: new Map(), fingerprint: null, serverPreview: null, selectionModel: null, selectionWorking: null, selectionPlan: null, error: null, loading: false, statusMessage: "Keine Änderungen", expandedBridges: new Set(), activationMessage: "", actionMenuOpen: false, diagnosticFilter: "", filtersOpen: false,
       reconciliationQuery: "", reconciliationFilter: "", display: { disabled: false, hidden: false, technical: false, unsupported: false }, unassignedPage: 0, areaEntityPages: new Map() });
     this.operationPlan = null; this.selectionOperationPlan = null; this.operationStatus = null; this.positiveListMigration = false;
-    Object.assign(this, { action: "", statusTone: "neutral", expandedAreas: new Set(), areaPages: new Map(), draftFingerprint: null, conflict: false, dialog: null, lastFetchAt: null, _subscription: null, _pendingRevision: 0, _seenRevision: 0, _refreshQueued: false, _passiveRenderPending: false, _passiveRenderControl: null });
+    Object.assign(this, { action: "", statusTone: "neutral", expandedAreas: new Set(), areaPages: new Map(), draftFingerprint: null, conflict: false, dialog: null, _dialogReturnLabel: null, _lastTriggerLabel: null, lastFetchAt: null, _subscription: null, _pendingRevision: 0, _seenRevision: 0, _refreshQueued: false, _passiveRenderPending: false, _passiveRenderControl: null });
     this.filters.device = "";
     this.render();
   }
@@ -166,6 +166,7 @@ class HomeKitManagerPanel extends HTMLElement {
   }
   status(entity) { return this.plannedStatus(entity) !== this.currentStatus(entity) ? "planned" : this.currentStatus(entity); }
   statusLabel(value) { return ({ included: "Eingeschlossen", include: "Eingeschlossen", excluded: "Ausgeschlossen", exclude: "Ausgeschlossen", unknown: "Unbekannt", no_state: "Ohne aktuellen State", disabled: "Deaktiviert", planned: "Vorgemerkt", mixed: "Gemischt", empty: "Keine relevanten Entitäten", unknown_only: "Nicht verifiziert", supported: "Unterstützt", conditionally_supported: "Eingeschränkt unterstützt", unsupported: "Nicht unterstützt", available: "Verfügbar", unavailable: "Nicht verfügbar", yes: "Ja", no: "Nein" })[value] || value; }
+  sourceLabel(value) { return ({ user: "Home Assistant UI / Config Entry", import: "Home Assistant YAML", yaml: "Home Assistant YAML", unknown: "Quelle nicht verifiziert" })[value] || "Quelle nicht verifiziert"; }
   runtimeLabel(value) { return ({ published_verified: "Veröffentlicht · verifiziert", not_published_verified: "Nicht veröffentlicht · verifiziert", mapping_ambiguous: "Zuordnung mehrdeutig", unknown: "Unbekannt", unsupported: "Nicht unterstützt" })[value] || "Unbekannt"; }
   managerDecision(entity) {
     const value = this.yamlStatus.document?.bridges?.[this.bridge?.entry_id]?.entities?.[entity.entity_id];
@@ -406,9 +407,25 @@ class HomeKitManagerPanel extends HTMLElement {
     finally { this.action = ""; this.render(); }
   }
   requestConfirmation(title, message, label, details = null) {
+    const active = this.shadowRoot.activeElement;
+    this._dialogReturnLabel = active?.getAttribute?.("aria-label") || this._lastTriggerLabel || null;
+    this._lastTriggerLabel = null;
     return new Promise(resolve => { this._dialogResolve = resolve; this.dialog = { title, message, label, details }; this.render(); });
   }
-  finishConfirmation(confirmed) { const resolve = this._dialogResolve; this._dialogResolve = null; this.dialog = null; this.render(); resolve?.(confirmed); }
+  finishConfirmation(confirmed) {
+    const resolve = this._dialogResolve;
+    const returnLabel = this._dialogReturnLabel;
+    this.shadowRoot.querySelector("dialog")?.close?.();
+    this._dialogResolve = null; this._dialogReturnLabel = null; this.dialog = null; this.render();
+    const restoreFocus = () => {
+      const candidates = [...this.shadowRoot.querySelectorAll("button, input, select, [tabindex]")];
+      const target = returnLabel ? candidates.find(node => node.getAttribute("aria-label") === returnLabel) : null;
+      (target || this.shadowRoot.querySelector("[data-nav][aria-selected=true]") || this.shadowRoot.querySelector("main"))?.focus?.({ preventScroll: true });
+    };
+    restoreFocus();
+    setTimeout(restoreFocus, 100);
+    resolve?.(confirmed);
+  }
   formatTime(value) { if (!value) return "Noch nicht bestätigt"; const date = new Date(value); return Number.isNaN(date.getTime()) ? "Unbekannt" : date.toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }); }
   counts(members) { return { entities: members.length, devices: new Set(members.map(item => item.device_id).filter(Boolean)).size, included: members.filter(item => this.currentStatus(item) === "included").length, compatible: members.filter(item => item.compatibility?.status === "supported").length, eligible: members.filter(item => !this.bulkExclusionReason(item)).length, unavailable: members.filter(item => !item.available).length, unassigned: members.filter(item => !item.device_id).length }; }
   visibleByDefault(entity) {
@@ -547,7 +564,7 @@ class HomeKitManagerPanel extends HTMLElement {
     return `${this.pageHeading("Geräte", "Geräte verwalten", "")}<div class="toolbar"><div class="segmented">${[["areas", "Bereiche"], ["devices", "Geräte"], ["entities", "Entitäten"]].map(([id, label]) => `<button data-group="${id}" aria-pressed="${this.groupMode === id}">${label}</button>`).join("")}</div><button data-selection aria-pressed="${this.selectionMode}">${this.selectionMode ? "Auswahl beenden" : "Mehrfachauswahl"}</button></div><label class="search"><span class="sr-only">Namen, Entity-IDs, Geräte oder Bereiche suchen</span><input type="search" data-query aria-label="Entitäten suchen" placeholder="Name, Gerät oder Bereich" value="${this.escape(this.query)}"></label><details class="filters surface"${this.filtersOpen ? " open" : ""}><summary>Filter${activeFilters ? ` · ${activeFilters} aktiv` : ""}${activeDisplay ? ` · Anzeige ${activeDisplay} aktiv` : ""}</summary><div class="filter-grid">${this.filterOptions("domain", values("domain"), "Domain")}${this.filterOptions("area", values("area_name").map(value => value || "Ohne Bereich"), "Bereich")}${this.filterOptions("device", values("device_name").map(value => value || "Ohne Gerät"), "Gerät")}${this.filterOptions("status", ["included", "excluded", "unknown", "planned"], "HomeKit-Konfiguration")}${this.filterOptions("compatibility", ["supported", "conditionally_supported", "unsupported", "unknown"], "Kompatibilität")}${this.filterOptions("availability", ["available", "unavailable", "unknown", "no_state", "disabled"], "Verfügbarkeit")}${this.filterOptions("integration", values("integration_domain"), "Integration")}</div><button data-reset-filters>Filter zurücksetzen</button>${this.displayOptionsTemplate()}<details class="technical inventory-summary" data-detail-key="inventory-summary"><summary>Weitere Kennzahlen</summary><p>Status: ${["available", "unavailable", "unknown", "no_state", "disabled"].map(status => `${this.statusLabel(status)} ${filtered.filter(entity => (entity.availability_status || (entity.available ? "available" : "unavailable")) === status).length}`).join(" · ")}</p><p>${this.quantity(filtered.filter(entity => !this.bulkExclusionReason(entity)).length, "für Sammelaktionen geeignet", "für Sammelaktionen geeignet")} · ${this.quantity(filtered.filter(entity => this.currentStatus(entity) === "included").length, "durch Filter eingeschlossen", "durch Filter eingeschlossen")}</p></details></details><p class="muted result-count">${filtered.length} von ${this.entities.length} Entitäten sichtbar</p>${this.selectionMode ? `<section class="selection-bar"><strong>${this.selected.size} ausgewählt</strong><button data-include>Einschließen</button><button data-exclude>Ausschließen</button><button data-clear>Zurücksetzen</button></section>` : ""}${filtered.length ? body : `<div class="empty"><strong>Keine Treffer</strong><p>Suche oder Filter anpassen.</p></div>`}`;
   }
   groupPager(total) { const pages = Math.max(1, Math.ceil(total / PAGE_SIZE)); return `<div class="pager"><button data-page="${this.page - 1}"${this.page === 0 ? " disabled" : ""}>Zurück</button><span>${Math.min(this.page + 1, pages)} / ${pages}</span><button data-page="${this.page + 1}"${(this.page + 1) * PAGE_SIZE >= total ? " disabled" : ""}>Weiter</button></div>`; }
-  pageHeading(eyebrow, title, text) { return `<section class="page-head"><p class="eyebrow">${this.escape(eyebrow)}</p><h2>${this.escape(title)}</h2>${text ? `<p>${this.escape(text)}</p>` : ""}</section>${eyebrow === "Änderungen" ? this.alignmentNotice() : ""}`; }
+  pageHeading(eyebrow, title, text) { return `<section class="page-head"><p class="eyebrow">${this.escape(eyebrow)}</p><h2>${this.escape(title)}</h2>${text ? `<p>${this.escape(text)}</p>` : ""}</section>${eyebrow === "HomeKit" ? this.bridgeSelector() : ""}${eyebrow === "Änderungen" ? this.alignmentNotice() : ""}`; }
   stateTile(label, value, tone = "neutral") { return `<div class="status-tile"><small>${this.escape(label)}</small><strong class="tone-${tone}">${this.escape(value)}</strong></div>`; }
   bridgeCard(bridge) {
     const open = this.expandedBridges.has(bridge.entry_id), selected = bridge.entry_id === this.bridge?.entry_id;
@@ -619,6 +636,10 @@ class HomeKitManagerPanel extends HTMLElement {
       await this.refresh(false);
       this.statusMessage = "Testmodus widerrufen";
     });
+  }
+  bridgeSelector() {
+    if (this.bridges.length < 2) return "";
+    return `<label class="bridge-selector"><span>Aktive Bridge</span><select data-bridge-select aria-label="Aktive HomeKit-Bridge">${this.bridges.map(item => `<option value="${this.escape(item.entry_id)}"${item.entry_id === this.bridge?.entry_id ? " selected" : ""}>${this.escape(item.title || item.entry_id)} · ${this.escape(this.sourceLabel(item.source))}</option>`).join("")}</select><small>Alle Entwürfe und Aktionen gelten ausschließlich für diese Bridge.</small></label>`;
   }
   homeTemplate() {
     const bridge = this.bridge, stale = this.overview.snapshot_stale || !this.lastFetchAt;
@@ -802,19 +823,42 @@ class HomeKitManagerPanel extends HTMLElement {
     const openDetails = new Set([...this.shadowRoot.querySelectorAll("details[data-detail-key][open]")].map(node => node.dataset.detailKey));
     const content = this.view === "home" ? this.homeTemplate() : this.view === "devices" ? this.devicesTemplate() : this.view === "changes" ? this.changesTemplate() : this.settingsTemplate();
     this.shadowRoot.innerHTML = `<style>${this.styles()}</style><main aria-busy="${Boolean(this.loading || this.action)}"><header class="app-header"><div><h1>HomeKit Manager</h1><p>Konfiguration sicher verwalten</p></div><button class="icon-button" data-refresh aria-label="Aktualisieren"${this.loading ? " disabled" : ""}>${this.loading ? "…" : "↻"}</button></header><nav class="main-nav" role="tablist" aria-label="Hauptbereiche">${[["home", "HomeKit"], ["devices", "Geräte"], ["changes", "Änderungen"], ["settings", "Einstellungen"]].map(([id, label]) => `<button id="nav-${id}" role="tab" data-nav="${id}" aria-selected="${this.view === id}" aria-controls="main-view" tabindex="${this.view === id ? 0 : -1}">${label}</button>`).join("")}</nav><div class="feedback" aria-live="polite">${this.action ? `<p class="notice" role="status">${this.escape(this.action)} …</p>` : `<p class="status-line tone-${this.statusTone || "neutral"}" role="status">${this.escape(this.statusMessage)}</p>`}${this.error ? `<aside class="notice error" role="alert"><strong>Aktion nicht bestätigt</strong><p>${this.escape(this.error)}</p><button data-refresh>Erneut lesend prüfen</button></aside>` : ""}${this.overview.snapshot_stale ? `<aside class="notice warning" role="alert">Die angezeigten Daten stammen vom letzten vollständigen Stand. Der aktuelle Abruf ist fehlgeschlagen.</aside>` : ""}</div><section id="main-view" role="tabpanel" aria-labelledby="nav-${this.view}">${content}</section>${this.dialog ? `<dialog aria-labelledby="confirm-title"><h2 id="confirm-title">${this.escape(this.dialog.title)}</h2><p>${this.escape(this.dialog.message)}</p>${this.dialog.details ? `<dl class="dialog-counts">${this.dialog.details.rows.map(([label, value]) => "<div><dt>"+this.escape(label)+"</dt><dd>"+this.escape(value)+"</dd></div>").join("")}</dl>${this.dialog.details.skipped.length ? `<details><summary>Warum werden Entitäten übersprungen?</summary><ul>${this.dialog.details.skipped.map(item => "<li>"+this.escape(item)+"</li>").join("")}</ul></details>` : ""}` : ""}<div class="dialog-actions"><button data-confirm-cancel>Abbrechen</button><button class="primary" data-confirm-accept>${this.escape(this.dialog.label)}</button></div></dialog>` : ""}</main>`;
+    const main = this.shadowRoot.querySelector("main");
+    if (main && !main.querySelector(".skip-link")) {
+      const skip = document.createElement("a");
+      skip.className = "skip-link";
+      skip.href = "#main-view";
+      skip.textContent = "Zum Inhalt springen";
+      main.prepend(skip);
+    }
     this.bind();
     this.shadowRoot.querySelectorAll("details[data-detail-key]").forEach(node => { if (openDetails.has(node.dataset.detailKey)) node.open = true; });
     if (queryFocused) { const query = this.shadowRoot.querySelector(queryControl); query?.focus(); if (start != null) query?.setSelectionRange(start, end); }
     if (selectFocused) this.shadowRoot.querySelector(selectFocused)?.focus();
     if (this.action) this.shadowRoot.querySelectorAll("button:not([data-nav]), input, select").forEach(node => { node.disabled = true; });
-    const dialog = this.shadowRoot.querySelector("dialog"); if (dialog && !dialog.open) dialog.showModal();
+    const dialog = this.shadowRoot.querySelector("dialog");
+    if (dialog) {
+      dialog.setAttribute("role", "dialog");
+      dialog.setAttribute("aria-modal", "true");
+      dialog.setAttribute("aria-describedby", "confirm-description");
+      dialog.querySelector("p")?.setAttribute("id", "confirm-description");
+      if (!dialog.open) { dialog.showModal(); this.shadowRoot.querySelector("[data-confirm-cancel]")?.focus(); }
+    }
   }
   bind() {
     const all = (selector, event, callback) => this.shadowRoot.querySelectorAll(selector).forEach(node => node.addEventListener(event, callback));
     const one = (selector, event, callback) => this.shadowRoot.querySelector(selector)?.addEventListener(event, callback);
+    if (!this._focusTracking && typeof this.shadowRoot.addEventListener === "function") {
+      this._focusTracking = true;
+      this.shadowRoot.addEventListener("click", event => {
+        const trigger = event.composedPath().find(node => node?.getAttribute?.("aria-label"));
+        if (trigger) this._lastTriggerLabel = trigger.getAttribute("aria-label");
+      }, true);
+    }
     all("[data-nav]", "click", event => this.selectView(event.currentTarget.dataset.nav));
     all(".main-nav [data-nav]", "keydown", event => { const ids = ["home", "devices", "changes", "settings"], index = ids.indexOf(this.view); const next = event.key === "ArrowRight" ? (index + 1) % 4 : event.key === "ArrowLeft" ? (index + 3) % 4 : event.key === "Home" ? 0 : event.key === "End" ? 3 : null; if (next != null) { event.preventDefault(); this.selectView(ids[next]); this.shadowRoot.querySelector(`#nav-${ids[next]}`)?.focus(); } });
     all("[data-refresh]", "click", () => this.refresh());
+    one("[data-bridge-select]", "change", event => this.selectBridge(event.target.value));
     all("[data-settings-view]", "click", event => this.setSettingsView(event.currentTarget.dataset.settingsView));
     one("[data-performance]", "click", () => this.loadSettingsData());
     one("[data-query]", "input", event => { this.query = event.target.value; this.page = 0; this.render(); });
@@ -862,7 +906,8 @@ class HomeKitManagerPanel extends HTMLElement {
     one("[data-save]", "click", () => this.saveDraft()); one("[data-preview]", "click", () => this.previewServer()); one("[data-export]", "click", () => this.exportDraft()); one("[data-load]", "click", () => this.loadSaved()); one("[data-discard]", "click", async () => { if (await this.requestConfirmation("Entwurf verwerfen", "Die ungespeicherten Vormerkungen werden verworfen. Ein gespeicherter Entwurf bleibt erhalten.", "Verwerfen")) this.discard(); });
     one("[data-confirm-accept]", "click", () => this.finishConfirmation(true)); one("[data-confirm-cancel]", "click", () => this.finishConfirmation(false)); one("dialog", "cancel", event => { event.preventDefault(); this.finishConfirmation(false); });
   }
-  styles() { return `
+  uxStyles() { return ".skip-link{position:absolute;left:12px;top:-48px;z-index:10;padding:10px 14px;border-radius:8px;background:var(--accent);color:var(--text-primary-color,#fff);font-weight:700;text-decoration:none}.skip-link:focus{top:12px}.bridge-selector{display:grid;gap:6px;margin:0 0 16px;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--secondary-background-color,#eef0f3)}.bridge-selector>span{font-size:.8rem;font-weight:700}.bridge-selector small{font-size:.75rem}.bridge-selector select{background:var(--surface)}"; }
+  styles() { return `${this.uxStyles()}
 :host{--space:4px;--radius:16px;--fg:var(--primary-text-color,#202124);--muted:var(--secondary-text-color,#62666c);--surface:var(--card-background-color,#fff);--bg:var(--primary-background-color,#f5f6f8);--line:var(--divider-color,#dfe2e7);--accent:var(--primary-color,#0277bd);display:block;color:var(--fg);background:var(--bg);min-height:100vh;font-family:var(--paper-font-body1_-_font-family,system-ui,sans-serif);line-height:1.5}
 .settings-nav{grid-template-columns:repeat(8,minmax(0,1fr))}.selection-decision-row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:14px 0;border-bottom:1px solid var(--line)}.selection-decision-row:last-child{border-bottom:0}.selection-choice{width:min(250px,42%);flex-shrink:0}.selection-choice select{font-size:.8rem}.selection-decision-row code{display:block}.reconciliation-toolbar{display:grid;grid-template-columns:minmax(0,2fr) minmax(160px,1fr) auto auto;gap:8px;align-items:center;margin:16px 0}.reconciliation-row{padding:16px 0;border-bottom:1px solid var(--line)}.reconciliation-row .section-heading{align-items:flex-start;margin-bottom:8px}.reconciliation-row .section-heading strong,.reconciliation-row .section-heading code{display:block;overflow-wrap:anywhere}.reconciliation-row .definition-list{margin-top:0}
 @media(max-width:700px){.selection-decision-row{display:grid;gap:10px}.selection-choice{width:100%}.reconciliation-toolbar{grid-template-columns:1fr}.reconciliation-toolbar button{width:100%}}

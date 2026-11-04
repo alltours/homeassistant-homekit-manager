@@ -627,3 +627,19 @@ test('five thousand device references remain paged and searchable', async ({ pag
   await expect(panel.locator('.device-row')).toHaveCount(1);
   await expect(panel.locator('.device-row')).toContainText('Device 4999');
 });
+
+test('confirmation dialogs announce themselves, take focus and restore the triggering control', async ({ page }) => {
+  await page.goto('/tests/frontend/browser_fixture.html');
+  const panel = page.locator('homekit-manager-panel');
+  await expect(panel.getByRole('link', { name: 'Zum Inhalt springen' })).toHaveCount(1);
+  await panel.getByRole('tab', { name: 'Geräte', exact: true }).click();
+  const trigger = panel.locator('.area-card').filter({ has: page.locator('[data-area="Kitchen"]') }).locator('[data-scope-value="excluded"]');
+  await trigger.focus();
+  await trigger.click();
+  const dialog = panel.getByRole('dialog');
+  await expect(dialog).toHaveAttribute('aria-modal', 'true');
+  await expect(dialog).toHaveAttribute('aria-describedby', 'confirm-description');
+  await expect(dialog.getByRole('button', { name: 'Abbrechen' })).toBeFocused();
+  await dialog.getByRole('button', { name: 'Abbrechen' }).click();
+  await expect(trigger).toBeFocused();
+});

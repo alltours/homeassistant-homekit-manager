@@ -3,6 +3,14 @@ import { test, expect } from '@playwright/test';
 test('multi-bridge selection keeps the selected native source explicit', async ({ page }) => {
   await page.goto('/tests/frontend/browser_fixture.html?multi-bridge');
   const panel = page.locator('homekit-manager-panel');
+  const bridgeSelect = panel.locator('[data-bridge-select]');
+  await expect(bridgeSelect).toBeVisible();
+  await expect(bridgeSelect).toHaveValue('fixture-bridge');
+  await bridgeSelect.selectOption('yaml-fixture-bridge');
+  await expect(bridgeSelect).toHaveValue('yaml-fixture-bridge');
+  await expect(panel.locator('.bridge-selector')).toContainText('Alle Entwürfe und Aktionen gelten ausschließlich für diese Bridge.');
+  await bridgeSelect.selectOption('fixture-bridge');
+  await expect(bridgeSelect).toHaveValue('fixture-bridge');
   await panel.locator('.home-details > summary').click();
   await expect(panel.locator('.bridge-card')).toHaveCount(3);
 

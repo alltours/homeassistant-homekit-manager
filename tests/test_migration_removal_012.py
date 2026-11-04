@@ -1,4 +1,4 @@
-"""Regression coverage for the 0.12.0 source-migration removal boundary."""
+"""Regression coverage for the source-migration removal boundary."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -49,5 +49,5 @@ def test_yaml_bridge_detection_remains_available_without_source_migration():
     assert result["direct_yaml"] is True
 
 
-def test_release_version_is_0120():
-    assert INTEGRATION_VERSION == "0.12.0"
+def test_release_version_is_0130():
+    assert INTEGRATION_VERSION == "0.13.0"

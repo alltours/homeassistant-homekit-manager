@@ -532,6 +532,15 @@ test('isolated Core beta native Bridge exposes the explicit test-mode control', 
   await expect(panel.locator('[data-test-mode-disable]')).toHaveCount(0);
 });
 
+test('stable Core 2026.11.0 exposes the bounded bridge write authorization', async ({page}) => {
+  await page.goto('/tests/frontend/browser_fixture.html?core-2026-11');
+  const panel = page.locator('homekit-manager-panel');
+  await panel.getByRole('tab', {name:'Einstellungen', exact:true}).click();
+  await panel.getByRole('button', {name:'Konfiguration', exact:true}).click();
+  await expect(panel.locator('[data-test-mode-enable]')).toBeEnabled();
+  await expect(panel.locator('[data-test-mode-disable]')).toHaveCount(0);
+});
+
 test('unassigned entities are direct area members and display options only affect the view', async ({ page }) => {
   await page.goto('/tests/frontend/browser_fixture.html');
   const panel = page.locator('homekit-manager-panel');

@@ -67,6 +67,7 @@ from .yaml_store import (
     YamlValidationError,
     YamlVersionConflict,
     YamlWriteError,
+    document_version,
     empty_document,
 )
 
@@ -515,14 +516,19 @@ class HomeKitManagerCoordinator:
         """Return a read-only baseline comparison; never persist or apply it."""
         snapshot = self._selection_snapshot()
         entry_id = snapshot.get("bridge_entry_id")
+        bridge_document = (self.yaml_snapshot.document.get("bridges", {}).get(entry_id, {})
+                           if entry_id else {})
+        manager_entities = bridge_document.get("entities", {}) if isinstance(bridge_document, dict) else {}
+        manager_ids = set(manager_entities) if isinstance(manager_entities, dict) else set()
         raw = self.selection_drafts.get(entry_id) if entry_id else None
-        stored_ids = sorted(
+        draft_ids = sorted(
             set((raw or {}).get("decisions", {}))
             | set((raw or {}).get("tombstones", {}))
             | set((raw or {}).get("stale_includes", {}))
         )
         native_ids = sorted(snapshot.get("native_filter", {}).get("include_entities", []) or [])
         current_ids = set(snapshot.get("current_entity_ids", []))
+        stale_manager = sorted(snapshot.get("stale_manager_decisions", []), key=lambda item: item.get("entity_id", ""))
         return {
             "bridge_entry_id": entry_id,
             "bridge_title": snapshot.get("bridge_title"),
@@ -530,18 +536,116 @@ class HomeKitManagerCoordinator:
             "snapshot_fingerprint": snapshot.get("snapshot_fingerprint"),
             "native_include_entities": native_ids,
             "current_entity_ids": sorted(current_ids),
-            "manager_decision_entities": stored_ids,
-            "native_without_manager_metadata": sorted(set(native_ids) - set(stored_ids)),
-            "stale_manager_entities": sorted(snapshot.get("stale_manager_decisions", []), key=lambda item: item.get("entity_id", "")),
+            "manager_decision_entities": sorted(manager_ids),
+            "selection_draft_entities": draft_ids,
+            "native_without_manager_metadata": sorted(set(native_ids) - manager_ids),
+            "stale_manager_entities": stale_manager,
             "stale_native_includes": list(snapshot.get("stale_native_includes", [])),
+            "manager_policy": bridge_document.get("policy", "explicit_overrides") if isinstance(bridge_document, dict) else "explicit_overrides",
+            "manager_file_version": self.yaml_snapshot.file_version or "",
+            "manager_document_fingerprint": document_version(self.yaml_snapshot.document),
             "proposed_metadata_changes": {
-                "would_add_review_metadata": sorted(set(native_ids) - set(stored_ids)),
-                "would_archive_stale_metadata": sorted(item.get("entity_id") for item in snapshot.get("stale_manager_decisions", []) if item.get("entity_id")),
+                "would_add_include_metadata": sorted(set(native_ids) - manager_ids),
+                "would_remove_stale_metadata": sorted(item.get("entity_id") for item in stale_manager if item.get("entity_id")),
             },
             "native_mutation_performed": False,
             "manager_metadata_mutation_performed": False,
             "message": "Lesender Abgleich vorbereitet. Keine Manager-Metadaten und keine native HomeKit-Konfiguration wurden geändert.",
         }
+
+    async def async_apply_selection_alignment(
+        self,
+        entry_id: str,
+        expected_snapshot_fingerprint: str,
+        expected_snapshot_revision: int,
+        expected_manager_document_fingerprint: str,
+        expected_manager_file_version: str,
+        adopt_native_entities: list[str],
+        remove_stale_entities: list[str],
+        confirmed: bool,
+    ) -> dict[str, Any]:
+        """Persist explicitly confirmed manager metadata without touching HomeKit."""
+        if not confirmed:
+            raise SelectionDraftError("Der Metadatenabgleich muss ausdrücklich bestätigt werden")
+        if not isinstance(entry_id, str) or not entry_id:
+            raise ValueError("Ungültige Bridge-ID")
+        if not isinstance(adopt_native_entities, list) or not isinstance(remove_stale_entities, list):
+            raise ValueError("Die Metadatenlisten sind ungültig")
+        if any(not isinstance(item, str) or "." not in item for item in adopt_native_entities + remove_stale_entities):
+            raise ValueError("Die Metadatenlisten enthalten eine ungültige Entity-ID")
+
+        changed_adopt: list[str] = []
+        changed_remove: list[str] = []
+        async with self._refresh_lock:
+            preview = self.selection_alignment_preview()
+            if preview.get("bridge_entry_id") != entry_id:
+                raise SelectionDraftConflict("Die ausgewählte Bridge wurde geändert. Bitte erneut laden.")
+            if (preview.get("snapshot_fingerprint") != expected_snapshot_fingerprint
+                    or preview.get("snapshot_revision") != expected_snapshot_revision):
+                raise SelectionDraftConflict("Der Live-Snapshot wurde seit der Vorschau verändert")
+            if preview.get("manager_document_fingerprint") != expected_manager_document_fingerprint:
+                raise YamlVersionConflict("Die Manager-Metadaten wurden seit der Vorschau verändert")
+            if preview.get("manager_file_version", "") != (expected_manager_file_version or ""):
+                raise YamlVersionConflict("Die Manager-Datei wurde seit der Vorschau verändert")
+            if self.configuration_sources.get("manager_include"):
+                raise YamlWriteError("Die Manager-Metadaten sind als native HomeKit-Quelle eingebunden und werden nicht überschrieben.")
+
+            native_ids = set(preview.get("native_include_entities", []))
+            manager_ids = set(preview.get("manager_decision_entities", []))
+            stale_ids = {item.get("entity_id") for item in preview.get("stale_manager_entities", []) if item.get("entity_id")}
+            requested_adopt = set(adopt_native_entities)
+            requested_remove = set(remove_stale_entities)
+            if requested_adopt - (native_ids - manager_ids):
+                raise SelectionDraftError("Nur aktuelle native Includes ohne Manager-Metadaten dürfen übernommen werden")
+            if requested_remove - stale_ids:
+                raise SelectionDraftError("Nur als veraltet nachgewiesene Manager-Entscheidungen dürfen entfernt werden")
+            if requested_adopt and preview.get("manager_policy") != "explicit_overrides":
+                raise SelectionDraftError("Native Auswahl kann nur in einer expliziten Manager-Override-Strategie übernommen werden")
+            if not requested_adopt and not requested_remove:
+                return preview
+
+            current = await self.hass.async_add_executor_job(self.yaml_store.load)
+            if (current.file_version or "") != (expected_manager_file_version or ""):
+                raise YamlVersionConflict("Die Manager-Datei wurde seit der Vorschau verändert")
+            if document_version(current.document) != expected_manager_document_fingerprint:
+                raise YamlVersionConflict("Die Manager-Metadaten wurden seit der Vorschau verändert")
+            current_bridges = dict(current.document.get("bridges", {}))
+            bridge_document = dict(current_bridges.get(entry_id, {}))
+            bridge_document.setdefault("policy", "explicit_overrides")
+            entities = dict(bridge_document.get("entities", {}))
+            for entity_id in sorted(requested_adopt):
+                entities[entity_id] = "include"
+                changed_adopt.append(entity_id)
+            for entity_id in sorted(requested_remove):
+                entities.pop(entity_id, None)
+                changed_remove.append(entity_id)
+            bridge_document["entities"] = entities
+            current_bridges[entry_id] = bridge_document
+            updated_document = {"schema_version": 1, "bridges": current_bridges}
+            validated = self.validate_draft(updated_document)
+            before_fingerprint = build_fingerprint(self.bridges, self.inventory, current.document)
+            before_history = (self.history_entries + [make_history_entry(
+                current.document, reason="alignment_before_change", fingerprint=before_fingerprint, bridge_id=entry_id,
+            )])[-50:]
+            await self.history_store.async_save(before_history)
+            saved = await self.hass.async_add_executor_job(self.yaml_store.save, validated["document"], current.file_version)
+            new_fingerprint = build_fingerprint(self.bridges, self.inventory, saved.document)
+            after_history = (before_history + [make_history_entry(
+                saved.document, reason="alignment_metadata_confirmed", fingerprint=new_fingerprint, bridge_id=entry_id,
+            )])[-50:]
+            await self.history_store.async_save(after_history)
+            self.history_entries = after_history
+            self.yaml_snapshot, self.fingerprint = saved, new_fingerprint
+
+        await self.async_refresh()
+        result = self.selection_alignment_preview()
+        result.update({
+            "native_mutation_performed": False,
+            "manager_metadata_mutation_performed": True,
+            "changed_entities": {"adopted_native": changed_adopt, "removed_stale": changed_remove},
+            "message": "Bestätigter Metadatenabgleich gespeichert. Native Filter, HAP-Persistenz und Pairings wurden nicht verändert.",
+        })
+        return result
 
     async def async_discard_selection_draft(self, entry_id: str, expected_draft_fingerprint: str | None = None) -> dict[str, Any]:
         """Discard one selected bridge's manager draft, never native HomeKit state."""

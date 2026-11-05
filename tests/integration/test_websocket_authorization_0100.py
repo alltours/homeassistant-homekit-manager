@@ -43,6 +43,11 @@ async def test_every_manager_websocket_route_rejects_authenticated_non_admin(
         "homekit_manager/test_write_mode_enable": {
             "entry_id": "none", "expected_fingerprint": "none", "confirmed_entry_id": "none",
         },
+        "homekit_manager/selection_alignment_apply": {
+            "entry_id": "none", "expected_snapshot_fingerprint": "none", "expected_snapshot_revision": 0,
+            "expected_manager_document_fingerprint": "none", "expected_manager_file_version": "",
+            "adopt_native_entities": [], "remove_stale_entities": [], "confirmed": True,
+        },
     }
     args["homekit_manager/bulk_preview"] = {"entry_id": "none", "fingerprint": "none", "kind": "device", "key": "device:none"}
     args["homekit_manager/save_selection_draft"] = {"draft": {"schema_version": 1}}

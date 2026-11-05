@@ -144,7 +144,7 @@ class HomeKitOperationService:
                 await test_authority.verify(self.hass, entry_id, source)
             except TestModeBlocked as err:
                 return {"enabled": False, "reason": str(err), "automatic_retry": False}
-            return {"enabled": True, "reason": "Befristeter nativer Testmodus aktiv",
+            return {"enabled": True, "reason": "Befristete native Schreibfreigabe aktiv",
                     "authority": "test_mode", "grant_id": test_authority.grant_id,
                     "expires_at": test_authority.expires_at.isoformat(),
                     "automatic_retry": False}

@@ -40,6 +40,7 @@ SELECTION_DRAFT_COMMAND = f"{DOMAIN}/selection_draft"
 SAVE_SELECTION_DRAFT_COMMAND = f"{DOMAIN}/save_selection_draft"
 DISCARD_SELECTION_DRAFT_COMMAND = f"{DOMAIN}/discard_selection_draft"
 SELECTION_ALIGNMENT_COMMAND = f"{DOMAIN}/selection_alignment"
+SELECTION_ALIGNMENT_APPLY_COMMAND = f"{DOMAIN}/selection_alignment_apply"
 SELECTION_PLAN_COMMAND = f"{DOMAIN}/selection_plan"
 SELECTION_OPERATION_PLAN_COMMAND = f"{DOMAIN}/selection_operation_plan"
 SCHEMA_VERSION = 1

@@ -11,7 +11,7 @@ const WS = {
   testModeEnable: "homekit_manager/test_write_mode_enable", testModeDisable: "homekit_manager/test_write_mode_disable",
   devicePreview: "homekit_manager/device_preview", performance: "homekit_manager/performance",
   managementStatus: "homekit_manager/management_status",
-  selectionDraft: "homekit_manager/selection_draft", saveSelectionDraft: "homekit_manager/save_selection_draft", discardSelectionDraft: "homekit_manager/discard_selection_draft", selectionAlignment: "homekit_manager/selection_alignment", selectionPlan: "homekit_manager/selection_plan", selectionOperationPlan: "homekit_manager/selection_operation_plan",
+  selectionDraft: "homekit_manager/selection_draft", saveSelectionDraft: "homekit_manager/save_selection_draft", discardSelectionDraft: "homekit_manager/discard_selection_draft", selectionAlignment: "homekit_manager/selection_alignment", selectionAlignmentApply: "homekit_manager/selection_alignment_apply", selectionPlan: "homekit_manager/selection_plan", selectionOperationPlan: "homekit_manager/selection_operation_plan",
 };
 
 class HomeKitManagerPanel extends HTMLElement {
@@ -613,7 +613,7 @@ class HomeKitManagerPanel extends HTMLElement {
   positiveListCard() {
     if (!this.bridge) return "";
     if (this.activePositiveList()) return `<section class="notice"><strong>Positivliste aktiv</strong><p>Neue Entitäten werden durch den bestehenden Filter nicht automatisch eingeschlossen.</p></section>`;
-    const eligible = this.bridge.source === "user" && this.bridge.mode === "bridge" && ["2026.10.4", "2026.11.0b0"].includes(this.overview.core_version) && !this.overview.snapshot_stale && this.fingerprint;
+    const eligible = this.bridge.source === "user" && this.bridge.mode === "bridge" && ["2026.10.4", "2026.11.0b0", "2026.11.0"].includes(this.overview.core_version) && !this.overview.snapshot_stale && this.fingerprint;
     return `<section class="notice warning"><strong>Positivliste vorbereiten</strong><p>Die aktuelle Bridge verwendet breitere Filterregeln. Eine Umstellung findet nur nach Prüfung des Live-HAP-Umfangs und gesondertem Apply statt. Die Migration ist für geladene native Bridges auf den verifizierten Core-Versionen verfügbar.</p><button data-positive-migration${eligible ? "" : " disabled"}>Positivliste als Entwurf vorbereiten</button></section>`;
   }
   alignmentNotice() {
@@ -636,28 +636,28 @@ class HomeKitManagerPanel extends HTMLElement {
   testWriteModeCard() {
     const mode = this.overview.test_write_mode || {};
     const bridge = this.bridge;
-    const supported = Boolean(bridge?.source === "user" && bridge?.mode === "bridge" && bridge?.state === "loaded" && ["2026.10.4", "2026.11.0b0"].includes(this.overview.core_version) && !this.overview.snapshot_stale);
+    const supported = Boolean(bridge?.source === "user" && bridge?.mode === "bridge" && bridge?.state === "loaded" && ["2026.10.4", "2026.11.0b0", "2026.11.0"].includes(this.overview.core_version) && !this.overview.snapshot_stale);
     const activeHere = mode.enabled && mode.entry_id === bridge?.entry_id;
     const detail = mode.enabled ? `Aktiv für Entry ${mode.entry_id} bis ${this.formatTime(mode.expires_at)}. Nach Core-Neustart deaktiviert.` : "Deaktiviert. Nach bewusster Admin-Aktivierung 60 Minuten nur für eine native Bridge und Filteränderungen gültig.";
-    return `<section class="notice${mode.enabled ? " warning" : ""}" aria-label="Produktiver Filter-Testmodus"><strong>Produktiver Filter-Testmodus</strong><p>${this.escape(detail)}</p><p>Keine separate Grant-Datei erforderlich. Vor jedem Apply sind ein aktueller Plan, der konkrete Diff und eine eigene Bestätigung nötig. Pairing-Erhalt in Apple Home wird dadurch nicht garantiert.</p>${mode.enabled ? `<button data-test-mode-disable>Testmodus sofort widerrufen</button>` : `<button data-test-mode-enable${supported ? "" : " disabled"}>Testmodus für diese Bridge aktivieren</button>`}${!supported && !mode.enabled ? `<p>Nur eine geladene native Bridge mit Core 2026.10.4 oder 2026.11.0b0 ist für Filteränderungen freigegeben.</p>` : ""}</section>`;
+    return `<section class="notice${mode.enabled ? " warning" : ""}" aria-label="Befristete Schreibfreigabe"><strong>Befristete Schreibfreigabe</strong><p>${this.escape(detail.replace("Testmodus", "Schreibfreigabe"))}</p><p>Keine dauerhafte globale Freigabe. Vor jedem Apply sind ein aktueller Plan, der konkrete Diff und eine eigene Bestätigung nötig. Pairing-Erhalt in Apple Home wird dadurch nicht garantiert.</p>${mode.enabled ? `<button data-test-mode-disable>Schreibfreigabe sofort widerrufen</button>` : `<button data-test-mode-enable${supported ? "" : " disabled"}>Schreibfreigabe für diese Bridge aktivieren</button>`}${!supported && !mode.enabled ? `<p>Nur eine geladene native Bridge mit Core 2026.10.4, 2026.11.0b0 oder 2026.11.0 ist für Filteränderungen freigegeben.</p>` : ""}</section>`;
   }
   async enableTestWriteMode() {
     const bridge = this.bridge;
     if (!bridge || !this.fingerprint) return;
-    if (!await this.requestConfirmation("Produktiven Filter-Testmodus aktivieren", `Bridge ${bridge.title || bridge.entry_id}, Entry-ID ${bridge.entry_id}, Quelle user. 60 Minuten lang können Admins validierte Filteränderungen nach eigener Apply-Bestätigung ausführen. Die Freigabe endet bei Widerruf, Ablauf oder Core-Neustart.`, "Testmodus für diese Bridge aktivieren")) return;
-    await this.runAction("Testmodus aktivieren", async () => {
+    if (!await this.requestConfirmation("Befristete Schreibfreigabe aktivieren", `Bridge ${bridge.title || bridge.entry_id}, Entry-ID ${bridge.entry_id}, Quelle user. 60 Minuten lang können Administratoren validierte Filteränderungen nach eigener Apply-Bestätigung ausführen. Die Freigabe endet bei Widerruf, Ablauf oder Core-Neustart.`, "Schreibfreigabe für diese Bridge aktivieren")) return;
+    await this.runAction("Schreibfreigabe aktivieren", async () => {
       await this._hass.callWS({ type: WS.testModeEnable, entry_id: bridge.entry_id, expected_fingerprint: this.fingerprint, confirmed_entry_id: bridge.entry_id });
       this.operationPlan = null;
       await this.refresh(false);
-      this.statusMessage = "Testmodus befristet aktiviert · neuen Änderungsplan validieren";
+      this.statusMessage = "Befristete Schreibfreigabe aktiviert · neuen Änderungsplan validieren";
     });
   }
   async disableTestWriteMode() {
-    await this.runAction("Testmodus widerrufen", async () => {
+    await this.runAction("Schreibfreigabe widerrufen", async () => {
       await this._hass.callWS({ type: WS.testModeDisable });
       this.operationPlan = null;
       await this.refresh(false);
-      this.statusMessage = "Testmodus widerrufen";
+      this.statusMessage = "Befristete Schreibfreigabe widerrufen";
     });
   }
   bridgeSelector() {
@@ -756,6 +756,32 @@ class HomeKitManagerPanel extends HTMLElement {
       this.statusMessage = "Lesender Abgleich aktualisiert · keine Konfiguration geändert";
     });
   }
+  async applySelectionAlignment(kind) {
+    const alignment = this.selectionAlignment;
+    const entryId = alignment?.bridge_entry_id;
+    if (!entryId) return;
+    const adopt = kind === "adopt" ? [...(alignment.native_without_manager_metadata || [])] : [];
+    const remove = kind === "remove" ? (alignment.stale_manager_entities || []).map(item => item.entity_id || item) : [];
+    const ids = [...adopt, ...remove];
+    if (!ids.length) return;
+    const action = kind === "adopt" ? "Native Auswahl als Manager-Metadaten übernehmen" : "Veraltete Manager-Entscheidungen entfernen";
+    if (!await this.requestConfirmation(action, `${ids.length} Entity-Referenz(en): ${ids.join(", ")}. Es werden ausschließlich Manager-Metadaten dieser Bridge geändert; Native Apply, Filter, Pairings und HAP-Persistenz bleiben unverändert.`, `${action} · kein Native Apply`)) return;
+    await this.runAction(action, async () => {
+      this.selectionAlignment = await this._hass.callWS({
+        type: WS.selectionAlignmentApply,
+        entry_id: entryId,
+        expected_snapshot_fingerprint: alignment.snapshot_fingerprint,
+        expected_snapshot_revision: alignment.snapshot_revision,
+        expected_manager_document_fingerprint: alignment.manager_document_fingerprint,
+        expected_manager_file_version: alignment.manager_file_version || "",
+        adopt_native_entities: adopt,
+        remove_stale_entities: remove,
+        confirmed: true,
+      });
+      await this.refresh(false);
+      this.statusMessage = "Metadatenabgleich bestätigt und gespeichert · HomeKit unverändert";
+    });
+  }
   async previewSelectionPlan() {
     if (!this.selectionWorking) return;
     await this.runAction("Nicht mutierende Vorschau berechnen", async () => {
@@ -816,7 +842,9 @@ class HomeKitManagerPanel extends HTMLElement {
     const nativePlan = this.selectionOperationPlan;
     const nativePlanBlock = nativePlan ? `<section class="surface"><h3>Native Apply-Plan</h3><p class="muted">Dieser Plan bindet Bridge, Snapshot, Revision, Identitäten und den serverseitig berechneten Diff. Das Anwenden ist eine separate, bestätigungspflichtige Mutation.</p><dl class="definition-list"><div><dt>Operation-ID</dt><dd><code>${this.escape(nativePlan.operation_id || "NOT_VERIFIED")}</code></dd></div><div><dt>Betroffene Entitäten</dt><dd>${nativePlan.changed_entities?.length || 0}</dd></div><div><dt>Schreibfreigabe</dt><dd>${nativePlan.apply_enabled ? "bereit" : "gesperrt"}</dd></div><div><dt>Status</dt><dd>${this.escape(nativePlan.state || "unbekannt")}</dd></div></dl>${nativePlan.change_details?.length ? `<ul>${nativePlan.change_details.map(item => `<li><code>${this.escape(item.entity_id)}</code>: ${this.escape(item.current)} → ${this.escape(item.desired)}</li>`).join("")}</ul>` : ""}<p class="notice warning">Native Apply ist nicht automatisch und nicht durch Entwurfsspeicherung freigeschaltet.</p><button class="primary" data-selection-apply${this.supportsSelectionApply() ? "" : " disabled"}>${this.supportsSelectionApply() ? "Genau diesen Plan anwenden" : "Apply gesperrt"}</button></section>` : "";
     const alignment = this.selectionAlignment;
-    const alignmentBlock = alignment ? `<section class="surface"><div class="section-heading"><h3>Lesender Abgleich</h3><button data-selection-alignment>Aktualisieren</button></div><p class="muted">Dieser Vergleich bereitet keine Übernahme vor und verändert weder Manager-Metadaten noch native HomeKit-Konfiguration.</p><dl class="definition-list"><div><dt>Native Includes</dt><dd>${alignment.native_include_entities?.length ?? 0}</dd></div><div><dt>Manager-Entscheidungen</dt><dd>${alignment.manager_decision_entities?.length ?? 0}</dd></div><div><dt>Native ohne Manager-Metadaten</dt><dd>${alignment.native_without_manager_metadata?.length ?? 0}</dd></div><div><dt>Veraltete Manager-Entscheidungen</dt><dd>${alignment.stale_manager_entities?.length ?? 0}</dd></div></dl></section>` : "";
+    const adoptCount = alignment?.native_without_manager_metadata?.length || 0;
+    const removeCount = alignment?.stale_manager_entities?.length || 0;
+    const alignmentBlock = alignment ? `<section class="surface"><div class="section-heading"><h3>Auswahlabgleich</h3><button data-selection-alignment>Aktualisieren</button></div><p class="muted">Der Abgleich unterscheidet native Auswahl und Manager-Metadaten. Die folgenden ausdrücklich bestätigten Aktionen ändern nur Manager-Metadaten dieser Bridge; Native Apply bleibt getrennt.</p><dl class="definition-list"><div><dt>Native Includes</dt><dd>${alignment.native_include_entities?.length ?? 0}</dd></div><div><dt>Manager-Entscheidungen</dt><dd>${alignment.manager_decision_entities?.length ?? 0}</dd></div><div><dt>Native ohne Manager-Metadaten</dt><dd>${adoptCount}</dd></div><div><dt>Veraltete Manager-Entscheidungen</dt><dd>${removeCount}</dd></div></dl><div class="actions">${adoptCount ? `<button data-selection-alignment-adopt>Native Auswahl als Manager-Metadaten übernehmen (${adoptCount})</button>` : ""}${removeCount ? `<button data-selection-alignment-remove>Veraltete Manager-Entscheidungen entfernen (${removeCount})</button>` : ""}</div><p class="lock-note">Alle Änderungen sind bridge-, Snapshot- und Dateiversionsgebunden. Ein veralteter Abgleich wird serverseitig abgelehnt.</p></section>` : "";
     const savedDraftAction = model.draft_fingerprint ? `<button data-selection-discard>Gespeicherten Entwurf verwerfen</button>` : "";
     return `<h3>Bestehende HomeKit-Auswahl übernehmen</h3><p class="muted">Dieser Workflow speichert fachliche Entscheidungen und berechnet zunächst eine hypothetische Vorschau. Ein Native Apply wird nur über einen getrennten, serverseitig validierten Plan und eine neue ausdrückliche Bestätigung angeboten.</p><aside class="notice warning"><strong>Noch nicht automatisch angewendet</strong><p>Keine automatische KEEP-Übernahme, Tombstone-Bereinigung, Nachfolgerzuordnung oder Mutation durch Navigation und Vorschau.</p></aside>${model.stale_draft ? `<aside class="notice error" role="alert"><strong>Entwurf ist veraltet</strong><p>${this.escape(model.plan_error || "Der Entwurf gehört zu einem älteren Snapshot.")} Bitte aktuelle Daten laden und Entscheidungen erneut bestätigen.</p></aside>` : ""}<section class="status-grid"><div class="status-tile"><small>Bridge</small><strong>${this.escape(snapshot.bridge_title || snapshot.bridge_entry_id || "Nicht ausgewählt")}</strong></div><div class="status-tile"><small>Aktuelle Veröffentlichungen</small><strong>${snapshot.current_entity_ids?.length ?? 0}</strong></div><div class="status-tile"><small>Offene Entscheidungen</small><strong>${plan?.counts?.review ?? "–"}</strong></div><div class="status-tile"><small>Tombstones / stale Includes</small><strong>${snapshot.stale_manager_decisions?.length ?? 0} / ${snapshot.stale_native_includes?.length ?? 0}</strong></div></section><dl class="definition-list"><div><dt>Snapshot</dt><dd>${this.escape(snapshot.snapshot_timestamp || "Nicht verifiziert")} · Revision ${this.escape(snapshot.snapshot_revision ?? "-")}</dd></div><div><dt>Vollständigkeit</dt><dd>${snapshot.snapshot_complete ? "Vollständig" : "NOT_VERIFIED"}</dd></div><div><dt>Reconciliation</dt><dd>${this.escape(snapshot.reconciliation_state || "unknown")}</dd></div><div><dt>Write-Status</dt><dd>${nativePlan?.apply_enabled ? "Planbezogen freigeschaltet" : "Gesperrt"}</dd></div></dl>${alignmentBlock}<section class="surface"><h3>Aktuelle HomeKit-Entities</h3>${entityRows || `<p class="muted">Keine aktuelle Runtime-Auswahl sicher nachgewiesen.</p>`}</section><section class="surface"><h3>Historische Tombstones</h3>${tombstoneRows || `<p class="muted">Keine verwaisten Entscheidungen im Snapshot.</p>`}</section><section class="surface"><h3>Veraltete native Includes</h3>${staleRows || `<p class="muted">Keine stale Includes im Snapshot.</p>`}</section><div class="sticky-actions"><span class="footer-count">Entwurf · HomeKit unverändert</span><button class="primary" data-selection-save${model.stale_draft ? " disabled" : ""}>Entscheidung speichern</button><button data-selection-plan${model.stale_draft ? " disabled" : ""}>Vorschau berechnen</button><button data-selection-operation-plan${model.stale_draft || plan?.blockers?.length ? " disabled" : ""}>Native Apply vorbereiten</button>${savedDraftAction}</div>${planBlock}${nativePlanBlock}`;
   }
@@ -940,6 +968,8 @@ class HomeKitManagerPanel extends HTMLElement {
     one("[data-selection-operation-plan]", "click", () => this.planSelectionOperation());
     one("[data-selection-discard]", "click", () => this.discardSavedSelection());
     one("[data-selection-alignment]", "click", () => this.refreshSelectionAlignment());
+    one("[data-selection-alignment-adopt]", "click", () => this.applySelectionAlignment("adopt"));
+    one("[data-selection-alignment-remove]", "click", () => this.applySelectionAlignment("remove"));
     one("[data-selection-apply]", "click", () => this.applySelectionOperation());
     one("[data-reconciliation-search]", "input", event => { this.reconciliationQuery = event.target.value; this.render(); });
     one("[data-reconciliation-filter]", "change", event => { this.reconciliationFilter = event.target.value; this.render(); });

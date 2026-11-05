@@ -19,7 +19,7 @@ from .const import (
     MANAGEMENT_STATUS_COMMAND, MANAGEMENT_ENABLE_COMMAND, MANAGEMENT_DISABLE_COMMAND,
     BULK_PREVIEW_COMMAND,
     SELECTION_DRAFT_COMMAND, SAVE_SELECTION_DRAFT_COMMAND, DISCARD_SELECTION_DRAFT_COMMAND,
-    SELECTION_ALIGNMENT_COMMAND, SELECTION_PLAN_COMMAND,
+    SELECTION_ALIGNMENT_COMMAND, SELECTION_ALIGNMENT_APPLY_COMMAND, SELECTION_PLAN_COMMAND,
     SELECTION_OPERATION_PLAN_COMMAND,
 )
 from .bulk import preview_bulk
@@ -162,6 +162,39 @@ async def websocket_discard_selection_draft(hass, connection, msg):
 async def websocket_selection_alignment(hass, connection, msg):
     """Return a read-only comparison of native selection and Manager metadata."""
     connection.send_result(msg["id"], hass.data["homekit_manager"]["coordinator"].selection_alignment_preview())
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({
+    probatio.Required("type"): SELECTION_ALIGNMENT_APPLY_COMMAND,
+    probatio.Required("entry_id"): str,
+    probatio.Required("expected_snapshot_fingerprint"): str,
+    probatio.Required("expected_snapshot_revision"): int,
+    probatio.Required("expected_manager_document_fingerprint"): str,
+    probatio.Required("expected_manager_file_version"): str,
+    probatio.Required("adopt_native_entities"): list,
+    probatio.Required("remove_stale_entities"): list,
+    probatio.Required("confirmed"): bool,
+})
+@websocket_api.async_response
+async def websocket_selection_alignment_apply(hass, connection, msg):
+    """Persist explicitly confirmed metadata alignment; never apply HomeKit."""
+    try:
+        result = await hass.data["homekit_manager"]["coordinator"].async_apply_selection_alignment(
+            msg["entry_id"], msg["expected_snapshot_fingerprint"], msg["expected_snapshot_revision"],
+            msg["expected_manager_document_fingerprint"], msg["expected_manager_file_version"],
+            msg["adopt_native_entities"], msg["remove_stale_entities"], msg["confirmed"],
+        )
+    except SelectionDraftConflict as err:
+        connection.send_error(msg["id"], "conflict", str(err))
+        return
+    except YamlVersionConflict as err:
+        connection.send_error(msg["id"], "metadata_conflict", str(err))
+        return
+    except (SelectionDraftError, YamlValidationError, YamlStoreError, ValueError, OSError) as err:
+        connection.send_error(msg["id"], "metadata_alignment_blocked", str(err))
+        return
+    connection.send_result(msg["id"], result)
 
 
 @websocket_api.require_admin
@@ -623,7 +656,7 @@ async def websocket_export(hass, connection, msg):
     except (YamlValidationError, ValueError) as err:
         connection.send_error(msg["id"], "invalid_format", str(err))
 
-REGISTERED_HANDLERS = (websocket_inventory, websocket_inventory_export, websocket_reconciliation_export, websocket_selection_draft, websocket_save_selection_draft, websocket_discard_selection_draft, websocket_selection_alignment, websocket_selection_plan, websocket_selection_operation_plan, websocket_bulk_preview, websocket_bridges, websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_activation_status, websocket_mode_status, websocket_management_status, websocket_management_enable, websocket_management_disable, websocket_test_write_mode_enable, websocket_test_write_mode_disable, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_apply_options_diff, websocket_operation_plan, websocket_operation_apply, websocket_operation_rollback, websocket_operation_status, websocket_operation_reconcile, websocket_prepare_options_diff, websocket_reconcile, websocket_export)
+REGISTERED_HANDLERS = (websocket_inventory, websocket_inventory_export, websocket_reconciliation_export, websocket_selection_draft, websocket_save_selection_draft, websocket_discard_selection_draft, websocket_selection_alignment, websocket_selection_alignment_apply, websocket_selection_plan, websocket_selection_operation_plan, websocket_bulk_preview, websocket_bridges, websocket_select_bridge, websocket_devices, websocket_areas, websocket_diagnostics, websocket_device_preview, websocket_rules_preview, websocket_history, websocket_history_restore, websocket_performance, websocket_activation_status, websocket_mode_status, websocket_management_status, websocket_management_enable, websocket_management_disable, websocket_test_write_mode_enable, websocket_test_write_mode_disable, websocket_yaml_status, websocket_validate_draft, websocket_preview, websocket_save_draft, websocket_apply_options_diff, websocket_operation_plan, websocket_operation_apply, websocket_operation_rollback, websocket_operation_status, websocket_operation_reconcile, websocket_prepare_options_diff, websocket_reconcile, websocket_export)
 
 
 def async_register_websocket_commands(hass, coordinator) -> None:

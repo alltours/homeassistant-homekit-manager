@@ -9,6 +9,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 # custom-component loader discovers the extracted artifact rather than the
 # source checkout.
 import custom_components.homekit_manager  # noqa: F401
+from custom_components.homekit_manager.fingerprint import build_fingerprint
 
 
 async def _setup_selection_context(hass, enable_custom_integrations):
@@ -187,3 +188,123 @@ async def test_discard_selection_draft_is_bridge_bound(
     response = await client.receive_json()
     assert response["success"] is False
     assert response["error"]["code"] == "conflict"
+
+
+async def test_confirmed_alignment_adopts_native_metadata_without_homekit_mutation(
+    hass, enable_custom_integrations, hass_ws_client,
+):
+    native, coordinator = await _setup_selection_context(hass, enable_custom_integrations)
+    before_options = deepcopy(dict(native.options))
+    client = await hass_ws_client()
+
+    await client.send_json_auto_id({"type": "homekit_manager/selection_alignment"})
+    preview = (await client.receive_json())["result"]
+    assert preview["native_without_manager_metadata"] == ["light.keep"]
+    assert preview["manager_metadata_mutation_performed"] is False
+
+    await client.send_json_auto_id({
+        "type": "homekit_manager/selection_alignment_apply",
+        "entry_id": native.entry_id,
+        "expected_snapshot_fingerprint": preview["snapshot_fingerprint"],
+        "expected_snapshot_revision": preview["snapshot_revision"],
+        "expected_manager_document_fingerprint": preview["manager_document_fingerprint"],
+        "expected_manager_file_version": preview["manager_file_version"],
+        "adopt_native_entities": ["light.keep"],
+        "remove_stale_entities": [],
+        "confirmed": True,
+    })
+    applied = await client.receive_json()
+    assert applied["success"] is True, applied
+    result = applied["result"]
+    assert result["native_mutation_performed"] is False
+    assert result["manager_metadata_mutation_performed"] is True
+    assert result["changed_entities"] == {"adopted_native": ["light.keep"], "removed_stale": []}
+    assert result["native_without_manager_metadata"] == []
+    assert dict(native.options) == before_options
+
+    stored = await hass.async_add_executor_job(coordinator.yaml_store.load)
+    assert stored.document["bridges"][native.entry_id]["entities"] == {"light.keep": "include"}
+    assert {item["reason"] for item in coordinator.history_entries} >= {"alignment_before_change", "alignment_metadata_confirmed"}
+
+    await client.send_json_auto_id({
+        "type": "homekit_manager/selection_alignment_apply",
+        "entry_id": native.entry_id,
+        "expected_snapshot_fingerprint": preview["snapshot_fingerprint"],
+        "expected_snapshot_revision": preview["snapshot_revision"],
+        "expected_manager_document_fingerprint": preview["manager_document_fingerprint"],
+        "expected_manager_file_version": preview["manager_file_version"],
+        "adopt_native_entities": ["light.keep"],
+        "remove_stale_entities": [],
+        "confirmed": True,
+    })
+    conflict = await client.receive_json()
+    assert conflict["success"] is False
+    assert conflict["error"]["code"] in {"conflict", "metadata_conflict"}
+    assert dict(native.options) == before_options
+
+
+async def test_alignment_requires_explicit_confirmation_and_valid_candidates(
+    hass, enable_custom_integrations, hass_ws_client,
+):
+    native, _coordinator = await _setup_selection_context(hass, enable_custom_integrations)
+    client = await hass_ws_client()
+    await client.send_json_auto_id({"type": "homekit_manager/selection_alignment"})
+    preview = (await client.receive_json())["result"]
+
+    payload = {
+        "type": "homekit_manager/selection_alignment_apply",
+        "entry_id": native.entry_id,
+        "expected_snapshot_fingerprint": preview["snapshot_fingerprint"],
+        "expected_snapshot_revision": preview["snapshot_revision"],
+        "expected_manager_document_fingerprint": preview["manager_document_fingerprint"],
+        "expected_manager_file_version": preview["manager_file_version"],
+        "adopt_native_entities": ["light.keep"],
+        "remove_stale_entities": [],
+        "confirmed": False,
+    }
+    await client.send_json_auto_id(payload)
+    rejected = await client.receive_json()
+    assert rejected["success"] is False
+    assert rejected["error"]["code"] == "metadata_alignment_blocked"
+
+    await client.send_json_auto_id(payload | {"confirmed": True, "adopt_native_entities": ["light.unknown"]})
+    invalid = await client.receive_json()
+    assert invalid["success"] is False
+    assert invalid["error"]["code"] == "metadata_alignment_blocked"
+
+
+async def test_confirmed_alignment_removes_only_stale_manager_metadata(
+    hass, enable_custom_integrations, hass_ws_client,
+):
+    native, coordinator = await _setup_selection_context(hass, enable_custom_integrations)
+    before_options = deepcopy(dict(native.options))
+    document = {"schema_version": 1, "bridges": {
+        native.entry_id: {"policy": "explicit_overrides", "entities": {"sensor.old": "exclude"}},
+    }}
+    saved = await hass.async_add_executor_job(coordinator.yaml_store.save, document, None)
+    coordinator.yaml_snapshot = saved
+    coordinator.fingerprint = build_fingerprint(coordinator.bridges, coordinator.inventory, saved.document)
+    client = await hass_ws_client()
+    await client.send_json_auto_id({"type": "homekit_manager/selection_alignment"})
+    preview = (await client.receive_json())["result"]
+    assert [item["entity_id"] for item in preview["stale_manager_entities"]] == ["sensor.old"]
+
+    await client.send_json_auto_id({
+        "type": "homekit_manager/selection_alignment_apply",
+        "entry_id": native.entry_id,
+        "expected_snapshot_fingerprint": preview["snapshot_fingerprint"],
+        "expected_snapshot_revision": preview["snapshot_revision"],
+        "expected_manager_document_fingerprint": preview["manager_document_fingerprint"],
+        "expected_manager_file_version": preview["manager_file_version"],
+        "adopt_native_entities": [],
+        "remove_stale_entities": ["sensor.old"],
+        "confirmed": True,
+    })
+    response = await client.receive_json()
+    assert response["success"] is True, response
+    result = response["result"]
+    assert result["native_mutation_performed"] is False
+    assert result["changed_entities"] == {"adopted_native": [], "removed_stale": ["sensor.old"]}
+    current = await hass.async_add_executor_job(coordinator.yaml_store.load)
+    assert current.document["bridges"][native.entry_id]["entities"] == {}
+    assert dict(native.options) == before_options
